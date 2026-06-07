@@ -109,11 +109,11 @@ async function runNoUserTest() {
         console.error(`\n❌ FAILURE: Caught an unexpected error message: ${err.message}`);
     } else {
         console.error('\n❌ FAILURE: Test failed due to an unknown error.');
-    } finally {
-      // Restore original mocks after the test is complete, regardless of success/failure.
-      mockUsers = originalMockUsers; 
-      mockParts = originalMockParts;
     }
+  } finally {
+    // Restore original mocks after the test is complete, regardless of success/failure.
+    mockUsers = originalMockUsers; 
+    mockParts = originalMockParts;
   }
 }
 
