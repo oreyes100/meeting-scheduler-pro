@@ -7,24 +7,23 @@
     "dev": "NODE_OPTIONS='--disable-warning=DEP0205' next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "clean": "rm -rf .next .aider.tags.cache.v4 *.tsbuildinfo && echo 'Build cache cleared. Run npm run dev to rebuild.'",
+    "shrink": "rm -rf node_modules .next .aider.tags.cache.v4 *.tsbuildinfo && echo 'Shrunk to source-only (~2MB). Run npm install when you need to develop again.'",
+    "prebuild": "rm -rf .next"
   },
   "dependencies": {
-    "@firebase/auth": "^1.13.1",
-    "@react-pdf/renderer": "^4.5.1",
     "@supabase/auth-helpers-nextjs": "^0.15.0",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.1",
     "@tanstack/react-query": "^5.100.14",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
-    "firebase": "^12.13.0",
     "lucide-react": "^1.16.0",
     "next": "16.2.6",
     "pg": "^8.21.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "resend": "^6.12.3",
     "tailwind-merge": "^3.6.0",
     "zustand": "^5.0.13"
   },

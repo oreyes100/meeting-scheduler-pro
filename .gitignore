@@ -52,6 +52,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# TypeScript build info
+*.tsbuildinfo
+
+# AI tool caches
+.aider.tags.cache.v4/
+
 #git
 logs/
 ```
