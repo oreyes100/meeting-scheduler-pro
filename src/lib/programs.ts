@@ -332,13 +332,14 @@ export const PROGRAMS: Record<string, Program> = {
 
 // Generic fallback: 8-part outline matching the standard JW meeting structure
 // used when no specific program is found for the week.
+// Songs are 0 when the week isn't in the catalog — the UI should treat 0 as "not set".
 export const FALLBACK_PROGRAM: Program = {
   weekLabel: '',
   mondayDate: '',
   sourceUrl: '',
-  songOpening: 1,
-  songMiddle: 1,
-  songClosing: 1,
+  songOpening: 0,
+  songMiddle: 0,
+  songClosing: 0,
   parts: [
     { number: 1, type: 'treasures_talk', title: 'Tesoros de la Biblia: Discurso', duration: 10, role: 'speaker' },
     { number: 2, type: 'spiritual_gems', title: 'Busquemos perlas escondidas', duration: 10, role: 'speaker' },

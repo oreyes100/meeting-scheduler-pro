@@ -230,6 +230,19 @@ export async function runAutoAssignment(meetingId, customClient) {
   // Closing Prayer (Male, can_do_prayers)
   await assignMeetingRole('closing_prayer_id', 'Closing Prayer', 'closing_prayer', u => u.gender === 'male' && u.can_do_prayers);
 
+  // Sync CBS conductor to the cbs meeting_part so the assigned count is accurate.
+  // The UI reads conductor/reader from meeting-level fields; this write keeps
+  // meeting_parts.assigned_user_id consistent with that assignment.
+  if (meeting.cbs_conductor_id) {
+    const cbsPart = parts.find(p => p.part_type === 'cbs');
+    if (cbsPart && !cbsPart.assigned_user_id) {
+      await supabase
+        .from('meeting_parts')
+        .update({ assigned_user_id: meeting.cbs_conductor_id })
+        .eq('id', cbsPart.id);
+      cbsPart.assigned_user_id = meeting.cbs_conductor_id;
+    }
+  }
 
   // --- Assign Part-Level Roles (Treasures talk, Gems, Bible Reading, Student Parts, Living) ---
   let newlyAssignedCount = 0;

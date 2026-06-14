@@ -16,7 +16,7 @@ interface SidebarProps {
   isCreating: boolean;
 }
 
-const MONTHS_TO_SHOW = 3; // current month + next 2
+const MONTHS_TO_SHOW = 6; // current month + next 5
 
 function getMondayOf(date: Date): Date {
   const d = new Date(date);

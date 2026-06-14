@@ -41,16 +41,11 @@ export async function GET(request: Request) {
 
       query = applyFilter(query, filter);
 
-      if (search) {
-        const term = `%${search.toLowerCase()}%`;
-        query = query.or(
-          `first_name.ilike.${term},last_name.ilike.${term},display_name.ilike.${term},name.ilike.${term}`
-        );
-      }
-
       const { data, error } = await query;
       if (error) throw error;
-      return NextResponse.json({ persons: (data || []).map((r) => normalize(r as unknown as Record<string, unknown>)) });
+
+      const persons = (data || []).map((r) => normalize(r as unknown as Record<string, unknown>));
+      return NextResponse.json({ persons: search ? accentSearch(persons, search) : persons });
     } catch (e: unknown) {
       // Migration not applied: fall back to legacy schema
       console.warn('Person full query failed, using legacy fallback. Raw error:', e);
@@ -74,6 +69,20 @@ export async function GET(request: Request) {
     console.error('GET /api/persons error:', e);
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+// Strips diacritics so "martinez" matches "Martínez"
+function deaccent(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+function accentSearch(persons: Person[], q: string): Person[] {
+  const term = deaccent(q);
+  return persons.filter(p => {
+    const haystack = [p.first_name, p.last_name, p.display_name]
+      .filter(Boolean).map(s => deaccent(s!)).join(' ');
+    return haystack.includes(term);
+  });
 }
 
 function normalize(row: Record<string, unknown>): Person {
