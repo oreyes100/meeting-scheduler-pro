@@ -110,6 +110,62 @@ export interface Person {
   person_type?: 'elder' | 'ministerial_servant' | 'special_pioneer' | 'regular_pioneer' | 'auxiliary_pioneer' | 'publisher' | 'unbaptized_publisher' | 'child';
 }
 
+// ─── Weekend Meeting / Public Talks ───────────────────────────────────────────
+
+export interface PublicTalkOutline {
+  id: string;
+  number: number;
+  title: string;
+  created_at?: string;
+  updated_at?: string;
+  // joined from history
+  last_given_date?: string | null;
+  last_given_speaker?: string | null;
+}
+
+export interface PublicSpeaker {
+  id: string;
+  name: string;
+  congregation: string;
+  city?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  outline_numbers: number[];
+  notes?: string | null;
+  created_at?: string;
+  // joined
+  last_given_date?: string | null;
+}
+
+export type WeekendSpeakerType = 'local' | 'visiting' | 'other';
+
+export interface WeekendMeeting {
+  id: string;
+  date: string;
+  speaker_type: WeekendSpeakerType;
+  local_speaker_id?: string | null;
+  visiting_speaker_id?: string | null;
+  other_speaker_name?: string | null;
+  outline_id?: string | null;
+  special_talk_title?: string | null;
+  song?: number | null;
+  speaker_confirmed?: boolean;
+  notes?: string | null;
+  chairman_id?: string | null;
+  wt_conductor_id?: string | null;
+  wt_reader_id?: string | null;
+  hospitality_person_id?: string | null;
+  hospitality_text?: string | null;
+  // joined
+  outline?: PublicTalkOutline | null;
+  local_speaker?: Pick<Person, 'id' | 'first_name' | 'last_name' | 'display_name'> | null;
+  visiting_speaker?: PublicSpeaker | null;
+  chairman?: Pick<Person, 'id' | 'first_name' | 'last_name'> | null;
+  wt_conductor?: Pick<Person, 'id' | 'first_name' | 'last_name'> | null;
+  wt_reader?: Pick<Person, 'id' | 'first_name' | 'last_name'> | null;
+  hospitality_person?: Pick<Person, 'id' | 'first_name' | 'last_name'> | null;
+}
+
 export type PersonFilter =
   | 'everyone'
   | 'families'
