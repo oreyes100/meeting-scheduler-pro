@@ -212,6 +212,7 @@ export function MeetingDashboard({
                        <option value=""></option>
                        {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
                     </select>
+                    <input type="text" className="w-[300px] border border-gray-300 p-0.5 h-6 ml-2 text-xs" value={bibleReading.title || ''} onChange={e => handlePartChange(bibleReading.id, 'title', e.target.value)} />
                     <FileText size={14} className="text-[#3b82f6] ml-1" />
                  </div>
                </div>
