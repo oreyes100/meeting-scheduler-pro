@@ -13,12 +13,12 @@ export async function GET() {
       .select(`
         *,
         outline:public_talk_outlines(*),
-        local_speaker:persons!weekend_meetings_local_speaker_id_fkey(id, first_name, last_name, display_name),
+        local_speaker:users!weekend_meetings_local_speaker_id_fkey(id, first_name, last_name, display_name, name),
         visiting_speaker:public_speakers!weekend_meetings_visiting_speaker_id_fkey(*),
-        chairman:persons!weekend_meetings_chairman_id_fkey(id, first_name, last_name),
-        wt_conductor:persons!weekend_meetings_wt_conductor_id_fkey(id, first_name, last_name),
-        wt_reader:persons!weekend_meetings_wt_reader_id_fkey(id, first_name, last_name),
-        hospitality_person:persons!weekend_meetings_hospitality_person_id_fkey(id, first_name, last_name)
+        chairman:users!weekend_meetings_chairman_id_fkey(id, first_name, last_name, display_name, name),
+        wt_conductor:users!weekend_meetings_wt_conductor_id_fkey(id, first_name, last_name, display_name, name),
+        wt_reader:users!weekend_meetings_wt_reader_id_fkey(id, first_name, last_name, display_name, name),
+        hospitality_person:users!weekend_meetings_hospitality_person_id_fkey(id, first_name, last_name, display_name, name)
       `)
       .order('date', { ascending: true });
 

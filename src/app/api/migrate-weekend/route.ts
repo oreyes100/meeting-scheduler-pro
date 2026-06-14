@@ -10,13 +10,15 @@ export async function POST() {
   try {
     const supabase = createClient(supabaseUrl, supabaseKey);
     const sqlPath = path.resolve(process.cwd(), 'update_schema_weekend.sql');
-    const sql = fs.readFileSync(sqlPath, 'utf8');
+    const raw = fs.readFileSync(sqlPath, 'utf8');
 
-    // Execute each statement separately
+    // Strip full-line comments first (otherwise statements starting with a
+    // comment block get wrongly filtered out), then split on ';'.
+    const sql = raw.split('\n').filter(l => !l.trim().startsWith('--')).join('\n');
     const statements = sql
       .split(';')
       .map(s => s.trim())
-      .filter(s => s.length > 0 && !s.startsWith('--'));
+      .filter(s => s.length > 0);
 
     const errors: string[] = [];
     for (const stmt of statements) {
@@ -26,10 +28,20 @@ export async function POST() {
       }
     }
 
+    // Reload PostgREST schema cache so the new tables are visible immediately
+    await supabase.rpc('pg_execute_sql', { sql: "NOTIFY pgrst, 'reload schema';" });
+
     if (errors.length > 0) {
+      const permissionBlocked = errors.some(e =>
+        e.includes('permission denied') || e.includes('must be owner'),
+      );
       return NextResponse.json({
         success: false,
-        message: 'Some statements failed. Try running update_schema_weekend.sql in the Supabase SQL Editor.',
+        permissionBlocked,
+        message: permissionBlocked
+          ? 'The service role cannot create tables. Copy the SQL below into the Supabase SQL Editor and run it.'
+          : 'Some statements failed. Run update_schema_weekend.sql in the Supabase SQL Editor.',
+        sql: raw,
         errors,
       }, { status: 207 });
     }
@@ -38,5 +50,16 @@ export async function POST() {
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Migration failed';
     return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+// Expose the SQL so the UI can offer a copy-paste fallback
+export async function GET() {
+  try {
+    const sqlPath = path.resolve(process.cwd(), 'update_schema_weekend.sql');
+    const raw = fs.readFileSync(sqlPath, 'utf8');
+    return NextResponse.json({ sql: raw });
+  } catch {
+    return NextResponse.json({ sql: '' });
   }
 }

@@ -38,8 +38,8 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
           const { data: sp } = await supabase.from('public_speakers').select('name').eq('id', updates.visiting_speaker_id).single();
           speakerName = sp?.name ?? null;
         } else if (speakerType === 'local' && updates.local_speaker_id) {
-          const { data: p } = await supabase.from('persons').select('first_name, last_name').eq('id', updates.local_speaker_id).single();
-          speakerName = p ? `${p.first_name} ${p.last_name}`.trim() : null;
+          const { data: p } = await supabase.from('users').select('first_name, last_name, display_name, name').eq('id', updates.local_speaker_id).single();
+          speakerName = p ? (p.display_name || [p.first_name, p.last_name].filter(Boolean).join(' ') || p.name || '').trim() : null;
         }
 
         await supabase.from('public_talk_history').insert({
@@ -57,12 +57,12 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
       .select(`
         *,
         outline:public_talk_outlines(*),
-        local_speaker:persons!weekend_meetings_local_speaker_id_fkey(id, first_name, last_name, display_name),
+        local_speaker:users!weekend_meetings_local_speaker_id_fkey(id, first_name, last_name, display_name, name),
         visiting_speaker:public_speakers!weekend_meetings_visiting_speaker_id_fkey(*),
-        chairman:persons!weekend_meetings_chairman_id_fkey(id, first_name, last_name),
-        wt_conductor:persons!weekend_meetings_wt_conductor_id_fkey(id, first_name, last_name),
-        wt_reader:persons!weekend_meetings_wt_reader_id_fkey(id, first_name, last_name),
-        hospitality_person:persons!weekend_meetings_hospitality_person_id_fkey(id, first_name, last_name)
+        chairman:users!weekend_meetings_chairman_id_fkey(id, first_name, last_name, display_name, name),
+        wt_conductor:users!weekend_meetings_wt_conductor_id_fkey(id, first_name, last_name, display_name, name),
+        wt_reader:users!weekend_meetings_wt_reader_id_fkey(id, first_name, last_name, display_name, name),
+        hospitality_person:users!weekend_meetings_hospitality_person_id_fkey(id, first_name, last_name, display_name, name)
       `)
       .single();
 
