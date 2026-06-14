@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { Plus, Trash2, Settings, ChevronDown, ChevronRight, Save } from 'lucide-react';
+import { Plus, Trash2, Settings, ChevronDown, ChevronRight, Save, X, Zap, Clock, RotateCcw } from 'lucide-react';
 import { PublicSpeakerModal } from './PublicSpeakerModal';
 import type { WeekendMeeting, PublicTalkOutline, PublicSpeaker } from '@/types';
 import { formatWeekRange } from '@/lib/weekLabel';
@@ -15,6 +15,13 @@ interface LocalPerson {
   can_be_chairman?: boolean;
   can_be_cbs_conductor?: boolean;
   can_be_cbs_reader?: boolean;
+}
+
+interface HistoryRecord {
+  id: string;
+  date: string;
+  speaker_name: string | null;
+  outline: { number: number; title: string } | null;
 }
 
 interface Props {
@@ -50,16 +57,41 @@ function congregationLabel(m: WeekendMeeting) {
   return '';
 }
 
+// Returns person ID assigned least recently for a role across all meetings
+function pickByRotation(
+  pool: LocalPerson[],
+  meetings: WeekendMeeting[],
+  field: 'chairman_id' | 'wt_conductor_id' | 'wt_reader_id' | 'hospitality_person_id',
+  excludeId?: string | null,
+): string | null {
+  if (pool.length === 0) return null;
+  // Build map: personId -> last assignment date
+  const lastAssigned: Record<string, string> = {};
+  for (const m of meetings) {
+    const val = m[field];
+    if (val) lastAssigned[val] = m.date > (lastAssigned[val] ?? '') ? m.date : lastAssigned[val];
+  }
+  const candidates = excludeId ? pool.filter(p => p.id !== excludeId) : pool;
+  if (candidates.length === 0) return pool[0].id;
+  candidates.sort((a, b) => {
+    const da = lastAssigned[a.id] ?? '0000-00-00';
+    const db = lastAssigned[b.id] ?? '0000-00-00';
+    return da < db ? -1 : da > db ? 1 : 0;
+  });
+  return candidates[0].id;
+}
+
 export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPersons, locale, onRefresh }: Props) {
   const [activeId, setActiveId] = useState<string | null>(meetings[0]?.id ?? null);
   const [speakerModalOpen, setSpeakerModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [autoAssigning, setAutoAssigning] = useState(false);
   const [formData, setFormData] = useState<Record<string, Partial<WeekendMeeting>>>({});
   const [showOutlineManager, setShowOutlineManager] = useState(false);
   const [showSpeakerManager, setShowSpeakerManager] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const activeMeeting = meetings.find(m => m.id === activeId);
-  const form = (activeId ? formData[activeId] : null) ?? activeMeeting ?? {};
 
   const setField = useCallback((field: string, value: unknown) => {
     if (!activeId) return;
@@ -87,6 +119,64 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
       setSaving(false);
     }
   }, [activeId, formData, onRefresh]);
+
+  const autoAssign = useCallback(async () => {
+    if (!activeId || !activeMeeting) return;
+    setAutoAssigning(true);
+    try {
+      const chairPool = localPersons.filter(p => p.can_be_chairman);
+      const wtPool = localPersons.filter(p => p.can_be_cbs_conductor || p.can_be_chairman);
+      const readerPool = localPersons.filter(p => p.can_be_cbs_reader);
+      const hospPool = localPersons;
+
+      const otherMeetings = meetings.filter(m => m.id !== activeId);
+
+      const chairmanId = pickByRotation(chairPool, otherMeetings, 'chairman_id');
+      const wtId = pickByRotation(wtPool, otherMeetings, 'wt_conductor_id', chairmanId);
+      const readerId = pickByRotation(readerPool, otherMeetings, 'wt_reader_id', wtId);
+      const hospId = pickByRotation(hospPool, otherMeetings, 'hospitality_person_id', chairmanId);
+
+      const patch: Partial<WeekendMeeting> = {
+        chairman_id: chairmanId,
+        wt_conductor_id: wtId,
+        wt_reader_id: readerId,
+        hospitality_person_id: hospId,
+      };
+
+      const res = await fetch(`/api/weekend-meetings/${activeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      setFormData(prev => { const n = { ...prev }; delete n[activeId]; return n; });
+      onRefresh();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Error en auto-asignación');
+    } finally {
+      setAutoAssigning(false);
+    }
+  }, [activeId, activeMeeting, localPersons, meetings, onRefresh]);
+
+  const removeAssignments = useCallback(async () => {
+    if (!activeId) return;
+    if (!confirm('¿Quitar todas las asignaciones de esta semana?')) return;
+    const res = await fetch(`/api/weekend-meetings/${activeId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chairman_id: null,
+        wt_conductor_id: null,
+        wt_reader_id: null,
+        hospitality_person_id: null,
+        hospitality_text: null,
+      }),
+    });
+    if (res.ok) {
+      setFormData(prev => { const n = { ...prev }; delete n[activeId]; return n; });
+      onRefresh();
+    }
+  }, [activeId, onRefresh]);
 
   const createMeeting = useCallback(async (date: string) => {
     const res = await fetch('/api/weekend-meetings', {
@@ -134,7 +224,6 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
 
   const isDirty = activeId ? !!formData[activeId] : false;
 
-  // Persons eligible for chairman / wt_conductor / wt_reader / hospitality
   const chairmenPool = localPersons.filter(p => p.can_be_chairman);
   const wtPool = localPersons.filter(p => p.can_be_cbs_conductor || p.can_be_chairman);
   const readerPool = localPersons.filter(p => p.can_be_cbs_reader);
@@ -146,41 +235,56 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
     return (activeMeeting as unknown as Record<string, unknown>)?.[field] ?? '';
   };
 
+  const mergedMeeting = activeMeeting
+    ? { ...activeMeeting, ...(formData[activeId!] ?? {}) } as WeekendMeeting
+    : null;
+
   return (
     <div className="flex h-full">
       {/* LEFT: Week list */}
-      <div className="w-72 border-r border-gray-200 flex flex-col bg-gray-50">
-        <div className="p-2 border-b border-gray-200 flex gap-1">
+      <div className="w-64 border-r border-gray-200 flex flex-col bg-gray-50 shrink-0">
+        <div className="p-2 border-b border-gray-200 flex gap-1 flex-wrap">
           <button
             onClick={() => setShowOutlineManager(v => !v)}
-            className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 bg-white hover:bg-gray-100 flex items-center gap-1"
+            className="flex-1 min-w-0 text-xs border border-gray-300 rounded px-2 py-1 bg-white hover:bg-gray-100 flex items-center gap-1"
           >
-            <Settings size={12} /> Discursos
+            <Settings size={11} /> Discursos
           </button>
           <button
             onClick={() => setShowSpeakerManager(v => !v)}
-            className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 bg-white hover:bg-gray-100 flex items-center gap-1"
+            className="flex-1 min-w-0 text-xs border border-gray-300 rounded px-2 py-1 bg-white hover:bg-gray-100 flex items-center gap-1"
           >
-            <Settings size={12} /> Oradores
+            <Settings size={11} /> Oradores
+          </button>
+          <button
+            onClick={() => setShowHistory(true)}
+            className="flex-1 min-w-0 text-xs border border-gray-300 rounded px-2 py-1 bg-white hover:bg-gray-100 flex items-center gap-1"
+          >
+            <Clock size={11} /> Historial
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
           {meetings.map(m => {
             const isActive = m.id === activeId;
-            const spName = speakerLabel(m);
-            const outLabel = outlineLabel(m);
+            const sp = speakerLabel(m);
+            const ol = outlineLabel(m);
+            const today = new Date().toISOString().slice(0, 10);
+            const isPast = m.date < today;
             return (
               <button
                 key={m.id}
                 onClick={() => setActiveId(m.id)}
                 className={`w-full text-left px-3 py-2 border-b border-gray-100 transition-colors ${
-                  isActive ? 'bg-yellow-100 border-l-4 border-l-sky-500' : 'hover:bg-white'
+                  isActive ? 'bg-yellow-100 border-l-4 border-l-sky-500' : isPast ? 'opacity-60 hover:bg-white' : 'hover:bg-white'
                 }`}
               >
-                <div className="text-xs font-semibold text-gray-800">{formatWeekRange(m.date, locale)}</div>
-                {spName && <div className="text-[11px] text-gray-500 truncate">{spName}</div>}
-                {outLabel && <div className="text-[10px] text-gray-400 truncate">{outLabel}</div>}
+                <div className={`text-xs font-semibold ${isPast ? 'text-gray-500' : 'text-gray-800'}`}>
+                  {formatWeekRange(m.date, locale)}
+                </div>
+                {sp && <div className="text-[11px] text-gray-500 truncate">{sp}</div>}
+                {ol && <div className="text-[10px] text-gray-400 truncate">{ol}</div>}
+                {!sp && !ol && <div className="text-[10px] text-gray-300 italic">Sin asignar</div>}
               </button>
             );
           })}
@@ -191,8 +295,10 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
             onClick={() => {
               const d = new Date();
               const day = d.getDay();
-              const diff = day === 0 ? 0 : 7 - day; // next Sunday's Monday
-              d.setDate(d.getDate() + diff - 6); // Monday of that week
+              const toSunday = day === 0 ? 7 : 7 - day;
+              d.setDate(d.getDate() + toSunday);
+              // Monday of that week
+              d.setDate(d.getDate() - 6);
               createMeeting(d.toISOString().slice(0, 10));
             }}
             className="w-full py-1.5 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded"
@@ -203,18 +309,34 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
       </div>
 
       {/* RIGHT: Detail form */}
-      {activeMeeting ? (
+      {activeMeeting && mergedMeeting ? (
         <div className="flex-1 overflow-y-auto p-4">
-          <div className="flex items-center justify-between mb-3">
+          {/* Header toolbar */}
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
             <h2 className="font-bold text-base text-gray-800">
               {formatWeekRange(activeMeeting.date, locale)}
             </h2>
-            <div className="flex gap-2">
+            <div className="flex gap-1.5 flex-wrap">
+              <button
+                onClick={autoAssign}
+                disabled={autoAssigning}
+                title="Auto-asignar presidente, conductor AT, lector y hospitalidad"
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded font-medium disabled:opacity-50"
+              >
+                <Zap size={12} /> {autoAssigning ? 'Asignando…' : 'Auto-asignar'}
+              </button>
+              <button
+                onClick={removeAssignments}
+                title="Quitar todas las asignaciones"
+                className="flex items-center gap-1 px-2.5 py-1.5 border border-gray-300 hover:bg-red-50 hover:border-red-300 hover:text-red-600 text-gray-500 text-xs rounded"
+              >
+                <RotateCcw size={12} /> Quitar asignaciones
+              </button>
               {isDirty && (
                 <button
                   onClick={save}
                   disabled={saving}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white text-xs rounded font-medium disabled:opacity-50"
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-sky-600 hover:bg-sky-700 text-white text-xs rounded font-medium disabled:opacity-50"
                 >
                   <Save size={12} /> {saving ? 'Guardando…' : 'Guardar'}
                 </button>
@@ -229,7 +351,7 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
             </div>
           </div>
 
-          {/* Speaker + Outline row */}
+          {/* Speaker + Outline */}
           <section className="mb-4 bg-white border border-gray-200 rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
               <span className="font-semibold text-sm text-gray-700">Discurso Público</span>
@@ -237,48 +359,46 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
                 onClick={() => setSpeakerModalOpen(true)}
                 className="text-xs text-sky-600 hover:underline"
               >
-                {speakerLabel({ ...activeMeeting, ...formData[activeId!] } as WeekendMeeting) ? 'Cambiar' : '+ Asignar orador'}
+                {speakerLabel(mergedMeeting) ? 'Cambiar' : '+ Asignar orador'}
               </button>
             </div>
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div>
                 <label className="text-gray-500 block mb-0.5">Orador</label>
                 <div className="font-medium text-gray-800">
-                  {speakerLabel({ ...activeMeeting, ...(formData[activeId!] ?? {}) } as WeekendMeeting) || <span className="text-gray-400 italic">Sin asignar</span>}
+                  {speakerLabel(mergedMeeting) || <span className="text-gray-400 italic">Sin asignar</span>}
                 </div>
-                {congregationLabel({ ...activeMeeting, ...(formData[activeId!] ?? {}) } as WeekendMeeting) && (
-                  <div className="text-gray-400">{congregationLabel({ ...activeMeeting, ...(formData[activeId!] ?? {}) } as WeekendMeeting)}</div>
+                {congregationLabel(mergedMeeting) && (
+                  <div className="text-gray-400">{congregationLabel(mergedMeeting)}</div>
                 )}
               </div>
               <div>
                 <label className="text-gray-500 block mb-0.5">Discurso</label>
                 <div className="font-medium text-gray-800">
-                  {outlineLabel({ ...activeMeeting, ...(formData[activeId!] ?? {}) } as WeekendMeeting) || <span className="text-gray-400 italic">Sin discurso</span>}
+                  {outlineLabel(mergedMeeting) || <span className="text-gray-400 italic">Sin discurso</span>}
                 </div>
               </div>
             </div>
-            <div className="mt-2 grid grid-cols-3 gap-3">
+            <div className="mt-2 flex gap-3 items-end">
               <div>
                 <label className="text-xs text-gray-500 block mb-0.5">Canción</label>
                 <input
                   type="number"
-                  className="w-full border border-gray-300 rounded px-2 py-1 text-xs"
+                  className="w-20 border border-gray-300 rounded px-2 py-1 text-xs"
                   placeholder="Nº"
                   value={String(getField('song') ?? '')}
                   onChange={e => setField('song', e.target.value ? Number(e.target.value) : null)}
                 />
               </div>
-              <div className="flex items-end gap-2">
-                <label className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer pb-1">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(getField('speaker_confirmed'))}
-                    onChange={e => setField('speaker_confirmed', e.target.checked)}
-                    className="w-3 h-3"
-                  />
-                  Confirmado
-                </label>
-              </div>
+              <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer pb-1">
+                <input
+                  type="checkbox"
+                  checked={Boolean(getField('speaker_confirmed'))}
+                  onChange={e => setField('speaker_confirmed', e.target.checked)}
+                  className="w-3 h-3"
+                />
+                Confirmado
+              </label>
             </div>
             <div className="mt-2">
               <label className="text-xs text-gray-500 block mb-0.5">Notas</label>
@@ -310,19 +430,6 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
                 </select>
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-0.5">Hospitalidad</label>
-                <select
-                  className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-yellow-50"
-                  value={String(getField('hospitality_person_id') ?? '')}
-                  onChange={e => setField('hospitality_person_id', e.target.value || null)}
-                >
-                  <option value=""></option>
-                  {localPersons.map(p => (
-                    <option key={p.id} value={p.id}>{personName(p)}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
                 <label className="text-xs text-gray-500 block mb-0.5">Conductor Estudio de La Atalaya</label>
                 <select
                   className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-sky-50"
@@ -348,6 +455,77 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
                   ))}
                 </select>
               </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-0.5">Hospitalidad</label>
+                <select
+                  className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-yellow-50"
+                  value={String(getField('hospitality_person_id') ?? '')}
+                  onChange={e => setField('hospitality_person_id', e.target.value || null)}
+                >
+                  <option value=""></option>
+                  {localPersons.map(p => (
+                    <option key={p.id} value={p.id}>{personName(p)}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="mt-2">
+              <label className="text-xs text-gray-500 block mb-0.5">Nota hospitalidad</label>
+              <input
+                type="text"
+                className="w-full border border-gray-300 rounded px-2 py-1 text-xs"
+                placeholder="Dirección, notas..."
+                value={String(getField('hospitality_text') ?? '')}
+                onChange={e => setField('hospitality_text', e.target.value)}
+              />
+            </div>
+          </section>
+
+          {/* Overview table */}
+          <section className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
+              <span className="font-semibold text-xs text-gray-600 uppercase tracking-wide">Resumen general</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left px-2 py-1.5 text-gray-500 font-medium">Semana</th>
+                    <th className="text-left px-2 py-1.5 text-gray-500 font-medium">Orador</th>
+                    <th className="text-left px-2 py-1.5 text-gray-500 font-medium">Discurso</th>
+                    <th className="text-left px-2 py-1.5 text-gray-500 font-medium">Presidente</th>
+                    <th className="text-left px-2 py-1.5 text-gray-500 font-medium">Conductor AT</th>
+                    <th className="text-left px-2 py-1.5 text-gray-500 font-medium">Lector AT</th>
+                    <th className="text-left px-2 py-1.5 text-gray-500 font-medium">Hospitalidad</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {meetings.map(m => {
+                    const isRow = m.id === activeId;
+                    const sp = speakerLabel(m);
+                    const ol = outlineLabel(m);
+                    const ch = personName(m.chairman);
+                    const wt = personName(m.wt_conductor);
+                    const rd = personName(m.wt_reader);
+                    const hp = personName(m.hospitality_person);
+                    return (
+                      <tr
+                        key={m.id}
+                        onClick={() => setActiveId(m.id)}
+                        className={`border-b border-gray-100 cursor-pointer ${isRow ? 'bg-yellow-50' : 'hover:bg-gray-50'}`}
+                      >
+                        <td className="px-2 py-1.5 font-medium whitespace-nowrap">{formatWeekRange(m.date, locale)}</td>
+                        <td className="px-2 py-1.5 whitespace-nowrap">{sp || <span className="text-gray-300">—</span>}</td>
+                        <td className="px-2 py-1.5 max-w-[180px] truncate">{ol || <span className="text-gray-300">—</span>}</td>
+                        <td className="px-2 py-1.5 whitespace-nowrap">{ch || <span className="text-gray-300">—</span>}</td>
+                        <td className="px-2 py-1.5 whitespace-nowrap">{wt || <span className="text-gray-300">—</span>}</td>
+                        <td className="px-2 py-1.5 whitespace-nowrap">{rd || <span className="text-gray-300">—</span>}</td>
+                        <td className="px-2 py-1.5 whitespace-nowrap">{hp || <span className="text-gray-300">—</span>}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </section>
         </div>
@@ -390,6 +568,67 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
           onRefresh={onRefresh}
         />
       )}
+
+      {/* Past History modal */}
+      {showHistory && (
+        <PastHistoryModal onClose={() => setShowHistory(false)} />
+      )}
+    </div>
+  );
+}
+
+// ── Past History Modal ──────────────────────────────────────────────────────
+
+function PastHistoryModal({ onClose }: { onClose: () => void }) {
+  const [history, setHistory] = React.useState<HistoryRecord[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    fetch('/api/public-talk-history')
+      .then(r => r.json())
+      .then(j => setHistory(j.history || []))
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 bg-sky-600 text-white rounded-t-lg">
+          <span className="font-bold text-sm">Historial de Discursos Públicos</span>
+          <button onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="p-6 text-center text-sm text-gray-400">Cargando…</div>
+          ) : history.length === 0 ? (
+            <div className="p-6 text-center text-sm text-gray-400">Sin historial registrado</div>
+          ) : (
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 sticky top-0">
+                <tr>
+                  <th className="text-left px-3 py-2 text-gray-500 font-medium">Fecha</th>
+                  <th className="text-left px-3 py-2 text-gray-500 font-medium">Orador</th>
+                  <th className="text-left px-3 py-2 text-gray-500 font-medium">Discurso</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map(h => (
+                  <tr key={h.id} className="border-b border-gray-100">
+                    <td className="px-3 py-1.5 whitespace-nowrap">{h.date}</td>
+                    <td className="px-3 py-1.5">{h.speaker_name || <span className="text-gray-300">—</span>}</td>
+                    <td className="px-3 py-1.5">
+                      {h.outline ? `${h.outline.number} - ${h.outline.title}` : <span className="text-gray-300">—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="px-4 py-2 border-t border-gray-200 text-xs text-gray-400">
+          {history.length} registro(s)
+        </div>
+      </div>
     </div>
   );
 }
@@ -531,6 +770,8 @@ function VisitingSpeakerManagerPanel({ speakers, outlines, onClose, onRefresh }:
   const [form, setForm] = useState({ name: '', congregation: '', city: '', phone: '', email: '', outlineNums: '' });
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  void outlines; // available for future outline picker
+
   const create = async () => {
     if (!form.name || !form.congregation) return;
     const outline_numbers = form.outlineNums
@@ -618,6 +859,3 @@ function VisitingSpeakerManagerPanel({ speakers, outlines, onClose, onRefresh }:
     </div>
   );
 }
-
-// Need X import
-import { X } from 'lucide-react';
