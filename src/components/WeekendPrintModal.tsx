@@ -19,6 +19,10 @@ function personName(p: { first_name?: string | null; last_name?: string | null; 
 
 const HOSPITALITY_GROUPS = ['Grupo 1', 'Grupo 2', 'Grupo 3', 'Grupo 4', 'Grupo 5'];
 
+// Paleta compartida con el programa de entre semana (modelo La Estación).
+const TEAL = '#3d7d8e';
+const TEAL_HEX = '3D7D8E';
+
 function speakerLabel(m: WeekendMeeting) {
   if (m.speaker_type === 'other') return m.other_speaker_name || '';
   if (m.speaker_type === 'visiting') return m.visiting_speaker?.name || '';
@@ -87,8 +91,8 @@ export function WeekendPrintModal({ meetings, congregation, locale, onClose }: P
         h2{font-size:14px;color:#555;margin:2px 0 16px;font-weight:normal}
         table{width:100%;border-collapse:collapse;font-size:11px}
         th,td{border:1px solid #ccc;padding:6px 8px;text-align:left;vertical-align:top}
-        th{background:#1e6fd9;color:#fff}
-        tr:nth-child(even) td{background:#f4f8ff}
+        th{background:${TEAL};color:#fff}
+        tr:nth-child(even) td{background:#eef4f6}
         .meta{font-size:11px;color:#444;margin-top:14px}
       </style></head><body>
       <h1>${congName} — Programa de Discursos Públicos</h1>
@@ -108,7 +112,7 @@ export function WeekendPrintModal({ meetings, congregation, locale, onClose }: P
 
     const headerRow = new TableRow({
       children: COLS.map(c => new TableCell({
-        shading: { fill: '1E6FD9' },
+        shading: { fill: TEAL_HEX },
         children: [new Paragraph({ children: [new TextRun({ text: c, bold: true, color: 'FFFFFF', size: 18 })] })],
       })),
     });
@@ -167,16 +171,19 @@ export function WeekendPrintModal({ meetings, congregation, locale, onClose }: P
 
         {/* Preview */}
         <div className="flex-1 overflow-auto p-4 bg-gray-100 dark:bg-gray-900">
-          <div className="bg-white mx-auto shadow p-6" style={{ maxWidth: 800 }}>
-            <h1 className="text-lg font-bold text-gray-900">{congName} — Programa de Discursos Públicos</h1>
+          <div className="bg-white mx-auto shadow p-6" style={{ maxWidth: 800, fontFamily: 'Arial, Helvetica, sans-serif' }}>
+            <div className="flex items-end justify-between border-b-2 border-slate-800 pb-1 mb-3">
+              <h1 className="text-lg font-bold text-gray-900">Programa de Discursos Públicos</h1>
+              <span className="text-lg font-bold text-gray-900">{congName}</span>
+            </div>
             <p className="text-sm text-gray-500 mb-4 capitalize">{monthTitle}{congregation?.kingdom_hall_address ? ` · ${congregation.kingdom_hall_address}` : ''}</p>
             <table className="w-full text-[11px] border-collapse">
               <thead>
-                <tr>{COLS.map(c => <th key={c} className="border border-gray-300 bg-sky-600 text-white px-2 py-1 text-left">{c}</th>)}</tr>
+                <tr>{COLS.map(c => <th key={c} className="border border-gray-300 text-white px-2 py-1 text-left" style={{ background: TEAL }}>{c}</th>)}</tr>
               </thead>
               <tbody>
                 {monthMeetings.map(m => (
-                  <tr key={m.id} className="even:bg-sky-50">
+                  <tr key={m.id} className="even:bg-[#eef4f6]">
                     {rowOf(m, locale).map((v, i) => <td key={i} className="border border-gray-300 px-2 py-1 text-gray-800">{v || ''}</td>)}
                   </tr>
                 ))}
