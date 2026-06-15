@@ -19,6 +19,8 @@ export default function WeekendPage() {
   const [migrating, setMigrating] = useState(false);
   const [migrationSql, setMigrationSql] = useState<string>('');
   const [copied, setCopied] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -59,6 +61,34 @@ export default function WeekendPage() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  const createWeek = useCallback(async (date?: string) => {
+    let iso = date;
+    if (!iso) {
+      const d = new Date();
+      const day = d.getDay();
+      const toSunday = day === 0 ? 7 : 7 - day;
+      d.setDate(d.getDate() + toSunday - 6);
+      iso = d.toISOString().slice(0, 10);
+    }
+    setCreating(true);
+    try {
+      const res = await fetch('/api/weekend-meetings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: iso }),
+      });
+      if (res.ok) {
+        const j = await res.json();
+        await fetchData();
+        setActiveId(j.meeting.id);
+      } else {
+        alert((await res.json()).error || 'Error al crear semana');
+      }
+    } finally {
+      setCreating(false);
+    }
+  }, [fetchData]);
 
   const runMigration = async () => {
     setMigrating(true);
@@ -168,12 +198,14 @@ export default function WeekendPage() {
   return (
     <div className="flex h-screen bg-gray-50 font-sans">
       <Sidebar
-        meetings={[]}
-        activeMeetingId={null}
-        setActiveMeetingId={() => {}}
+        meetings={meetings}
+        activeMeetingId={activeId}
+        setActiveMeetingId={setActiveId}
         onPrint={() => {}}
-        onNewMeeting={() => {}}
-        isCreating={false}
+        onNewMeeting={createWeek}
+        isCreating={creating}
+        allowPast
+        monthsBack={12}
       />
       <div className="flex-1 overflow-hidden">
         <WeekendDashboard
@@ -183,6 +215,8 @@ export default function WeekendPage() {
           localPersons={localPersons}
           locale={safeLocale}
           onRefresh={fetchData}
+          activeId={activeId}
+          setActiveId={setActiveId}
         />
       </div>
     </div>

@@ -42,7 +42,18 @@ export async function POST(request: Request) {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // Idempotent: if the week already exists, return it instead of failing
+      if (error.code === '23505' || error.message.includes('duplicate')) {
+        const { data: existing } = await supabase
+          .from('weekend_meetings')
+          .select()
+          .eq('date', date)
+          .single();
+        if (existing) return NextResponse.json({ meeting: existing }, { status: 200 });
+      }
+      throw error;
+    }
     return NextResponse.json({ meeting: data }, { status: 201 });
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Error' }, { status: 500 });

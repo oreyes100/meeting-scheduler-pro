@@ -31,6 +31,8 @@ interface Props {
   localPersons: LocalPerson[];
   locale: 'en' | 'es';
   onRefresh: () => void;
+  activeId: string | null;
+  setActiveId: (id: string | null) => void;
 }
 
 function personName(p: { first_name?: string | null; last_name?: string | null; display_name?: string | null } | null | undefined) {
@@ -81,8 +83,7 @@ function pickByRotation(
   return candidates[0].id;
 }
 
-export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPersons, locale, onRefresh }: Props) {
-  const [activeId, setActiveId] = useState<string | null>(meetings[0]?.id ?? null);
+export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPersons, locale, onRefresh, activeId, setActiveId }: Props) {
   const [speakerModalOpen, setSpeakerModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [autoAssigning, setAutoAssigning] = useState(false);
@@ -90,8 +91,6 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
   const [showOutlineManager, setShowOutlineManager] = useState(false);
   const [showSpeakerManager, setShowSpeakerManager] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [newWeekDate, setNewWeekDate] = useState('');
 
   const activeMeeting = meetings.find(m => m.id === activeId);
 
@@ -180,19 +179,6 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
     }
   }, [activeId, onRefresh]);
 
-  const createMeeting = useCallback(async (date: string) => {
-    const res = await fetch('/api/weekend-meetings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date }),
-    });
-    if (res.ok) {
-      const j = await res.json();
-      onRefresh();
-      setActiveId(j.meeting.id);
-    }
-  }, [onRefresh]);
-
   const deleteMeeting = useCallback(async (id: string) => {
     if (!confirm('¿Eliminar esta reunión de fin de semana?')) return;
     await fetch(`/api/weekend-meetings/${id}`, { method: 'DELETE' });
@@ -242,98 +228,33 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
     : null;
 
   return (
-    <div className="flex h-full">
-      {/* LEFT: Week list */}
-      <div className="w-64 border-r border-gray-200 flex flex-col bg-gray-50 shrink-0">
-        <div className="p-2 border-b border-gray-200 flex gap-1 flex-wrap">
-          <button
-            onClick={() => setShowOutlineManager(v => !v)}
-            className="flex-1 min-w-0 text-xs border border-gray-300 rounded px-2 py-1 bg-white hover:bg-gray-100 flex items-center gap-1"
-          >
-            <Settings size={11} /> Discursos
-          </button>
-          <button
-            onClick={() => setShowSpeakerManager(v => !v)}
-            className="flex-1 min-w-0 text-xs border border-gray-300 rounded px-2 py-1 bg-white hover:bg-gray-100 flex items-center gap-1"
-          >
-            <Settings size={11} /> Oradores
-          </button>
-          <button
-            onClick={() => setShowHistory(true)}
-            className="flex-1 min-w-0 text-xs border border-gray-300 rounded px-2 py-1 bg-white hover:bg-gray-100 flex items-center gap-1"
-          >
-            <Clock size={11} /> Historial
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          {meetings.map(m => {
-            const isActive = m.id === activeId;
-            const sp = speakerLabel(m);
-            const ol = outlineLabel(m);
-            const today = new Date().toISOString().slice(0, 10);
-            const isPast = m.date < today;
-            return (
-              <button
-                key={m.id}
-                onClick={() => setActiveId(m.id)}
-                className={`w-full text-left px-3 py-2 border-b border-gray-100 transition-colors ${
-                  isActive ? 'bg-yellow-100 border-l-4 border-l-sky-500' : isPast ? 'opacity-60 hover:bg-white' : 'hover:bg-white'
-                }`}
-              >
-                <div className={`text-xs font-semibold ${isPast ? 'text-gray-500' : 'text-gray-800'}`}>
-                  {formatWeekRange(m.date, locale)}
-                </div>
-                {sp && <div className="text-[11px] text-gray-500 truncate">{sp}</div>}
-                {ol && <div className="text-[10px] text-gray-400 truncate">{ol}</div>}
-                {!sp && !ol && <div className="text-[10px] text-gray-300 italic">Sin asignar</div>}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="p-2 border-t border-gray-200 flex flex-col gap-1">
-          <button
-            onClick={() => {
-              const d = new Date();
-              const day = d.getDay();
-              const toSunday = day === 0 ? 7 : 7 - day;
-              d.setDate(d.getDate() + toSunday - 6);
-              createMeeting(d.toISOString().slice(0, 10));
-            }}
-            className="w-full py-1.5 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded"
-          >
-            <Plus size={12} className="inline mr-1" />Nueva semana
-          </button>
-          {!showDatePicker ? (
-            <button
-              onClick={() => setShowDatePicker(true)}
-              className="w-full py-1 border border-gray-300 hover:bg-gray-100 text-gray-500 text-xs rounded"
-            >
-              + Semana pasada (histórico)
-            </button>
-          ) : (
-            <div className="flex gap-1">
-              <input
-                type="date"
-                className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs"
-                value={newWeekDate}
-                onChange={e => setNewWeekDate(e.target.value)}
-                placeholder="Fecha lunes"
-              />
-              <button
-                onClick={() => {
-                  if (newWeekDate) { createMeeting(newWeekDate); setShowDatePicker(false); setNewWeekDate(''); }
-                }}
-                className="px-2 py-1 bg-sky-600 text-white text-xs rounded"
-              >✓</button>
-              <button onClick={() => { setShowDatePicker(false); setNewWeekDate(''); }} className="px-2 py-1 text-gray-400 text-xs">✕</button>
-            </div>
-          )}
-        </div>
+    <div className="flex flex-col h-full">
+      {/* Top toolbar: managers */}
+      <div className="px-4 py-2 border-b border-gray-200 bg-white flex gap-2 items-center">
+        <button
+          onClick={() => setShowOutlineManager(v => !v)}
+          className="text-xs border border-gray-300 rounded px-3 py-1.5 bg-white hover:bg-gray-100 flex items-center gap-1"
+        >
+          <Settings size={12} /> Discursos
+        </button>
+        <button
+          onClick={() => setShowSpeakerManager(v => !v)}
+          className="text-xs border border-gray-300 rounded px-3 py-1.5 bg-white hover:bg-gray-100 flex items-center gap-1"
+        >
+          <Settings size={12} /> Oradores
+        </button>
+        <button
+          onClick={() => setShowHistory(true)}
+          className="text-xs border border-gray-300 rounded px-3 py-1.5 bg-white hover:bg-gray-100 flex items-center gap-1"
+        >
+          <Clock size={12} /> Historial
+        </button>
+        <span className="text-xs text-gray-400 ml-auto">
+          Usa el panel de semanas (izquierda) para seleccionar o crear una semana — pasadas incluidas
+        </span>
       </div>
 
-      {/* RIGHT: Detail form */}
+      {/* Detail form */}
       {activeMeeting && mergedMeeting ? (
         <div className="flex-1 overflow-y-auto p-4">
           {/* Header toolbar */}

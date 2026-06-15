@@ -14,6 +14,8 @@ interface SidebarProps {
   onPrint: () => void;
   onNewMeeting: (specificDate?: string) => void;
   isCreating: boolean;
+  allowPast?: boolean;       // allow clicking/creating past weeks (weekend historical entry)
+  monthsBack?: number;       // how many months before current to show
 }
 
 const MONTHS_TO_SHOW = 6; // current month + next 5
@@ -41,7 +43,7 @@ function isoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-export function Sidebar({ meetings, activeMeetingId, setActiveMeetingId, onPrint, onNewMeeting, isCreating }: SidebarProps) {
+export function Sidebar({ meetings, activeMeetingId, setActiveMeetingId, onPrint, onNewMeeting, isCreating, allowPast = false, monthsBack = 0 }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { t, locale } = useT();
@@ -58,8 +60,8 @@ export function Sidebar({ meetings, activeMeetingId, setActiveMeetingId, onPrint
   type Month = { key: string; weeks: Week[] };
   const calendar: { months: Month[] } = useMemo(() => {
     if (!today) return { months: [] };
-    const start = new Date(today.getFullYear(), today.getMonth(), 1);
-    const end = addMonths(start, MONTHS_TO_SHOW - 1);
+    const start = new Date(today.getFullYear(), today.getMonth() - monthsBack, 1);
+    const end = addMonths(start, MONTHS_TO_SHOW - 1 + monthsBack);
     end.setMonth(end.getMonth() + 1);
     end.setDate(0); // last day of (start + MONTHS_TO_SHOW - 1)
 
@@ -84,7 +86,7 @@ export function Sidebar({ meetings, activeMeetingId, setActiveMeetingId, onPrint
       cursor.setDate(cursor.getDate() + 7);
     }
     return { months: Object.values(monthsMap) };
-  }, [meetings, today, locale]);
+  }, [meetings, today, locale, monthsBack]);
 
   const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({});
 
@@ -195,21 +197,25 @@ export function Sidebar({ meetings, activeMeetingId, setActiveMeetingId, onPrint
                         );
                       }
 
-                      // Empty week — clickable placeholder
+                      // Empty week — clickable placeholder.
+                      // Past weeks are only clickable when allowPast (weekend historical entry).
+                      const blocked = isPast && !allowPast;
                       return (
                         <button
                           key={week.isoDate}
                           onClick={() => onNewMeeting(week.isoDate)}
-                          disabled={isCreating || isPast}
+                          disabled={isCreating || blocked}
                           className={`w-full text-left px-4 py-1.5 border-b border-gray-100 last:border-0 transition-colors flex items-center justify-between group ${
-                            isPast
+                            blocked
                               ? 'text-gray-300 cursor-not-allowed'
-                              : 'text-gray-400 hover:bg-sky-50 hover:text-sky-600 cursor-pointer'
+                              : isPast
+                                ? 'text-gray-400 hover:bg-amber-50 hover:text-amber-600 cursor-pointer italic'
+                                : 'text-gray-400 hover:bg-sky-50 hover:text-sky-600 cursor-pointer'
                           }`}
-                          title={isPast ? t('sidebar.pastWeek') : `${t('sidebar.createWeekFor')} ${label}`}
+                          title={blocked ? t('sidebar.pastWeek') : `${t('sidebar.createWeekFor')} ${label}`}
                         >
                           <span className="italic">{label}</span>
-                          {!isPast && <Plus size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
+                          {!blocked && <Plus size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
                         </button>
                       );
                     })}
