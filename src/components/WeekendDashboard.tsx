@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { Plus, Trash2, Settings, ChevronDown, ChevronRight, Save, X, Zap, Clock, RotateCcw } from 'lucide-react';
+import { Plus, Trash2, Settings, ChevronDown, ChevronRight, Save, X, Zap, Clock, RotateCcw, Printer } from 'lucide-react';
 import { PublicSpeakerModal } from './PublicSpeakerModal';
-import type { WeekendMeeting, PublicTalkOutline, PublicSpeaker } from '@/types';
+import { WeekendPrintModal } from './WeekendPrintModal';
+import type { WeekendMeeting, PublicTalkOutline, PublicSpeaker, CongregationSettings } from '@/types';
 import { formatWeekRange } from '@/lib/weekLabel';
 
 interface LocalPerson {
@@ -37,6 +38,7 @@ interface Props {
   onRefresh: () => void;
   activeId: string | null;
   setActiveId: (id: string | null) => void;
+  congregation?: CongregationSettings | null;
 }
 
 function personName(p: { first_name?: string | null; last_name?: string | null; display_name?: string | null } | null | undefined) {
@@ -87,8 +89,9 @@ function pickByRotation(
   return candidates[0].id;
 }
 
-export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPersons, locale, onRefresh, activeId, setActiveId }: Props) {
+export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPersons, locale, onRefresh, activeId, setActiveId, congregation }: Props) {
   const [speakerModalOpen, setSpeakerModalOpen] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [formData, setFormData] = useState<Record<string, Partial<WeekendMeeting>>>({});
@@ -255,6 +258,12 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
           className="text-xs border border-gray-300 rounded px-3 py-1.5 bg-white hover:bg-gray-100 flex items-center gap-1"
         >
           <Clock size={12} /> Historial
+        </button>
+        <button
+          onClick={() => setPrintOpen(true)}
+          className="text-xs border border-gray-300 rounded px-3 py-1.5 bg-white hover:bg-gray-100 flex items-center gap-1"
+        >
+          <Printer size={12} /> Imprimir mes
         </button>
         <span className="text-xs text-gray-400 ml-auto">
           Usa el panel de semanas (izquierda) para seleccionar o crear una semana — pasadas incluidas
@@ -547,6 +556,16 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
       {/* Past History modal */}
       {showHistory && (
         <PastHistoryModal onClose={() => setShowHistory(false)} />
+      )}
+
+      {/* Month print modal */}
+      {printOpen && (
+        <WeekendPrintModal
+          meetings={meetings}
+          congregation={congregation ?? null}
+          locale={locale}
+          onClose={() => setPrintOpen(false)}
+        />
       )}
     </div>
   );

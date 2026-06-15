@@ -202,3 +202,24 @@ export type PersonFilter =
   | 'reports_directly_to_branch'
   | 'removed'
   | 'moved';
+
+export interface CongregationSettings {
+  id: string;
+  name: string | null;
+  number: string | null;
+  congregation_id: string | null;
+  language: string | null;
+  time_zone: string | null;
+  weekend_meeting_day: string | null;
+  weekend_meeting_time: string | null;
+  midweek_meeting_day: string | null;
+  midweek_meeting_time: string | null;
+  zoom_meeting_id: string | null;
+  zoom_password: string | null;
+  zoom_link: string | null;
+  dial_in_number: string | null;
+  kingdom_hall_address: string | null;
+  circuit: string | null;
+  co_name: string | null;
+  co_contact_details: string | null;
+}

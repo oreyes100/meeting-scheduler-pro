@@ -2,8 +2,9 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Users, Calendar, MapPin, Smartphone, UserX, Printer, HelpCircle, ChevronDown, ChevronRight, Plus, BookOpen } from 'lucide-react';
+import { Users, Calendar, MapPin, Smartphone, UserX, Printer, HelpCircle, ChevronDown, ChevronRight, Plus, BookOpen, Home, Sun, Moon, Monitor } from 'lucide-react';
 import { useT } from '@/lib/i18n';
+import { useTheme, type ThemeMode } from '@/lib/theme';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { formatWeekRange } from '@/lib/weekLabel';
 
@@ -47,6 +48,12 @@ export function Sidebar({ meetings, activeMeetingId, setActiveMeetingId, onPrint
   const router = useRouter();
   const pathname = usePathname();
   const { t, locale } = useT();
+  const { mode, setMode } = useTheme();
+  const cycleTheme = () => {
+    const order: ThemeMode[] = ['light', 'dark', 'system'];
+    setMode(order[(order.indexOf(mode) + 1) % order.length]);
+  };
+  const ThemeIcon = mode === 'light' ? Sun : mode === 'dark' ? Moon : Monitor;
 
   // Today's date (client-only) — used to filter past months
   const [today, setToday] = useState<Date | null>(null);
@@ -126,9 +133,10 @@ export function Sidebar({ meetings, activeMeetingId, setActiveMeetingId, onPrint
   };
 
   return (
-    <div className="flex h-full bg-white border-r border-border text-sm overflow-hidden select-none">
+    <div className="flex h-full bg-white dark:bg-gray-800 border-r border-border text-sm overflow-hidden select-none">
       {/* 1. Leftmost Mini Icon Bar */}
       <div className="w-14 bg-sky-500 flex flex-col items-center py-4 space-y-6 text-white flex-shrink-0">
+        <button onClick={() => router.push('/congregation')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/congregation') ? 'bg-sky-600 shadow-inner' : ''}`} title="Congregación"><Home size={24} /></button>
         <button onClick={() => router.push('/persons')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/persons') ? 'bg-sky-600' : ''}`} title={t('sidebar.tooltip.persons')}><Users size={24} /></button>
         <button onClick={() => router.push('/meetings')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/meetings') ? 'bg-sky-600 shadow-inner' : ''}`} title={t('sidebar.tooltip.schedule')}><Calendar size={24} /></button>
         <button onClick={() => router.push('/weekend')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/weekend') ? 'bg-sky-600 shadow-inner' : ''}`} title="Reunión Fin de Semana"><BookOpen size={24} /></button>
@@ -140,6 +148,7 @@ export function Sidebar({ meetings, activeMeetingId, setActiveMeetingId, onPrint
           <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
         </button>
         <button onClick={onPrint} className="p-2 hover:bg-sky-600 rounded-md transition-colors" title={t('sidebar.tooltip.print')}><Printer size={24} /></button>
+        <button onClick={cycleTheme} className="p-2 hover:bg-sky-600 rounded-md transition-colors" title={`Tema: ${mode === 'light' ? 'claro' : mode === 'dark' ? 'oscuro' : 'según sistema'}`}><ThemeIcon size={24} /></button>
         <button onClick={() => alert('Help center coming soon!')} className="p-2 hover:bg-sky-600 rounded-md transition-colors" title={t('sidebar.tooltip.help')}><HelpCircle size={24} /></button>
       </div>
 

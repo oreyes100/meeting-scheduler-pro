@@ -1,6 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
+/* Enable class-based dark mode (Tailwind v4): `dark:` variant applies under .dark */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --color-primary: #2563EB;
   --color-primary-light: #3B82F6;
@@ -44,6 +47,22 @@
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+}
+
+/* Dark theme: override semantic tokens */
+.dark {
+  color-scheme: dark;
+  --color-surface: #1E293B;
+  --color-surface-secondary: #0F172A;
+  --color-surface-tertiary: #334155;
+
+  --color-text: #F1F5F9;
+  --color-text-secondary: #CBD5E1;
+  --color-text-muted: #94A3B8;
+
+  --color-border: #334155;
+  --color-border-light: #1E293B;
+  --color-border-hover: #475569;
 }
 
 @theme inline {

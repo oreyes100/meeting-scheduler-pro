@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { WeekendDashboard } from '@/components/WeekendDashboard';
 import { Sidebar } from '@/components/Sidebar';
-import type { WeekendMeeting, PublicTalkOutline, PublicSpeaker } from '@/types';
+import type { WeekendMeeting, PublicTalkOutline, PublicSpeaker, CongregationSettings } from '@/types';
 import { useT } from '@/lib/i18n';
 
 export default function WeekendPage() {
@@ -13,6 +13,7 @@ export default function WeekendPage() {
   const [outlines, setOutlines] = useState<PublicTalkOutline[]>([]);
   const [visitingSpeakers, setVisitingSpeakers] = useState<PublicSpeaker[]>([]);
   const [localPersons, setLocalPersons] = useState<any[]>([]);
+  const [congregation, setCongregation] = useState<CongregationSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [migrationNeeded, setMigrationNeeded] = useState(false);
@@ -53,6 +54,11 @@ export default function WeekendPage() {
       setVisitingSpeakers(spj.speakers || []);
       setLocalPersons(pj.persons || []);
       setMigrationNeeded(false);
+      // Congregation settings are optional — ignore if table not yet created
+      try {
+        const cRes = await fetch('/api/congregation');
+        if (cRes.ok) setCongregation((await cRes.json()).congregation || null);
+      } catch { /* ignore */ }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error');
     } finally {
@@ -217,6 +223,7 @@ export default function WeekendPage() {
           onRefresh={fetchData}
           activeId={activeId}
           setActiveId={setActiveId}
+          congregation={congregation}
         />
       </div>
     </div>
