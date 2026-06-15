@@ -42,6 +42,8 @@ src/
 - **No tocar** `src/lib/programs.ts` para agregar semanas sin confirmación (cambio manual deliberado).
 - Si tarea afecta **>3 archivos** → exponer plan antes de editar.
 - Antes de acción destructiva (reset, drop, rm): confirmar con usuario.
+- **`git push` a producción: ejecutar sin preguntar** — el usuario ya hizo pruebas antes de pedir el push.
+- **Congregación**: "La Estación" (constante en PrintModal.tsx → `CONGREGATION_NAME`).
 
 ## Formato de Output
 - Respuestas concisas. Sin intro genérica.
