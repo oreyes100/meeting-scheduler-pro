@@ -14,6 +14,7 @@ interface LocalSpeaker {
 interface Props {
   outlines: PublicTalkOutline[];
   localSpeakers: LocalSpeaker[];
+  allLocalPersons?: LocalSpeaker[];
   visitingSpeakers: PublicSpeaker[];
   onConfirm: (result: {
     speakerType: 'local' | 'visiting' | 'other';
@@ -50,6 +51,7 @@ const AGE_BG: Record<string, string> = {
 export function PublicSpeakerModal({
   outlines,
   localSpeakers,
+  allLocalPersons,
   visitingSpeakers,
   onConfirm,
   onClose,
@@ -68,6 +70,10 @@ export function PublicSpeakerModal({
   const [filterBySpeaker, setFilterBySpeaker] = useState(false);
   const [speakerSearch, setSpeakerSearch] = useState('');
   const [congregationFilter, setCongregationFilter] = useState('');
+  const [localScope, setLocalScope] = useState<'local' | 'all'>('local');
+
+  // 'local' = only persons with the speaker capability; 'all' = every publisher
+  const localSpeakerList = localScope === 'all' && allLocalPersons ? allLocalPersons : localSpeakers;
 
   // Congregations list from visiting speakers
   const congregations = useMemo(() => {
@@ -151,18 +157,29 @@ export function PublicSpeakerModal({
 
             {speakerType === 'local' && (
               <div className="flex flex-col flex-1 overflow-hidden p-2 gap-2">
-                <div className="flex items-center gap-1 border border-gray-300 rounded px-2 py-1">
-                  <Search size={12} className="text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Buscar..."
-                    className="flex-1 text-xs outline-none"
-                    value={speakerSearch}
-                    onChange={e => setSpeakerSearch(e.target.value)}
-                  />
+                <div className="flex gap-1">
+                  <select
+                    className="text-xs border border-gray-300 rounded px-2 py-1"
+                    value={localScope}
+                    onChange={e => { setLocalScope(e.target.value as 'local' | 'all'); setSelectedLocalId(''); }}
+                    title="Mostrar solo oradores con permiso, o todos los publicadores"
+                  >
+                    <option value="local">Solo oradores</option>
+                    <option value="all">Todos</option>
+                  </select>
+                  <div className="flex items-center gap-1 border border-gray-300 rounded px-2 py-1 flex-1">
+                    <Search size={12} className="text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar..."
+                      className="flex-1 text-xs outline-none"
+                      value={speakerSearch}
+                      onChange={e => setSpeakerSearch(e.target.value)}
+                    />
+                  </div>
                 </div>
                 <div className="flex-1 overflow-y-auto border border-gray-200 rounded">
-                  {localSpeakers
+                  {localSpeakerList
                     .filter(s => !speakerSearch || speakerName(s).toLowerCase().includes(speakerSearch.toLowerCase()))
                     .map(s => (
                       <button

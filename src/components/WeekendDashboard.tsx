@@ -11,11 +11,15 @@ interface LocalPerson {
   first_name: string | null;
   last_name: string | null;
   display_name: string | null;
+  can_be_speaker?: boolean;
   can_give_public_talk?: boolean;
   can_be_chairman?: boolean;
   can_be_cbs_conductor?: boolean;
   can_be_cbs_reader?: boolean;
 }
+
+// Hospitality assignments: groups first, then individual publishers.
+const HOSPITALITY_GROUPS = ['Grupo 1', 'Grupo 2', 'Grupo 3', 'Grupo 4', 'Grupo 5'];
 
 interface HistoryRecord {
   id: string;
@@ -215,6 +219,9 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
   const chairmenPool = localPersons.filter(p => p.can_be_chairman);
   const wtPool = localPersons.filter(p => p.can_be_cbs_conductor || p.can_be_chairman);
   const readerPool = localPersons.filter(p => p.can_be_cbs_reader);
+  // Local public speakers: the populated capability flag is `can_be_speaker`
+  // (legacy `can_give_public_talk` kept as fallback).
+  const localSpeakerPool = localPersons.filter(p => p.can_be_speaker || p.can_give_public_talk);
 
   const getField = (field: string) => {
     if (!activeId) return '';
@@ -405,13 +412,33 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
                 <label className="text-xs text-gray-500 block mb-0.5">Hospitalidad</label>
                 <select
                   className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-yellow-50"
-                  value={String(getField('hospitality_person_id') ?? '')}
-                  onChange={e => setField('hospitality_person_id', e.target.value || null)}
+                  value={
+                    HOSPITALITY_GROUPS.includes(String(getField('hospitality_text') ?? ''))
+                      ? `group:${getField('hospitality_text')}`
+                      : String(getField('hospitality_person_id') ?? '')
+                  }
+                  onChange={e => {
+                    const v = e.target.value;
+                    if (v.startsWith('group:')) {
+                      setField('hospitality_text', v.slice(6));
+                      setField('hospitality_person_id', null);
+                    } else {
+                      setField('hospitality_person_id', v || null);
+                      setField('hospitality_text', null);
+                    }
+                  }}
                 >
                   <option value=""></option>
-                  {localPersons.map(p => (
-                    <option key={p.id} value={p.id}>{personName(p)}</option>
-                  ))}
+                  <optgroup label="Grupos">
+                    {HOSPITALITY_GROUPS.map(g => (
+                      <option key={g} value={`group:${g}`}>{g}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Publicadores">
+                    {localPersons.map(p => (
+                      <option key={p.id} value={p.id}>{personName(p)}</option>
+                    ))}
+                  </optgroup>
                 </select>
               </div>
             </div>
@@ -453,7 +480,8 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
                     const ch = personName(m.chairman);
                     const wt = personName(m.wt_conductor);
                     const rd = personName(m.wt_reader);
-                    const hp = personName(m.hospitality_person);
+                    const hp = personName(m.hospitality_person) ||
+                      (HOSPITALITY_GROUPS.includes(m.hospitality_text || '') ? m.hospitality_text! : '');
                     return (
                       <tr
                         key={m.id}
@@ -485,7 +513,8 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
       {speakerModalOpen && activeMeeting && (
         <PublicSpeakerModal
           outlines={outlines}
-          localSpeakers={localPersons.filter(p => p.can_give_public_talk)}
+          localSpeakers={localSpeakerPool}
+          allLocalPersons={localPersons}
           visitingSpeakers={visitingSpeakers}
           onConfirm={handleSpeakerConfirm}
           onClose={() => setSpeakerModalOpen(false)}
