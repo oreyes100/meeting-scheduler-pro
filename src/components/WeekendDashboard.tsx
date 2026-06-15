@@ -90,6 +90,8 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
   const [showOutlineManager, setShowOutlineManager] = useState(false);
   const [showSpeakerManager, setShowSpeakerManager] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [newWeekDate, setNewWeekDate] = useState('');
 
   const activeMeeting = meetings.find(m => m.id === activeId);
 
@@ -290,21 +292,44 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
           })}
         </div>
 
-        <div className="p-2 border-t border-gray-200">
+        <div className="p-2 border-t border-gray-200 flex flex-col gap-1">
           <button
             onClick={() => {
               const d = new Date();
               const day = d.getDay();
               const toSunday = day === 0 ? 7 : 7 - day;
-              d.setDate(d.getDate() + toSunday);
-              // Monday of that week
-              d.setDate(d.getDate() - 6);
+              d.setDate(d.getDate() + toSunday - 6);
               createMeeting(d.toISOString().slice(0, 10));
             }}
             className="w-full py-1.5 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded"
           >
             <Plus size={12} className="inline mr-1" />Nueva semana
           </button>
+          {!showDatePicker ? (
+            <button
+              onClick={() => setShowDatePicker(true)}
+              className="w-full py-1 border border-gray-300 hover:bg-gray-100 text-gray-500 text-xs rounded"
+            >
+              + Semana pasada (histórico)
+            </button>
+          ) : (
+            <div className="flex gap-1">
+              <input
+                type="date"
+                className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs"
+                value={newWeekDate}
+                onChange={e => setNewWeekDate(e.target.value)}
+                placeholder="Fecha lunes"
+              />
+              <button
+                onClick={() => {
+                  if (newWeekDate) { createMeeting(newWeekDate); setShowDatePicker(false); setNewWeekDate(''); }
+                }}
+                className="px-2 py-1 bg-sky-600 text-white text-xs rounded"
+              >✓</button>
+              <button onClick={() => { setShowDatePicker(false); setNewWeekDate(''); }} className="px-2 py-1 text-gray-400 text-xs">✕</button>
+            </div>
+          )}
         </div>
       </div>
 
