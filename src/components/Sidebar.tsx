@@ -140,7 +140,7 @@ export function Sidebar({ meetings, activeMeetingId, setActiveMeetingId, onPrint
         <button onClick={() => router.push('/persons')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/persons') ? 'bg-sky-600' : ''}`} title={t('sidebar.tooltip.persons')}><Users size={24} /></button>
         <button onClick={() => router.push('/meetings')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/meetings') ? 'bg-sky-600 shadow-inner' : ''}`} title={t('sidebar.tooltip.schedule')}><Calendar size={24} /></button>
         <button onClick={() => router.push('/weekend')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/weekend') ? 'bg-sky-600 shadow-inner' : ''}`} title="Reunión Fin de Semana"><BookOpen size={24} /></button>
-        <button onClick={() => alert('Territories module coming soon!')} className="p-2 hover:bg-sky-600 rounded-md transition-colors" title={t('sidebar.tooltip.territories')}><MapPin size={24} /></button>
+        <button onClick={() => router.push('/territories')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/territories') ? 'bg-sky-600 shadow-inner' : ''}`} title={t('sidebar.tooltip.territories')}><MapPin size={24} /></button>
         <button onClick={() => alert('Mobile Sync module coming soon!')} className="p-2 hover:bg-sky-600 rounded-md transition-colors" title={t('sidebar.tooltip.mobile')}><Smartphone size={24} /></button>
         <div className="flex-1"></div>
         <button onClick={() => alert('Alerts coming soon!')} className="p-2 hover:bg-sky-600 rounded-md transition-colors relative" title={t('sidebar.tooltip.alerts')}>
