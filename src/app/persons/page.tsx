@@ -279,7 +279,15 @@ function PersonEditor({ person, isNew, onClose, onSaved }: PersonEditorProps) {
               <Section title={t('persons.section.assignment')}>
                 <Grid>
                   <Field label={t('persons.chairman')}><Toggle value={!!form.can_be_chairman} onChange={(v) => handleChange('can_be_chairman', v)} /></Field>
-                  <Field label={t('persons.speaker')}><Toggle value={!!form.can_be_speaker} onChange={(v) => handleChange('can_be_speaker', v)} /></Field>
+                  <div>
+                    <Field label={t('persons.speaker')}><Toggle value={!!form.can_be_speaker} onChange={(v) => handleChange('can_be_speaker', v)} /></Field>
+                    {form.can_be_speaker && (
+                      <div className="mt-2 ml-1 flex flex-col gap-1.5 border-l-2 border-sky-100 pl-3">
+                        <Field label="Orador local"><Toggle value={form.speaker_local !== false} onChange={(v) => handleChange('speaker_local', v)} /></Field>
+                        <Field label="Orador visitante (saliente)"><Toggle value={!!form.speaker_visiting} onChange={(v) => handleChange('speaker_visiting', v)} /></Field>
+                      </div>
+                    )}
+                  </div>
                   <Field label={t('persons.gems')}><Toggle value={!!form.can_do_gems} onChange={(v) => handleChange('can_do_gems', v)} /></Field>
                   <Field label={t('persons.bibleReadingAssign')}><Toggle value={!!form.can_do_bible_reading} onChange={(v) => handleChange('can_do_bible_reading', v)} /></Field>
                   <Field label={t('persons.studentParts')}><Toggle value={!!form.can_do_student_parts} onChange={(v) => handleChange('can_do_student_parts', v)} /></Field>

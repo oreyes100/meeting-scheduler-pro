@@ -77,6 +77,8 @@ export interface Person {
   // Assignment capabilities (used by auto-assign)
   can_be_chairman: boolean;
   can_be_speaker: boolean;
+  speaker_local?: boolean;
+  speaker_visiting?: boolean;
   can_do_gems: boolean;
   can_do_bible_reading: boolean;
   can_do_student_parts: boolean;

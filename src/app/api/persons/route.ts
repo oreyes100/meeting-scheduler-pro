@@ -14,7 +14,7 @@ const PERSON_FIELDS = [
   'status', 'moved_date', 'moved_to_congregation', 'is_active',
   'is_publisher', 'is_unbaptized_publisher', 'is_elder', 'is_ministerial_servant',
   'is_regular_pioneer', 'is_auxiliary_pioneer', 'is_special_pioneer', 'auxiliary_pioneer_this_month',
-  'can_be_chairman', 'can_be_speaker', 'can_do_gems', 'can_do_bible_reading',
+  'can_be_chairman', 'can_be_speaker', 'speaker_local', 'speaker_visiting', 'can_do_gems', 'can_do_bible_reading',
   'can_do_student_parts', 'can_be_assistant', 'can_do_prayers',
   'can_be_cbs_conductor', 'can_be_cbs_reader',
   'is_elderly', 'is_infirm', 'is_child', 'is_deaf', 'is_blind', 'is_anointed',

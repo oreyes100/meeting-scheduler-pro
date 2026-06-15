@@ -12,7 +12,7 @@ const PERSON_FIELDS = `
   status, moved_date, moved_to_congregation, is_active,
   is_publisher, is_unbaptized_publisher, is_elder, is_ministerial_servant,
   is_regular_pioneer, is_auxiliary_pioneer, is_special_pioneer, auxiliary_pioneer_this_month,
-  can_be_chairman, can_be_speaker, can_do_gems, can_do_bible_reading,
+  can_be_chairman, can_be_speaker, speaker_local, speaker_visiting, can_do_gems, can_do_bible_reading,
   can_do_student_parts, can_be_assistant, can_do_prayers,
   can_be_cbs_conductor, can_be_cbs_reader,
   is_elderly, is_infirm, is_child, is_deaf, is_blind, is_anointed,
@@ -92,6 +92,8 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
       auxiliary_pioneer_this_month: body.auxiliary_pioneer_this_month || false,
       can_be_chairman: body.can_be_chairman ?? false,
       can_be_speaker: body.can_be_speaker ?? body.gender === 'male',
+      speaker_local: body.speaker_local ?? true,
+      speaker_visiting: body.speaker_visiting ?? false,
       can_do_gems: body.can_do_gems ?? body.gender === 'male',
       can_do_bible_reading: body.can_do_bible_reading ?? true,
       can_do_student_parts: body.can_do_student_parts ?? true,
@@ -139,6 +141,14 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     } catch (e: unknown) {
       console.warn('Person full update failed, using legacy fallback. Raw error:', e);
       const msg = e instanceof Error ? e.message : 'unknown';
+      // If only the new speaker-scope columns are missing, retry without them
+      if (msg.includes('speaker_local') || msg.includes('speaker_visiting')) {
+        const u2 = { ...update };
+        delete (u2 as Record<string, unknown>).speaker_local;
+        delete (u2 as Record<string, unknown>).speaker_visiting;
+        const { data, error } = await supabase.from('users').update(u2).eq('id', id).select().single();
+        if (!error) return NextResponse.json({ person: data, migrationPending: true });
+      }
       // Legacy fallback: only update name/email
       const legacyUpdate = {
         name: display_name || first_name,
