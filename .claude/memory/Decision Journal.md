@@ -34,6 +34,32 @@ Registro de decisiones arquitectónicas cerradas. No proponer alternativas a est
 
 ---
 
+## [2026-06-15] Territorios: Leaflet vía CDN, no librería npm
+
+**Contexto**: Módulo territorios (adaptado de TerritoryJW, repo React Native+Firestore). Necesita mapa con polígonos.
+
+**Decisión**: Leaflet cargado por CDN (unpkg) imperativamente en `TerritoryMap.tsx`. Sin `react-leaflet` ni deps npm. OpenStreetMap como tiles (sin API key). Centro por defecto: Pátzcuaro [19.5126, -101.6093].
+
+**Por qué**: Next 16 + React 19 → riesgo de peer-deps con react-leaflet. CDN evita conflictos de build y no requiere claves. Vercel tiene internet en runtime.
+
+**Alternativa descartada**: react-leaflet / mapbox — peer-deps frágiles y/o API key de pago.
+
+**Estado**: CERRADO. Tabla `territories` requiere correr `sql/territories_schema.sql` en Supabase (una vez).
+
+---
+
+## [2026-06-15] PrintModal: formato modelo "La Estación" hardcoded
+
+**Contexto**: Usuario dio Word oficial como modelo exacto (colores teal/ámbar/marrón, viñetas, Limpieza/Hospitalidad amarillo).
+
+**Decisión**: Paleta como constantes en `PrintModal.tsx` (TEAL/AMBER/MAROON/YELLOW). Misma paleta replicada en `WeekendPrintModal.tsx`. `CONGREGATION_NAME = 'La Estación'`.
+
+**Pendiente conocido**: `cleaning_group`/`hospitality_group` no existen en tabla `meetings` — la fila Limpieza/Hospitalidad muestra `___` hasta agregar esos campos.
+
+**Estado**: CERRADO (formato). Campos limpieza/hospitalidad = mejora futura.
+
+---
+
 ## [2026-06-13] CBS: asignación en campo meeting-level, no en meeting_parts
 
 **Contexto**: CBS conductor y lector se almacenan en `meetings.cbs_conductor_id` / `meetings.cbs_reader_id`, no como `meeting_parts.assigned_user_id`.
