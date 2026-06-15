@@ -109,6 +109,24 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
     }));
   }, [activeId]);
 
+  // Auto-save a single field immediately (used by dropdowns)
+  const saveField = useCallback(async (field: string, value: unknown) => {
+    if (!activeId) return;
+    setField(field, value);
+    try {
+      const res = await fetch(`/api/weekend-meetings/${activeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      setFormData(prev => { const n = { ...prev }; delete n[activeId]; return n; });
+      onRefresh();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Error al guardar');
+    }
+  }, [activeId, setField, onRefresh]);
+
   const save = useCallback(async () => {
     if (!activeId || !formData[activeId]) return;
     setSaving(true);
@@ -193,7 +211,7 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
     onRefresh();
   }, [activeId, onRefresh]);
 
-  const handleSpeakerConfirm = useCallback((result: {
+  const handleSpeakerConfirm = useCallback(async (result: {
     speakerType: 'local' | 'visiting' | 'other';
     localSpeakerId?: string;
     visitingSpeakerId?: string;
@@ -202,20 +220,31 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
     specialTalkTitle?: string;
   }) => {
     if (!activeId) return;
-    const patch: Partial<WeekendMeeting> = {
-      speaker_type: result.speakerType,
-      local_speaker_id: result.localSpeakerId ?? null,
-      visiting_speaker_id: result.visitingSpeakerId ?? null,
-      other_speaker_name: result.otherSpeakerName ?? null,
-      outline_id: result.outlineId ?? null,
-      special_talk_title: result.specialTalkTitle ?? null,
-    };
-    setFormData(prev => ({
-      ...prev,
-      [activeId]: { ...(prev[activeId] ?? {}), ...patch },
-    }));
     setSpeakerModalOpen(false);
-  }, [activeId]);
+    setSaving(true);
+    try {
+      const patch = {
+        speaker_type: result.speakerType,
+        local_speaker_id: result.localSpeakerId ?? null,
+        visiting_speaker_id: result.visitingSpeakerId ?? null,
+        other_speaker_name: result.otherSpeakerName ?? null,
+        outline_id: result.outlineId ?? null,
+        special_talk_title: result.specialTalkTitle ?? null,
+      };
+      const res = await fetch(`/api/weekend-meetings/${activeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      setFormData(prev => { const n = { ...prev }; delete n[activeId]; return n; });
+      onRefresh();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Error al guardar orador');
+    } finally {
+      setSaving(false);
+    }
+  }, [activeId, onRefresh]);
 
   const isDirty = activeId ? !!formData[activeId] : false;
 
@@ -383,7 +412,7 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
                 <select
                   className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-sky-50"
                   value={String(getField('chairman_id') ?? '')}
-                  onChange={e => setField('chairman_id', e.target.value || null)}
+                  onChange={e => saveField('chairman_id', e.target.value || null)}
                 >
                   <option value=""></option>
                   {chairmenPool.map(p => (
@@ -396,7 +425,7 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
                 <select
                   className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-sky-50"
                   value={String(getField('wt_conductor_id') ?? '')}
-                  onChange={e => setField('wt_conductor_id', e.target.value || null)}
+                  onChange={e => saveField('wt_conductor_id', e.target.value || null)}
                 >
                   <option value=""></option>
                   {wtPool.map(p => (
@@ -409,7 +438,7 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
                 <select
                   className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-sky-50"
                   value={String(getField('wt_reader_id') ?? '')}
-                  onChange={e => setField('wt_reader_id', e.target.value || null)}
+                  onChange={e => saveField('wt_reader_id', e.target.value || null)}
                 >
                   <option value=""></option>
                   {readerPool.map(p => (
@@ -426,14 +455,38 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
                       ? `group:${getField('hospitality_text')}`
                       : String(getField('hospitality_person_id') ?? '')
                   }
-                  onChange={e => {
+                  onChange={async e => {
                     const v = e.target.value;
                     if (v.startsWith('group:')) {
-                      setField('hospitality_text', v.slice(6));
+                      const group = v.slice(6);
+                      setField('hospitality_text', group);
                       setField('hospitality_person_id', null);
+                      if (!activeId) return;
+                      try {
+                        const res = await fetch(`/api/weekend-meetings/${activeId}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ hospitality_text: group, hospitality_person_id: null }),
+                        });
+                        if (!res.ok) throw new Error((await res.json()).error);
+                        setFormData(prev => { const n = { ...prev }; delete n[activeId]; return n; });
+                        onRefresh();
+                      } catch (err) { alert(err instanceof Error ? err.message : 'Error al guardar'); }
                     } else {
-                      setField('hospitality_person_id', v || null);
+                      const personId = v || null;
+                      setField('hospitality_person_id', personId);
                       setField('hospitality_text', null);
+                      if (!activeId) return;
+                      try {
+                        const res = await fetch(`/api/weekend-meetings/${activeId}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ hospitality_person_id: personId, hospitality_text: null }),
+                        });
+                        if (!res.ok) throw new Error((await res.json()).error);
+                        setFormData(prev => { const n = { ...prev }; delete n[activeId]; return n; });
+                        onRefresh();
+                      } catch (err) { alert(err instanceof Error ? err.message : 'Error al guardar'); }
                     }
                   }}
                 >
