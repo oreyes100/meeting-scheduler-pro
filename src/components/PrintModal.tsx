@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { X, Printer, FileText, Calendar, UserCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Printer, FileText, Calendar, UserCheck, LayoutGrid } from 'lucide-react';
 
 const CONGREGATION_NAME = 'La Estación';
 
@@ -44,7 +44,49 @@ interface PrintModalProps {
   publishers: any[];
 }
 
-type ReportType = 's140' | 's89' | 'chairman';
+type ReportType = 's140' | 'combined' | 's89' | 'chairman';
+
+// Lunes (ISO) de la semana de una fecha — para emparejar entre semana ↔ fin de semana.
+function mondayOf(iso: string): string {
+  const d = new Date(iso + 'T00:00:00Z');
+  if (isNaN(d.getTime())) return iso;
+  const day = d.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setUTCDate(d.getUTCDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+function fmtDMY(iso: string): string {
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y.slice(2)}`;
+}
+
+function wkName(p: any): string {
+  if (!p) return '';
+  return p.name || [p.first_name, p.last_name].filter(Boolean).join(' ');
+}
+function wkSpeaker(w: any): string {
+  if (!w) return '';
+  if (w.speaker_type === 'other') return w.other_speaker_name || '';
+  if (w.speaker_type === 'visiting') return w.visiting_speaker?.name || '';
+  return wkName(w.local_speaker);
+}
+function wkCongregation(w: any): string {
+  if (!w) return '';
+  if (w.speaker_type === 'visiting') return w.visiting_speaker?.congregation || '';
+  if (w.speaker_type === 'local') return 'Local';
+  return '';
+}
+function wkTalk(w: any): string {
+  if (!w) return '';
+  if (w.special_talk_title) return w.special_talk_title;
+  if (w.outline) return `${w.outline.number} - ${w.outline.title}`;
+  return '';
+}
+function wkHospitality(w: any): string {
+  if (!w) return '';
+  return wkName(w.hospitality_person) || w.hospitality_text || '';
+}
 
 function getName(id: string | null | undefined, publishers: any[]): string {
   if (!id) return '';
@@ -135,7 +177,23 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
     return new Date().toISOString().substring(0, 7);
   });
 
+  const [weekendMeetings, setWeekendMeetings] = useState<any[]>([]);
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    fetch('/api/weekend-meetings')
+      .then(r => r.json())
+      .then(j => { if (!cancelled) setWeekendMeetings(j.meetings || []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isOpen]);
+
   if (!isOpen) return null;
+
+  const weekendByMonday: Record<string, any> = {};
+  for (const w of weekendMeetings) {
+    if (w?.date) weekendByMonday[mondayOf(w.date)] = w;
+  }
 
   const monthlyMeetings = allMeetings.filter(m => m.date.startsWith(selectedMonth));
   const availableMonths = Array.from(new Set(allMeetings.map(m => m.date.substring(0, 7)))).sort() as string[];
@@ -177,6 +235,7 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                 <div className="space-y-1.5">
                   {([
                     { key: 's140', label: 'Programa mensual', icon: <Calendar className="w-4 h-4" /> },
+                    { key: 'combined', label: 'Programa combinado', icon: <LayoutGrid className="w-4 h-4" /> },
                     { key: 's89',  label: 'Hojas de asignación (S-89)', icon: <FileText className="w-4 h-4" /> },
                     { key: 'chairman', label: 'Hoja del presidente', icon: <UserCheck className="w-4 h-4" /> },
                   ] as const).map(({ key, label, icon }) => (
@@ -193,7 +252,7 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                 </div>
               </div>
 
-              {reportType === 's140' && (
+              {(reportType === 's140' || reportType === 'combined') && (
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Mes</label>
                   <select
@@ -317,6 +376,112 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                   })}
 
                   {/* Pie de impresión */}
+                  <p className="text-right text-[10px] text-slate-400 italic mt-4">Impreso {printedOn}</p>
+                </div>
+              )}
+
+              {/* ── Programa Combinado (entre semana + fin de semana) ───────── */}
+              {reportType === 'combined' && (
+                <div>
+                  <style>{`@media print { @page { size: A4 landscape; margin: 8mm; } }`}</style>
+
+                  {/* Títulos de las tres áreas */}
+                  <div className="flex items-end border-b-2 border-slate-800 pb-1 mb-4 text-[13px] font-bold text-slate-900">
+                    <span className="flex-1">Programa para la reunión de entre semana</span>
+                    <span style={{ width: '38%' }} className="pl-2 flex justify-between">
+                      <span>Reunión de fin de semana</span>
+                      <span>{CONGREGATION_NAME}</span>
+                    </span>
+                  </div>
+
+                  {monthlyMeetings.length === 0 ? (
+                    <p className="text-center py-12 text-slate-400">No hay reuniones para este mes.</p>
+                  ) : monthlyMeetings.map((m, mIdx) => {
+                    const allParts = (m.parts || []) as Part[];
+                    const gems = allParts.find(p => p.part_type === 'spiritual_gems');
+                    const scripture = gems ? extractScripture(gems.title) : '';
+                    const mainParts = allParts.filter(p => p.part_type !== 'cbs').sort((a, b) => a.part_number - b.part_number);
+                    const cbsPart = allParts.find(p => p.part_type === 'cbs');
+                    const bibleIdx = mainParts.findIndex(p => p.part_type === 'bible_reading');
+                    const firstStudentIdx = mainParts.findIndex(p => p.part_type === 'student_part');
+                    const firstLivingIdx = mainParts.findIndex(p => p.part_type === 'living_part');
+
+                    const chairmanName = m.chairman?.name || getName(m.chairman_id, publishers);
+                    const closingName = m.closing_prayer?.name || getName(m.closing_prayer_id, publishers);
+                    const cbsConductor = m.cbs_conducer?.name || getName(m.cbs_conductor_id, publishers);
+                    const cbsReader = m.cbs_reader?.name || getName(m.cbs_reader_id, publishers);
+                    const cbsName = cbsConductor && cbsReader ? `${cbsConductor}/${cbsReader}` : (cbsConductor || cbsReader || '');
+
+                    const w = weekendByMonday[mondayOf(m.date)];
+                    const isLast = mIdx === monthlyMeetings.length - 1;
+
+                    const wkRow = (label: string, value: string, highlight?: boolean) => (
+                      <div className="flex py-0.5 text-sm">
+                        <span className="font-bold text-slate-700" style={{ width: 96 }}>{label}</span>
+                        <span className={`flex-1 text-slate-800 ${highlight ? 'px-1' : ''}`} style={highlight ? { background: YELLOW } : undefined}>{value || '—'}</span>
+                      </div>
+                    );
+
+                    return (
+                      <div key={m.id} className={`week-block flex mb-5 ${!isLast ? 'page-break' : ''}`}>
+                        {/* Columna entre semana */}
+                        <div className="flex-1 pr-3">
+                          <div className="flex items-stretch text-white text-sm" style={{ background: TEAL }}>
+                            <div className="font-bold px-2 py-1 flex-1">{fmtJW(m.date)}{scripture ? ` | ${scripture}` : ''}</div>
+                            <div className="px-3 py-1 border-l border-white/30 w-2/5">
+                              <span className="text-[11px] font-semibold uppercase opacity-80">Presidente y Oración</span>{' '}
+                              <span className="font-medium">{chairmanName || '—'}</span>
+                            </div>
+                          </div>
+
+                          <div className="text-sm">
+                            {mainParts.map((p, idx) => (
+                              <React.Fragment key={p.id}>
+                                {idx === firstStudentIdx && idx !== -1 && <div style={{ height: 3, background: AMBER }} className="my-1" />}
+                                {idx === firstLivingIdx && idx !== -1 && <div style={{ height: 3, background: MAROON }} className="my-1" />}
+                                {idx === bibleIdx && idx !== -1 && (
+                                  <p className="font-bold text-slate-700 text-xs uppercase tracking-wide mt-1 mb-0.5">Sala principal</p>
+                                )}
+                                <PartRow left={`${p.part_number}. ${programTitle(p)} (${p.duration_minutes} min.)`} right={rowName(p)} />
+                              </React.Fragment>
+                            ))}
+                            {cbsPart && (
+                              <PartRow left={`${cbsPart.part_number}. Estudio bíblico (${cbsPart.duration_minutes} min.)`} right={cbsName} />
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between mt-1.5 text-sm">
+                            <span className="font-bold px-2 py-0.5" style={{ background: YELLOW }}>
+                              Limpieza&nbsp;&nbsp;{m.cleaning_group ?? '___'}
+                            </span>
+                            <span className="flex items-center gap-1.5">
+                              <span className="text-[11px] font-semibold uppercase text-slate-500">Oración final</span>
+                              <span className="text-slate-800">{closingName || '—'}</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Columna fin de semana */}
+                        <div style={{ width: '38%' }} className="border-l-2 pl-3" >
+                          <div className="flex items-stretch text-white text-sm font-bold" style={{ background: TEAL }}>
+                            <div className="px-2 py-1 flex-1">Domingo</div>
+                            <div className="px-2 py-1">{w ? fmtDMY(w.date) : '—'}</div>
+                          </div>
+                          <div className="mt-0.5">
+                            {wkRow('Presidente', wkName(w?.chairman))}
+                            {wkRow('Discurso', wkTalk(w))}
+                            {wkRow('Orador', wkSpeaker(w))}
+                            {wkRow('Congregación', wkCongregation(w))}
+                            {wkRow('Conductor', wkName(w?.wt_conductor))}
+                            {wkRow('Lector', wkName(w?.wt_reader))}
+                            {wkRow('Limpieza', w?.cleaning_group ?? '___', true)}
+                            {wkRow('Hospitalidad', wkHospitality(w), true)}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
                   <p className="text-right text-[10px] text-slate-400 italic mt-4">Impreso {printedOn}</p>
                 </div>
               )}
