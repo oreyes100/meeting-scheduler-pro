@@ -225,4 +225,5 @@ export interface CongregationSettings {
   circuit: string | null;
   co_name: string | null;
   co_contact_details: string | null;
+  auxiliary_rooms: string | null;
 }

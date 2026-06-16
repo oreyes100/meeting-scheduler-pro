@@ -140,11 +140,11 @@ export function MeetingDashboard({
     return ` (${dateStr}${title})`;
   };
 
-  const optionsFor = (canField: keyof Profile | null, roleKey: string, extraFilter?: (p: Profile) => boolean) => {
-    let list = publishers;
-    if (canField) list = list.filter(p => (p as any)[canField]);
+  const optionsFor = (canField: string | null, roleKey: string, extraFilter?: (p: any) => boolean) => {
+    let list: any[] = publishers;
+    if (canField) list = list.filter((p: any) => p[canField]);
     if (extraFilter) list = list.filter(extraFilter);
-    return list.map(p => (
+    return list.map((p: any) => (
       <option key={p.id} value={p.id}>{p.first_name} {p.last_name}{fmtLastAssign(p.id, roleKey)}</option>
     ));
   };
