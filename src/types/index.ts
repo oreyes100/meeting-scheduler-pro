@@ -158,6 +158,7 @@ export interface WeekendMeeting {
   wt_reader_id?: string | null;
   hospitality_person_id?: string | null;
   hospitality_text?: string | null;
+  cleaning_group?: string | null;
   // joined
   outline?: PublicTalkOutline | null;
   local_speaker?: Pick<Person, 'id' | 'first_name' | 'last_name' | 'display_name'> | null;

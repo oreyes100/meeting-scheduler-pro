@@ -172,6 +172,14 @@ export function MeetingDashboard({
                 </select>
               </div>
 
+              <div className="flex items-center">
+                <div className="w-[120px]"></div>
+                <div className="w-[180px]"></div>
+                <div className="flex-1"></div>
+                <label className="w-[120px] text-gray-700 text-right pr-2">Limpieza</label>
+                <input type="text" className="w-[180px] border border-gray-300 bg-white p-0.5 h-6 text-xs" placeholder="Grupo / núm." value={formData.cleaning_group || ''} onChange={e => handleMeetingChange('cleaning_group', e.target.value)} />
+              </div>
+
              {treasuresTalk && (
                <div className="flex items-center">
                  <label className="w-[120px] text-gray-700 text-right pr-2">{treasuresLabel}</label>

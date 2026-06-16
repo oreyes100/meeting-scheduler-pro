@@ -26,6 +26,7 @@ export async function PUT(
         closing_prayer_id: body.closing_prayer_id || null,
         cbs_conductor_id: body.cbs_conductor_id || null,
         cbs_reader_id: body.cbs_reader_id || null,
+        cleaning_group: body.cleaning_group ?? null,
       })
       .eq('id', id);
 

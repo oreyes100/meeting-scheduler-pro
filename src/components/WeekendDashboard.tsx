@@ -503,6 +503,17 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
                   </optgroup>
                 </select>
               </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-0.5">Limpieza</label>
+                <input
+                  type="text"
+                  className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-yellow-50"
+                  placeholder="Grupo / núm."
+                  value={String(getField('cleaning_group') ?? '')}
+                  onChange={e => setField('cleaning_group', e.target.value)}
+                  onBlur={e => saveField('cleaning_group', e.target.value || null)}
+                />
+              </div>
             </div>
             <div className="mt-2">
               <label className="text-xs text-gray-500 block mb-0.5">Nota hospitalidad</label>

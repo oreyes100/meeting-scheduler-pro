@@ -8,7 +8,7 @@ const ALLOWED = [
   'speaker_type', 'local_speaker_id', 'visiting_speaker_id', 'other_speaker_name',
   'outline_id', 'special_talk_title', 'song', 'speaker_confirmed', 'notes',
   'chairman_id', 'wt_conductor_id', 'wt_reader_id',
-  'hospitality_person_id', 'hospitality_text',
+  'hospitality_person_id', 'hospitality_text', 'cleaning_group',
 ];
 
 export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
