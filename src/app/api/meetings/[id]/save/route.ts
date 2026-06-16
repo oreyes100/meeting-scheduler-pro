@@ -27,6 +27,7 @@ export async function PUT(
         cbs_conductor_id: body.cbs_conductor_id || null,
         cbs_reader_id: body.cbs_reader_id || null,
         cleaning_group: body.cleaning_group ?? null,
+        assembly_type: body.assembly_type ?? null,
       })
       .eq('id', id);
 

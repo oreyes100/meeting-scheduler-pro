@@ -16,6 +16,7 @@ export default function MeetingsPage() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [activeMeetingId, setActiveMeetingId] = useState<string | null>(null);
   const [printModalOpen, setPrintModalOpen] = useState(false);
+  const [midweekDay, setMidweekDay] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     if (typeof window === 'undefined') return;
@@ -75,6 +76,12 @@ export default function MeetingsPage() {
       const publishersResult = await publishersRes.json();
       if (!publishersRes.ok) throw new Error(publishersResult.error || 'Failed to fetch publishers');
       setPublishers(publishersResult.users || []);
+
+      const congRes = await fetch('/api/congregation');
+      if (congRes.ok) {
+        const congData = await congRes.json();
+        setMidweekDay(congData.settings?.midweek_meeting_day || null);
+      }
 
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to load scheduling data.';
@@ -222,7 +229,7 @@ export default function MeetingsPage() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 font-sans">
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-900 font-sans">
       {/* Sidebar */}
       <Sidebar 
         meetings={meetings}
@@ -236,7 +243,7 @@ export default function MeetingsPage() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Dashboard Content */}
-        <main className="flex-1 overflow-y-auto bg-white">
+        <main className="flex-1 overflow-y-auto bg-white dark:bg-gray-800">
           <MeetingDashboard
             meeting={activeMeeting}
             publishers={publishers}
@@ -247,6 +254,7 @@ export default function MeetingsPage() {
             loading={loading}
             error={error}
             successMsg={successMsg}
+            midweekMeetingDay={midweekDay}
           />
         </main>
       </div>

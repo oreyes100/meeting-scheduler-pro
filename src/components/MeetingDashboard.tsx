@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Profile } from '@/types';
 import { Plus, Minus, FileText } from 'lucide-react';
 import { useT } from '@/lib/i18n';
-import { formatWeekRange } from '@/lib/weekLabel';
+
 
 interface DashboardProps {
   meeting: any | null;
@@ -16,6 +16,7 @@ interface DashboardProps {
   loading: boolean;
   error: string | null;
   successMsg: string | null;
+  midweekMeetingDay?: string | null;
 }
 
 export function MeetingDashboard({
@@ -25,6 +26,7 @@ export function MeetingDashboard({
   onClearAssignments,
   onRebuildParts,
   autoAssigning,
+  midweekMeetingDay,
 }: DashboardProps) {
   const [formData, setFormData] = useState<any>(null);
   const { t, locale } = useT();
@@ -91,10 +93,19 @@ export function MeetingDashboard({
     return <div className="p-8 text-center text-gray-500 dark:text-gray-400 dark:text-gray-500 dark:text-gray-400 dark:text-gray-300">{t('meeting.selectMeeting')}</div>;
   }
 
-  const getWeekLabel = (dateString: string) => {
+  const DAY_MAP: Record<string, number> = { monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6, sunday: 0 };
+
+  const getMeetingDayLabel = (dateString: string) => {
     if (!dateString) return '';
-    // The meeting's date is already a Monday; pass it straight in
-    return formatWeekRange(dateString.slice(0, 10), locale);
+    const monday = new Date(dateString.slice(0, 10) + 'T00:00:00');
+    const dayName = (midweekMeetingDay || 'wednesday').toLowerCase();
+    const targetDow = DAY_MAP[dayName] ?? 3;
+    const offset = targetDow === 0 ? 6 : targetDow - 1;
+    const meetingDate = new Date(monday);
+    meetingDate.setDate(meetingDate.getDate() + offset);
+    const loc = locale === 'es' ? 'es-ES' : 'en-US';
+    const formatted = meetingDate.toLocaleDateString(loc, { weekday: 'long', day: 'numeric', month: 'long' });
+    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
   };
 
   const treasuresTalk = allParts.find((p: any) => p.part_type === 'treasures_talk');
@@ -130,8 +141,13 @@ export function MeetingDashboard({
              <button onClick={onClearAssignments} className="bg-gray-100 dark:bg-gray-700 border border-gray-400 text-gray-800 dark:text-gray-200 px-2 py-0.5 rounded text-xs hover:bg-gray-200 dark:bg-gray-600 shadow-sm">{t('meeting.clear')}</button>
              <button onClick={onRebuildParts} title={t('meeting.rebuildFromJW')} className="bg-amber-100 border border-amber-400 text-amber-800 px-2 py-0.5 rounded text-xs hover:bg-amber-200 shadow-sm">{t('meeting.rebuildFromJW')}</button>
              {autoAssigning && <span className="text-blue-600 font-bold ml-2">...</span>}
+             <select className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-xs rounded px-1 py-0.5 ml-2" value={formData.assembly_type || ''} onChange={e => handleMeetingChange('assembly_type', e.target.value || null)}>
+               <option value="">Normal</option>
+               <option value="regional">Asamblea Regional</option>
+               <option value="circuit">Asamblea de Circuito</option>
+             </select>
            </div>
-           <h2 className="w-1/3 text-center text-lg font-bold text-[#d93025]">{getWeekLabel(formData.date)}</h2>
+           <h2 className="w-1/3 text-center text-lg font-bold text-[#d93025]">{getMeetingDayLabel(formData.date)}</h2>
            <div className="w-1/3 flex items-center justify-end gap-1">
               <span className="text-gray-700 dark:text-gray-300 font-medium mr-1 text-xs">{t('meeting.songs')}</span>
               <input type="number" className="w-12 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-0.5 text-center text-xs h-6" value={formData.song_opening || ''} onChange={e => handleMeetingChange('song_opening', parseInt(e.target.value))} />
@@ -139,6 +155,18 @@ export function MeetingDashboard({
               <input type="number" className="w-12 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-0.5 text-center text-xs h-6" value={formData.song_closing || ''} onChange={e => handleMeetingChange('song_closing', parseInt(e.target.value))} />
            </div>
         </div>
+
+        {formData.assembly_type ? (
+          <div className="flex items-center justify-center h-48">
+            <div className="text-center">
+              <div className="text-4xl mb-3">🏛️</div>
+              <h3 className="text-xl font-bold text-gray-700 dark:text-gray-200">
+                {formData.assembly_type === 'regional' ? 'Asamblea Regional' : 'Asamblea de Circuito'}
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400 mt-2 text-sm">No hay reunión entre semana esta semana</p>
+            </div>
+          </div>
+        ) : (<>
 
         {/* Treasures from God's Word */}
         <div className="mb-2">
@@ -177,7 +205,13 @@ export function MeetingDashboard({
                 <div className="w-[180px]"></div>
                 <div className="flex-1"></div>
                 <label className="w-[120px] text-gray-700 dark:text-gray-300 text-right pr-2">Limpieza</label>
-                <input type="text" className="w-[180px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-0.5 h-6 text-xs" placeholder="Grupo / núm." value={formData.cleaning_group || ''} onChange={e => handleMeetingChange('cleaning_group', e.target.value)} />
+                <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-0.5 h-6 text-xs" value={formData.cleaning_group || ''} onChange={e => handleMeetingChange('cleaning_group', e.target.value)}>
+                  <option value=""></option>
+                  <option value="1">Grupo 1</option>
+                  <option value="2">Grupo 2</option>
+                  <option value="3">Grupo 3</option>
+                  <option value="4">Grupo 4</option>
+                </select>
               </div>
 
              {treasuresTalk && (
@@ -234,10 +268,16 @@ export function MeetingDashboard({
              <span className="text-sm">{t('meeting.applyYourself')}</span>
            </div>
             <div className="px-1 flex flex-col gap-1.5">
-              {studentParts.map((part: any) => (
+              {studentParts.map((part: any) => {
+                const isTalk = part.student_part_type === 'talk';
+                const assigneeList = isTalk ? publishers.filter((p: any) => p.gender === 'male') : publishers;
+                return (
                 <div key={part.id} className="flex items-center">
                   <label className="w-[28px] text-gray-700 dark:text-gray-300 text-right pr-2 text-xs font-semibold">{part.part_number}.</label>
-                  <select className="w-[170px] border border-gray-300 dark:border-gray-600 p-0.5 h-6 text-xs bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200" value={part.student_part_type || ''} onChange={e => handlePartChange(part.id, 'student_part_type', e.target.value)}>
+                  <select className="w-[170px] border border-gray-300 dark:border-gray-600 p-0.5 h-6 text-xs bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200" value={part.student_part_type || ''} onChange={e => {
+                    handlePartChange(part.id, 'student_part_type', e.target.value);
+                    if (e.target.value === 'talk') handlePartChange(part.id, 'assistant_user_id', null);
+                  }}>
                     <option value="starting_conversation">{t('meeting.startingConversation')}</option>
                     <option value="following_up">{t('meeting.followingUp')}</option>
                     <option value="making_disciples">{t('meeting.makingDisciples')}</option>
@@ -246,7 +286,7 @@ export function MeetingDashboard({
                   </select>
                   <select className="w-[170px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200 ml-1" value={part.assigned_user_id || part.student_id || ''} onChange={e => handlePartChange(part.id, 'assigned_user_id', e.target.value)}>
                        <option value=""></option>
-                       {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
+                       {assigneeList.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
                   </select>
                   <input type="text" className="w-[260px] border border-gray-300 dark:border-gray-600 p-0.5 h-6 ml-2 text-xs" value={part.title || ''} onChange={e => handlePartChange(part.id, 'title', e.target.value)} />
                   <FileText size={14} className="text-[#3b82f6] ml-1" />
@@ -255,13 +295,18 @@ export function MeetingDashboard({
 
                   <div className="flex-1"></div>
 
+                  {!isTalk && (
+                  <>
                   <label className="text-gray-700 dark:text-gray-300 text-right pr-2 text-xs">{t('meeting.assistant')}</label>
                   <select className="w-[170px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={part.assistant_user_id || ''} onChange={e => handlePartChange(part.id, 'assistant_user_id', e.target.value)}>
                        <option value=""></option>
                        {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
                   </select>
+                  </>
+                  )}
                 </div>
-              ))}
+                );
+              })}
            </div>
         </div>
 
@@ -323,6 +368,7 @@ export function MeetingDashboard({
             </div>
          </div>
 
+        </>)}
       </div>
     </div>
   );

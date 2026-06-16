@@ -3,54 +3,45 @@
 ## Estado del Proyecto
 - **Versión**: 0.x (en desarrollo activo)
 - **Sprint activo**: NINGUNO
-- **Deploy**: Vercel (producido), rama `main`
+- **Deploy**: Vercel (producción), rama `main`
 
-## Última Sesión (2026-06-13)
+## Última Sesión (2026-06-15)
 ### Completado
-- Revisión de blueprints Obsidian vs estado del proyecto
-- Expansión de CLAUDE.md con rol, restricciones, arquitectura real
-- Creación de Contexto Activo
-- Pruebas funcionales completas de todos los sistemas (ver Resultados abajo)
+- **Dark mode completo** — 4 commits aplicados a producción:
+  - `67fc4d9` WeekendDashboard + MeetingDashboard: todas las clases `bg-white/gray-*` con `dark:`
+  - `f34281b` Sidebar, territories, persons, congregation, modales — dark mode sistemático
+  - `9ce8f8a` SELECT dropdowns con colores hardcoded (`#b4d5eb`, `#fdfad4`) → dark equivalents
+  - `24fc03a` Icon sidebar `bg-sky-500` → `dark:bg-gray-900`
+- **Verificación recursiva** con Chrome MCP + JS `getComputedStyle` en todas las páginas
+  - `/meetings`, `/weekend`, `/persons`, `/congregation`, `/territories` — limpios
+  - Única zona clara restante: tiles OpenStreetMap (Leaflet) — externos, no modificables
 
 ### Pendiente
 - (nada bloqueante)
 
-## Resultados de Pruebas Funcionales (2026-06-13)
-| Sistema | Estado | Detalle |
-|---------|--------|---------|
-| Build | ✅ | `next build` limpio, 0 errores TS |
-| TypeScript | ✅ | `tsc --noEmit` sin errores |
-| GET /api/meetings | ✅ | 14 reuniones, migration_applied=true |
-| GET /api/persons | ✅ | 91 personas (34M / 57F), migrationPending=false |
-| GET /api/persons filters | ✅ | filter=elders(5), filter=brothers(34) correctos |
-| POST /api/meetings | ✅ | Crea reunión, genera partes desde programs.ts |
-| POST /api/meetings/[id]/assign | ✅ | Auto-asigna 8/9 partes (CBS sin parte CBS en partes — ver nota) |
-| POST /api/meetings/[id]/clear | ✅ | Limpia asignaciones correctamente |
-| POST /api/meetings/[id]/rebuild-parts | ✅ | Reconstruye partes preservando asignaciones |
-
-### Observaciones / Bugs Potenciales
-1. **auto-assign reporta 8/9**: El CBS (`cbs_conductor_id`/`cbs_reader_id`) se asigna en el campo meeting-level, pero el conteo final cuenta `meeting_parts.assigned_user_id`. La parte CBS en `meeting_parts` queda sin `assigned_user_id`. No es bug funcional pero el contador 8/9 puede confundir al usuario.
-2. **assignment-engine.ts (TS)** está prácticamente sin usar — toda la lógica real va por `auto-assign-service.js`. El engine TS usa `Profile` (no `Person`) y su lógica es mucho más simple (sin LRA, sin roles). Código muerto o en progreso.
-3. **node_modules incompleto en repo limpio** — `next` no estaba instalado, requirió `npm install`. Normal si .gitignore excluye node_modules, pero documentado.
-4. **Reunión Sep 1 2026** creada en test usa FALLBACK_PROGRAM (songs 1,1,1) — semana fuera de rango de `programs.ts`.
-5. **search=martinez devuelve 0** — posible bug: la búsqueda usa `ilike` en `last_name`, pero algunos registros pueden tener `last_name` null y nombre solo en `display_name` o `name`.
+## Bugs Conocidos
+1. **auto-assign 8/9**: CBS se asigna en `meetings.cbs_conductor_id` pero el conteo usa `meeting_parts.assigned_user_id` → contador visual puede confundir
+2. **search=martinez devuelve 0**: `ilike` en `last_name`, pero algunos registros tienen nombre en `display_name`
+3. **Mapa Leaflet en dark mode**: tiles OSM son claros por diseño — para modo oscuro real se necesitaría cambiar tile provider (ej. CartoDB Dark Matter)
 
 ## Estado Técnico Actual
-- `programs.ts` cubre semanas May 18 – Aug 17 2026 (hardcoded, se actualiza manualmente)
-- `assignment-engine.ts` es código TS sin uso real — `auto-assign-service.js` es el motor activo
-- `PrintModal.tsx` existe pero no fue auditado contra criterios print-first
-- No hay tests automatizados
-- BD: 14 reuniones existentes, 91 usuarios registrados
+- `programs.ts` cubre semanas May 18 – Aug 17 2026 (hardcoded)
+- `auto-assign-service.js` es el motor activo (no `assignment-engine.ts`)
+- `cleaning_group` implementado en ambas tablas (entre semana + fin de semana)
+- Territorios: Leaflet CDN, Supabase `territories` table, polígonos como jsonb
+- PrintModal: S-140 + S-89 + Programa combinado (3 col) — paleta La Estación
+- WeekendPrintModal: tarjetas (default) + tabla — toggle en toolbar
 
 ## Próximos Pasos — Prioridad
-1. 🟡 Auditar `PrintModal.tsx` — alinear con principio print-first (IAS)
-2. 🟢 Evaluar mover `PROGRAMS` a JSON externo para facilitar actualización sin código
-3. 🟢 Agregar semanas Aug 18+ cuando el programa JW esté disponible
+1. 🟡 Agregar semanas `programs.ts` Aug 18+ cuando haya programa JW disponible
+2. 🟢 Leaflet dark tiles (CartoDB Dark Matter) — mejora cosmética
+3. 🟢 Fix search por `display_name` además de `last_name`
 
 ## Notas Arquitectónicas
-- `auto-assign-service.js` depende de `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` en env
-- Roles de capacidad viven en `persons` (flags booleanos `can_*`)
-- `meetings.cbs_conductor_id` / `cbs_reader_id` — CBS se almacena como una sola parte, UI lo divide en 2 campos
+- CSS variables semánticas en `globals.css` (`.dark { --color-surface: #1E293B ... }`)
+- Dark mode: clase `.dark` en `<html>`, toggle via `ThemeProvider` → `localStorage`
+- `bg-[#b4d5eb]` = SELECT asignado (azul claro); dark: `bg-[#1e3a4a]`
+- `bg-[#fdfad4]` = SELECT estado alternativo (amarillo claro); dark: `bg-[#3a3a1a]`
 
 ---
-*Actualizado: 2026-06-13*
+*Actualizado: 2026-06-15*

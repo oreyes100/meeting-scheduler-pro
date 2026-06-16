@@ -28,6 +28,11 @@ export async function runAutoAssignment(meetingId, customClient) {
     throw new Error(`Failed to fetch meeting: ${meetingError?.message || 'Meeting not found'}`);
   }
 
+  if (meeting.assembly_type) {
+    logs.push(`ℹ️ Skipping auto-assignment — this week is ${meeting.assembly_type === 'regional' ? 'Asamblea Regional' : 'Asamblea de Circuito'}`);
+    return { assignedCount: 0, totalCount: 0, logs };
+  }
+
   // 2. Fetch meeting parts for this meeting
   const { data: parts, error: partsError } = await supabase
     .from('meeting_parts')
@@ -340,7 +345,8 @@ export async function runAutoAssignment(meetingId, customClient) {
 
     // 4. Student Parts (Apply Yourself to the Field Ministry)
     if (part.part_type === 'student_part' && !part.assigned_user_id) {
-      const candidates = users.filter(u => !assignedInThisMeeting.has(u.id) && u.can_do_student_parts);
+      const isTalk = part.student_part_type === 'talk';
+      const candidates = users.filter(u => !assignedInThisMeeting.has(u.id) && u.can_do_student_parts && (!isTalk || u.gender === 'male'));
       const sorted = getLRASortedUsers(candidates, 'student_part');
       if (sorted.length > 0) {
         const student = sorted[0];
@@ -441,6 +447,31 @@ export async function runAutoAssignment(meetingId, customClient) {
       } else {
         logs.push(`⚠️ No candidate found for Living Part: "${part.title}"`);
       }
+    }
+  }
+
+  // --- Auto-assign cleaning_group (sequential 1→2→3→4→1) ---
+  if (!meeting.cleaning_group) {
+    const { data: prevMeetings } = await supabase
+      .from('meetings')
+      .select('cleaning_group, date')
+      .lt('date', meeting.date)
+      .not('cleaning_group', 'is', null)
+      .order('date', { ascending: false })
+      .limit(1);
+
+    const lastGroup = prevMeetings?.[0]?.cleaning_group;
+    const lastNum = parseInt(lastGroup) || 0;
+    const nextGroup = String((lastNum % 4) + 1);
+
+    const { error: cleanErr } = await supabase
+      .from('meetings')
+      .update({ cleaning_group: nextGroup })
+      .eq('id', meetingId);
+
+    if (!cleanErr) {
+      meeting.cleaning_group = nextGroup;
+      logs.push(`✅ Assigned cleaning group: ${nextGroup}`);
     }
   }
 

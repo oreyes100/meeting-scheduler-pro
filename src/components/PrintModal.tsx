@@ -292,6 +292,17 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                   {monthlyMeetings.length === 0 ? (
                     <p className="text-center py-12 text-slate-400">No hay reuniones para este mes.</p>
                   ) : monthlyMeetings.map((m, mIdx) => {
+                    if (m.assembly_type) {
+                      return (
+                        <div key={m.id} className="week-block mb-5">
+                          <div className="flex items-center text-white text-sm py-2 px-3" style={{ background: TEAL }}>
+                            <span className="font-bold">{fmtJW(m.date)}</span>
+                            <span className="mx-3">—</span>
+                            <span className="font-bold">{m.assembly_type === 'regional' ? 'ASAMBLEA REGIONAL' : 'ASAMBLEA DE CIRCUITO'}</span>
+                          </div>
+                        </div>
+                      );
+                    }
                     const allParts = (m.parts || []) as Part[];
                     const gems = allParts.find(p => p.part_type === 'spiritual_gems');
                     const scripture = gems ? extractScripture(gems.title) : '';
@@ -397,6 +408,17 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                   {monthlyMeetings.length === 0 ? (
                     <p className="text-center py-12 text-slate-400">No hay reuniones para este mes.</p>
                   ) : monthlyMeetings.map((m, mIdx) => {
+                    if (m.assembly_type) {
+                      return (
+                        <div key={m.id} className="week-block mb-5">
+                          <div className="flex items-center text-white text-sm py-2 px-3" style={{ background: TEAL }}>
+                            <span className="font-bold">{fmtJW(m.date)}</span>
+                            <span className="mx-3">—</span>
+                            <span className="font-bold">{m.assembly_type === 'regional' ? 'ASAMBLEA REGIONAL' : 'ASAMBLEA DE CIRCUITO'}</span>
+                          </div>
+                        </div>
+                      );
+                    }
                     const allParts = (m.parts || []) as Part[];
                     const gems = allParts.find(p => p.part_type === 'spiritual_gems');
                     const scripture = gems ? extractScripture(gems.title) : '';

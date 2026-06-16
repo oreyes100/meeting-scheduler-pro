@@ -40,7 +40,7 @@ export async function GET() {
         id, title, date, duration_minutes, created_by,
         song_opening, song_middle, song_closing,
         chairman_id, opening_prayer_id, closing_prayer_id,
-        cbs_conductor_id, cbs_reader_id, is_published, cleaning_group
+        cbs_conductor_id, cbs_reader_id, is_published, cleaning_group, assembly_type
       `)
       .order('date', { ascending: true });
 
