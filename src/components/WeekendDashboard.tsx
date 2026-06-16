@@ -269,32 +269,32 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
   return (
     <div className="flex flex-col h-full">
       {/* Top toolbar: managers */}
-      <div className="px-4 py-2 border-b border-gray-200 bg-white flex gap-2 items-center">
+      <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex gap-2 items-center">
         <button
           onClick={() => setShowOutlineManager(v => !v)}
-          className="text-xs border border-gray-300 rounded px-3 py-1.5 bg-white hover:bg-gray-100 flex items-center gap-1"
+          className="text-xs border border-gray-300 dark:border-gray-600 rounded px-3 py-1.5 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:bg-gray-700 flex items-center gap-1"
         >
           <Settings size={12} /> Discursos
         </button>
         <button
           onClick={() => setShowSpeakerManager(v => !v)}
-          className="text-xs border border-gray-300 rounded px-3 py-1.5 bg-white hover:bg-gray-100 flex items-center gap-1"
+          className="text-xs border border-gray-300 dark:border-gray-600 rounded px-3 py-1.5 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:bg-gray-700 flex items-center gap-1"
         >
           <Settings size={12} /> Oradores
         </button>
         <button
           onClick={() => setShowHistory(true)}
-          className="text-xs border border-gray-300 rounded px-3 py-1.5 bg-white hover:bg-gray-100 flex items-center gap-1"
+          className="text-xs border border-gray-300 dark:border-gray-600 rounded px-3 py-1.5 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:bg-gray-700 flex items-center gap-1"
         >
           <Clock size={12} /> Historial
         </button>
         <button
           onClick={() => setPrintOpen(true)}
-          className="text-xs border border-gray-300 rounded px-3 py-1.5 bg-white hover:bg-gray-100 flex items-center gap-1"
+          className="text-xs border border-gray-300 dark:border-gray-600 rounded px-3 py-1.5 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:bg-gray-700 flex items-center gap-1"
         >
           <Printer size={12} /> Imprimir mes
         </button>
-        <span className="text-xs text-gray-400 ml-auto">
+        <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto">
           Usa el panel de semanas (izquierda) para seleccionar o crear una semana — pasadas incluidas
         </span>
       </div>
@@ -304,7 +304,7 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
         <div className="flex-1 overflow-y-auto p-4">
           {/* Header toolbar */}
           <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-            <h2 className="font-bold text-base text-gray-800">
+            <h2 className="font-bold text-base text-gray-800 dark:text-gray-200">
               {formatWeekRange(activeMeeting.date, locale)}
             </h2>
             <div className="flex gap-1.5 flex-wrap">
@@ -319,7 +319,7 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
               <button
                 onClick={removeAssignments}
                 title="Quitar todas las asignaciones"
-                className="flex items-center gap-1 px-2.5 py-1.5 border border-gray-300 hover:bg-red-50 hover:border-red-300 hover:text-red-600 text-gray-500 text-xs rounded"
+                className="flex items-center gap-1 px-2.5 py-1.5 border border-gray-300 dark:border-gray-600 hover:bg-red-50 hover:border-red-300 hover:text-red-600 text-gray-500 dark:text-gray-400 dark:text-gray-500 text-xs rounded"
               >
                 <RotateCcw size={12} /> Quitar asignaciones
               </button>
@@ -334,7 +334,7 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
               )}
               <button
                 onClick={() => deleteMeeting(activeMeeting.id)}
-                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
+                className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-500 hover:bg-red-50 rounded"
                 title="Eliminar semana"
               >
                 <Trash2 size={14} />
@@ -343,9 +343,9 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
           </div>
 
           {/* Speaker + Outline */}
-          <section className="mb-4 bg-white border border-gray-200 rounded-lg p-3">
+          <section className="mb-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="font-semibold text-sm text-gray-700">Discurso Público</span>
+              <span className="font-semibold text-sm text-gray-700 dark:text-gray-300">Discurso Público</span>
               <button
                 onClick={() => setSpeakerModalOpen(true)}
                 className="text-xs text-sky-600 hover:underline"
@@ -355,33 +355,33 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
             </div>
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div>
-                <label className="text-gray-500 block mb-0.5">Orador</label>
-                <div className="font-medium text-gray-800">
-                  {speakerLabel(mergedMeeting) || <span className="text-gray-400 italic">Sin asignar</span>}
+                <label className="text-gray-500 dark:text-gray-400 dark:text-gray-500 block mb-0.5">Orador</label>
+                <div className="font-medium text-gray-800 dark:text-gray-200">
+                  {speakerLabel(mergedMeeting) || <span className="text-gray-400 dark:text-gray-500 italic">Sin asignar</span>}
                 </div>
                 {congregationLabel(mergedMeeting) && (
-                  <div className="text-gray-400">{congregationLabel(mergedMeeting)}</div>
+                  <div className="text-gray-400 dark:text-gray-500">{congregationLabel(mergedMeeting)}</div>
                 )}
               </div>
               <div>
-                <label className="text-gray-500 block mb-0.5">Discurso</label>
-                <div className="font-medium text-gray-800">
-                  {outlineLabel(mergedMeeting) || <span className="text-gray-400 italic">Sin discurso</span>}
+                <label className="text-gray-500 dark:text-gray-400 dark:text-gray-500 block mb-0.5">Discurso</label>
+                <div className="font-medium text-gray-800 dark:text-gray-200">
+                  {outlineLabel(mergedMeeting) || <span className="text-gray-400 dark:text-gray-500 italic">Sin discurso</span>}
                 </div>
               </div>
             </div>
             <div className="mt-2 flex gap-3 items-end">
               <div>
-                <label className="text-xs text-gray-500 block mb-0.5">Canción</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 block mb-0.5">Canción</label>
                 <input
                   type="number"
-                  className="w-20 border border-gray-300 rounded px-2 py-1 text-xs"
+                  className="w-20 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs"
                   placeholder="Nº"
                   value={String(getField('song') ?? '')}
                   onChange={e => setField('song', e.target.value ? Number(e.target.value) : null)}
                 />
               </div>
-              <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer pb-1">
+              <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 dark:text-gray-500 cursor-pointer pb-1">
                 <input
                   type="checkbox"
                   checked={Boolean(getField('speaker_confirmed'))}
@@ -392,10 +392,10 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
               </label>
             </div>
             <div className="mt-2">
-              <label className="text-xs text-gray-500 block mb-0.5">Notas</label>
+              <label className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 block mb-0.5">Notas</label>
               <input
                 type="text"
-                className="w-full border border-gray-300 rounded px-2 py-1 text-xs"
+                className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs"
                 placeholder="Notas del discurso..."
                 value={String(getField('notes') ?? '')}
                 onChange={e => setField('notes', e.target.value)}
@@ -404,13 +404,13 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
           </section>
 
           {/* Weekend Assignments */}
-          <section className="mb-4 bg-white border border-gray-200 rounded-lg p-3">
-            <div className="font-semibold text-sm text-gray-700 mb-3">Asignaciones de Fin de Semana</div>
+          <section className="mb-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+            <div className="font-semibold text-sm text-gray-700 dark:text-gray-300 mb-3">Asignaciones de Fin de Semana</div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-gray-500 block mb-0.5">Presidente</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 block mb-0.5">Presidente</label>
                 <select
-                  className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-sky-50"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs bg-sky-50"
                   value={String(getField('chairman_id') ?? '')}
                   onChange={e => saveField('chairman_id', e.target.value || null)}
                 >
@@ -421,9 +421,9 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
                 </select>
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-0.5">Conductor Estudio de La Atalaya</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 block mb-0.5">Conductor Estudio de La Atalaya</label>
                 <select
-                  className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-sky-50"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs bg-sky-50"
                   value={String(getField('wt_conductor_id') ?? '')}
                   onChange={e => saveField('wt_conductor_id', e.target.value || null)}
                 >
@@ -434,9 +434,9 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
                 </select>
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-0.5">Lector de La Atalaya</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 block mb-0.5">Lector de La Atalaya</label>
                 <select
-                  className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-sky-50"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs bg-sky-50"
                   value={String(getField('wt_reader_id') ?? '')}
                   onChange={e => saveField('wt_reader_id', e.target.value || null)}
                 >
@@ -447,9 +447,9 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
                 </select>
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-0.5">Hospitalidad</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 block mb-0.5">Hospitalidad</label>
                 <select
-                  className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-yellow-50"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs bg-yellow-50 dark:bg-yellow-950/30"
                   value={
                     HOSPITALITY_GROUPS.includes(String(getField('hospitality_text') ?? ''))
                       ? `group:${getField('hospitality_text')}`
@@ -504,10 +504,10 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
                 </select>
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-0.5">Limpieza</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 block mb-0.5">Limpieza</label>
                 <input
                   type="text"
-                  className="w-full border border-gray-300 rounded px-2 py-1 text-xs bg-yellow-50"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs bg-yellow-50 dark:bg-yellow-950/30"
                   placeholder="Grupo / núm."
                   value={String(getField('cleaning_group') ?? '')}
                   onChange={e => setField('cleaning_group', e.target.value)}
@@ -516,10 +516,10 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
               </div>
             </div>
             <div className="mt-2">
-              <label className="text-xs text-gray-500 block mb-0.5">Nota hospitalidad</label>
+              <label className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 block mb-0.5">Nota hospitalidad</label>
               <input
                 type="text"
-                className="w-full border border-gray-300 rounded px-2 py-1 text-xs"
+                className="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs"
                 placeholder="Dirección, notas..."
                 value={String(getField('hospitality_text') ?? '')}
                 onChange={e => setField('hospitality_text', e.target.value)}
@@ -528,21 +528,21 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
           </section>
 
           {/* Overview table */}
-          <section className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-            <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
-              <span className="font-semibold text-xs text-gray-600 uppercase tracking-wide">Resumen general</span>
+          <section className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+            <div className="px-3 py-2 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+              <span className="font-semibold text-xs text-gray-600 dark:text-gray-400 dark:text-gray-500 uppercase tracking-wide">Resumen general</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
-                <thead className="bg-gray-50">
+                <thead className="bg-gray-50 dark:bg-gray-900">
                   <tr>
-                    <th className="text-left px-2 py-1.5 text-gray-500 font-medium">Semana</th>
-                    <th className="text-left px-2 py-1.5 text-gray-500 font-medium">Orador</th>
-                    <th className="text-left px-2 py-1.5 text-gray-500 font-medium">Discurso</th>
-                    <th className="text-left px-2 py-1.5 text-gray-500 font-medium">Presidente</th>
-                    <th className="text-left px-2 py-1.5 text-gray-500 font-medium">Conductor AT</th>
-                    <th className="text-left px-2 py-1.5 text-gray-500 font-medium">Lector AT</th>
-                    <th className="text-left px-2 py-1.5 text-gray-500 font-medium">Hospitalidad</th>
+                    <th className="text-left px-2 py-1.5 text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium">Semana</th>
+                    <th className="text-left px-2 py-1.5 text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium">Orador</th>
+                    <th className="text-left px-2 py-1.5 text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium">Discurso</th>
+                    <th className="text-left px-2 py-1.5 text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium">Presidente</th>
+                    <th className="text-left px-2 py-1.5 text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium">Conductor AT</th>
+                    <th className="text-left px-2 py-1.5 text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium">Lector AT</th>
+                    <th className="text-left px-2 py-1.5 text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium">Hospitalidad</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -559,7 +559,7 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
                       <tr
                         key={m.id}
                         onClick={() => setActiveId(m.id)}
-                        className={`border-b border-gray-100 cursor-pointer ${isRow ? 'bg-yellow-50' : 'hover:bg-gray-50'}`}
+                        className={`border-b border-gray-100 dark:border-gray-700 cursor-pointer ${isRow ? 'bg-yellow-50 dark:bg-yellow-950/30' : 'hover:bg-gray-50 dark:bg-gray-900'}`}
                       >
                         <td className="px-2 py-1.5 font-medium whitespace-nowrap">{formatWeekRange(m.date, locale)}</td>
                         <td className="px-2 py-1.5 whitespace-nowrap">{sp || <span className="text-gray-300">—</span>}</td>
@@ -577,7 +577,7 @@ export function WeekendDashboard({ meetings, outlines, visitingSpeakers, localPe
           </section>
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
+        <div className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-500 text-sm">
           Selecciona una semana
         </div>
       )}
@@ -650,28 +650,28 @@ function PastHistoryModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 bg-sky-600 text-white rounded-t-lg">
           <span className="font-bold text-sm">Historial de Discursos Públicos</span>
           <button onClick={onClose}><X size={18} /></button>
         </div>
         <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="p-6 text-center text-sm text-gray-400">Cargando…</div>
+            <div className="p-6 text-center text-sm text-gray-400 dark:text-gray-500">Cargando…</div>
           ) : history.length === 0 ? (
-            <div className="p-6 text-center text-sm text-gray-400">Sin historial registrado</div>
+            <div className="p-6 text-center text-sm text-gray-400 dark:text-gray-500">Sin historial registrado</div>
           ) : (
             <table className="w-full text-xs">
-              <thead className="bg-gray-50 sticky top-0">
+              <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0">
                 <tr>
-                  <th className="text-left px-3 py-2 text-gray-500 font-medium">Fecha</th>
-                  <th className="text-left px-3 py-2 text-gray-500 font-medium">Orador</th>
-                  <th className="text-left px-3 py-2 text-gray-500 font-medium">Discurso</th>
+                  <th className="text-left px-3 py-2 text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium">Fecha</th>
+                  <th className="text-left px-3 py-2 text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium">Orador</th>
+                  <th className="text-left px-3 py-2 text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium">Discurso</th>
                 </tr>
               </thead>
               <tbody>
                 {history.map(h => (
-                  <tr key={h.id} className="border-b border-gray-100">
+                  <tr key={h.id} className="border-b border-gray-100 dark:border-gray-700">
                     <td className="px-3 py-1.5 whitespace-nowrap">{h.date}</td>
                     <td className="px-3 py-1.5">{h.speaker_name || <span className="text-gray-300">—</span>}</td>
                     <td className="px-3 py-1.5">
@@ -683,7 +683,7 @@ function PastHistoryModal({ onClose }: { onClose: () => void }) {
             </table>
           )}
         </div>
-        <div className="px-4 py-2 border-t border-gray-200 text-xs text-gray-400">
+        <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-400 dark:text-gray-500">
           {history.length} registro(s)
         </div>
       </div>
@@ -733,14 +733,14 @@ function OutlineManagerPanel({ outlines, onClose, onRefresh }: {
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 bg-sky-600 text-white rounded-t-lg">
           <span className="font-bold text-sm">Gestionar Discursos Públicos</span>
           <button onClick={onClose}><X size={18} /></button>
         </div>
         <div className="flex-1 overflow-y-auto">
           <table className="w-full text-xs">
-            <thead className="bg-gray-50 sticky top-0">
+            <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0">
               <tr>
                 <th className="text-left px-3 py-2 w-12">#</th>
                 <th className="text-left px-3 py-2">Título</th>
@@ -749,20 +749,20 @@ function OutlineManagerPanel({ outlines, onClose, onRefresh }: {
             </thead>
             <tbody>
               {outlines.map(o => (
-                <tr key={o.id} className="border-b border-gray-100">
-                  <td className="px-3 py-1.5 text-gray-500">{o.number}</td>
+                <tr key={o.id} className="border-b border-gray-100 dark:border-gray-700">
+                  <td className="px-3 py-1.5 text-gray-500 dark:text-gray-400 dark:text-gray-500">{o.number}</td>
                   <td className="px-3 py-1.5">
                     {editId === o.id ? (
                       <div className="flex gap-1">
                         <input
-                          className="flex-1 border border-gray-300 rounded px-1 py-0.5 text-xs"
+                          className="flex-1 border border-gray-300 dark:border-gray-600 rounded px-1 py-0.5 text-xs"
                           value={editTitle}
                           onChange={e => setEditTitle(e.target.value)}
                           onKeyDown={e => { if (e.key === 'Enter') update(o.id); if (e.key === 'Escape') setEditId(null); }}
                           autoFocus
                         />
                         <button onClick={() => update(o.id)} className="text-sky-600 font-bold text-xs">✓</button>
-                        <button onClick={() => setEditId(null)} className="text-gray-400 text-xs">✕</button>
+                        <button onClick={() => setEditId(null)} className="text-gray-400 dark:text-gray-500 text-xs">✕</button>
                       </div>
                     ) : (
                       <span
@@ -781,26 +781,26 @@ function OutlineManagerPanel({ outlines, onClose, onRefresh }: {
             </tbody>
           </table>
         </div>
-        <div className="p-3 border-t border-gray-200">
+        <div className="p-3 border-t border-gray-200 dark:border-gray-700">
           {adding ? (
             <div className="flex gap-2">
               <input
                 type="number"
                 placeholder="#"
-                className="w-16 border border-gray-300 rounded px-2 py-1 text-xs"
+                className="w-16 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs"
                 value={newNum}
                 onChange={e => setNewNum(e.target.value)}
               />
               <input
                 type="text"
                 placeholder="Título del discurso"
-                className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs"
+                className="flex-1 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs"
                 value={newTitle}
                 onChange={e => setNewTitle(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && create()}
               />
               <button onClick={create} className="px-3 py-1 bg-sky-600 text-white text-xs rounded">Agregar</button>
-              <button onClick={() => setAdding(false)} className="px-2 py-1 text-gray-400 text-xs">✕</button>
+              <button onClick={() => setAdding(false)} className="px-2 py-1 text-gray-400 dark:text-gray-500 text-xs">✕</button>
             </div>
           ) : (
             <button
@@ -854,21 +854,21 @@ function VisitingSpeakerManagerPanel({ speakers, outlines, onClose, onRefresh }:
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 bg-sky-600 text-white rounded-t-lg">
           <span className="font-bold text-sm">Oradores Visitantes</span>
           <button onClick={onClose}><X size={18} /></button>
         </div>
         <div className="flex-1 overflow-y-auto">
           {speakers.map(s => (
-            <div key={s.id} className="border-b border-gray-100">
+            <div key={s.id} className="border-b border-gray-100 dark:border-gray-700">
               <div
-                className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-gray-50"
+                className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-gray-50 dark:bg-gray-900"
                 onClick={() => setExpandedId(expandedId === s.id ? null : s.id)}
               >
                 <div>
                   <div className="text-xs font-semibold">{s.name}</div>
-                  <div className="text-[11px] text-gray-400">{s.congregation}{s.city ? ` — ${s.city}` : ''}</div>
+                  <div className="text-[11px] text-gray-400 dark:text-gray-500">{s.congregation}{s.city ? ` — ${s.city}` : ''}</div>
                 </div>
                 <div className="flex items-center gap-2">
                   {expandedId === s.id ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -878,7 +878,7 @@ function VisitingSpeakerManagerPanel({ speakers, outlines, onClose, onRefresh }:
                 </div>
               </div>
               {expandedId === s.id && (
-                <div className="px-4 pb-3 text-xs text-gray-500 space-y-1 bg-gray-50">
+                <div className="px-4 pb-3 text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 space-y-1 bg-gray-50 dark:bg-gray-900">
                   {s.phone && <div>📞 {s.phone}</div>}
                   {s.email && <div>✉️ {s.email}</div>}
                   <div>Discursos: {(s.outline_numbers || []).join(', ') || 'Ninguno registrado'}</div>
@@ -888,23 +888,23 @@ function VisitingSpeakerManagerPanel({ speakers, outlines, onClose, onRefresh }:
             </div>
           ))}
           {speakers.length === 0 && (
-            <div className="p-4 text-center text-xs text-gray-400">Sin oradores visitantes registrados</div>
+            <div className="p-4 text-center text-xs text-gray-400 dark:text-gray-500">Sin oradores visitantes registrados</div>
           )}
         </div>
-        <div className="p-3 border-t border-gray-200">
+        <div className="p-3 border-t border-gray-200 dark:border-gray-700">
           {adding ? (
             <div className="flex flex-col gap-2">
               <div className="grid grid-cols-2 gap-2">
-                <input type="text" placeholder="Nombre*" className="border border-gray-300 rounded px-2 py-1 text-xs" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
-                <input type="text" placeholder="Congregación*" className="border border-gray-300 rounded px-2 py-1 text-xs" value={form.congregation} onChange={e => setForm(p => ({ ...p, congregation: e.target.value }))} />
-                <input type="text" placeholder="Ciudad" className="border border-gray-300 rounded px-2 py-1 text-xs" value={form.city} onChange={e => setForm(p => ({ ...p, city: e.target.value }))} />
-                <input type="text" placeholder="Teléfono" className="border border-gray-300 rounded px-2 py-1 text-xs" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
-                <input type="email" placeholder="Email" className="border border-gray-300 rounded px-2 py-1 text-xs" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
-                <input type="text" placeholder="Discursos (ej. 1,5,18)" className="border border-gray-300 rounded px-2 py-1 text-xs" value={form.outlineNums} onChange={e => setForm(p => ({ ...p, outlineNums: e.target.value }))} />
+                <input type="text" placeholder="Nombre*" className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+                <input type="text" placeholder="Congregación*" className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs" value={form.congregation} onChange={e => setForm(p => ({ ...p, congregation: e.target.value }))} />
+                <input type="text" placeholder="Ciudad" className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs" value={form.city} onChange={e => setForm(p => ({ ...p, city: e.target.value }))} />
+                <input type="text" placeholder="Teléfono" className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
+                <input type="email" placeholder="Email" className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
+                <input type="text" placeholder="Discursos (ej. 1,5,18)" className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-xs" value={form.outlineNums} onChange={e => setForm(p => ({ ...p, outlineNums: e.target.value }))} />
               </div>
               <div className="flex gap-2">
                 <button onClick={create} className="px-3 py-1 bg-sky-600 text-white text-xs rounded">Agregar</button>
-                <button onClick={() => setAdding(false)} className="px-2 py-1 text-gray-400 text-xs">Cancelar</button>
+                <button onClick={() => setAdding(false)} className="px-2 py-1 text-gray-400 dark:text-gray-500 text-xs">Cancelar</button>
               </div>
             </div>
           ) : (
