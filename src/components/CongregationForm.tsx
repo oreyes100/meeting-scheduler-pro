@@ -14,7 +14,7 @@ type Form = Partial<CongregationSettings>;
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs font-medium text-gray-500 dark:text-gray-400">{label}</label>
+      <label className="text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-300">{label}</label>
       {children}
     </div>
   );
@@ -82,23 +82,23 @@ export function CongregationForm() {
     try { await navigator.clipboard.writeText(migrationSql); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* ignore */ }
   };
 
-  if (loading) return <div className="p-8 text-gray-400 text-sm">Cargando…</div>;
+  if (loading) return <div className="p-8 text-gray-400 dark:text-gray-500 dark:text-gray-400 dark:text-gray-300 text-sm">Cargando…</div>;
 
   if (needsMigration) {
     return (
       <div className="p-8 max-w-2xl mx-auto">
         <h2 className="text-lg font-bold text-gray-700 dark:text-gray-200 mb-2">Configuración inicial requerida</h2>
-        <p className="text-sm text-gray-500 mb-3">
+        <p className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-300 mb-3">
           La tabla de configuración de la congregación no existe. Ejecuta este SQL en
           <strong> Supabase → SQL Editor</strong>:
         </p>
         <div className="flex justify-end mb-1">
           <button onClick={copySql} className="px-3 py-1 bg-sky-600 text-white rounded text-xs">{copied ? '✓ Copiado' : 'Copiar SQL'}</button>
         </div>
-        <textarea readOnly value={migrationSql} className="w-full h-64 border border-gray-300 rounded p-2 text-[11px] font-mono bg-gray-50" />
+        <textarea readOnly value={migrationSql} className="w-full h-64 border border-gray-300 dark:border-gray-600 rounded p-2 text-[11px] font-mono bg-gray-50 dark:bg-gray-900" />
         <div className="flex gap-2 mt-2">
           <a href="https://supabase.com/dashboard/project/_/sql/new" target="_blank" rel="noreferrer" className="px-4 py-2 bg-green-600 text-white rounded text-sm">Abrir SQL Editor</a>
-          <button onClick={load} className="px-4 py-2 border border-gray-300 rounded text-sm">Ya lo ejecuté → Recargar</button>
+          <button onClick={load} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm">Ya lo ejecuté → Recargar</button>
         </div>
       </div>
     );
@@ -172,7 +172,7 @@ export function CongregationForm() {
         </div>
       </section>
 
-      <p className="text-xs text-gray-400 flex items-center gap-1">
+      <p className="text-xs text-gray-400 dark:text-gray-500 dark:text-gray-400 dark:text-gray-300 flex items-center gap-1">
         <Database size={11} /> Esta información se usa en la impresión de programas y otros módulos.
       </p>
     </div>

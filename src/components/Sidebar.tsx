@@ -155,13 +155,13 @@ export function Sidebar({ meetings, activeMeetingId, setActiveMeetingId, onPrint
       {/* 2. Secondary Sidebar: Congregation and Months/Weeks */}
       <div className="flex-1 flex flex-col w-56 flex-shrink-0">
         {/* Congregation Selector Header */}
-        <div className="p-2 border-b border-gray-200">
-          <div className="border border-gray-300 rounded px-2 py-1 bg-white flex justify-between items-center cursor-pointer">
-            <span className="font-medium text-gray-700">{t('sidebar.congregation')}</span>
-            <ChevronDown size={14} className="text-gray-500" />
+        <div className="p-2 border-b border-gray-200 dark:border-gray-700">
+          <div className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-800 flex justify-between items-center cursor-pointer">
+            <span className="font-medium text-gray-700 dark:text-gray-300">{t('sidebar.congregation')}</span>
+            <ChevronDown size={14} className="text-gray-500 dark:text-gray-400 dark:text-gray-300" />
           </div>
           <div className="mt-2 px-1 flex items-center justify-between">
-            <span className="font-medium text-gray-800 text-sm">{t('sidebar.language')}</span>
+            <span className="font-medium text-gray-800 dark:text-gray-200 text-sm">{t('sidebar.language')}</span>
             <LanguageSwitcher />
           </div>
         </div>
@@ -169,15 +169,15 @@ export function Sidebar({ meetings, activeMeetingId, setActiveMeetingId, onPrint
         {/* Scrollable list of months and weeks */}
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {!today ? (
-            <div className="text-gray-500 p-2 text-center text-xs">{t('sidebar.loading')}</div>
+            <div className="text-gray-500 dark:text-gray-400 dark:text-gray-300 p-2 text-center text-xs">{t('sidebar.loading')}</div>
           ) : calendar.months.length === 0 ? (
-            <div className="text-gray-500 p-2 text-center text-xs">{t('sidebar.emptyWeeks')}</div>
+            <div className="text-gray-500 dark:text-gray-400 dark:text-gray-300 p-2 text-center text-xs">{t('sidebar.emptyWeeks')}</div>
           ) : (
             calendar.months.map((month) => (
               <div key={month.key} className="mb-2">
                 <button
                   onClick={() => toggleMonth(month.key)}
-                  className="w-full flex items-center gap-1 px-2 py-1.5 rounded text-sky-600 border border-sky-200 bg-sky-50 hover:bg-sky-100 transition-colors"
+                  className="w-full flex items-center gap-1 px-2 py-1.5 rounded text-sky-600 border border-sky-200 bg-sky-50 dark:bg-sky-950/30 hover:bg-sky-100 transition-colors"
                 >
                   {expandedMonths[month.key] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                   <span className="font-semibold text-xs tracking-wider uppercase">{month.key}</span>
@@ -197,8 +197,8 @@ export function Sidebar({ meetings, activeMeetingId, setActiveMeetingId, onPrint
                           <button
                             key={week.isoDate}
                             onClick={() => setActiveMeetingId(m.id)}
-                            className={`w-full text-left px-4 py-1.5 border-b border-gray-100 last:border-0 hover:bg-gray-100 transition-colors ${
-                              isActive ? 'bg-yellow-200 border-yellow-300 font-medium text-gray-900' : 'text-gray-700'
+                            className={`w-full text-left px-4 py-1.5 border-b border-gray-100 dark:border-gray-700 last:border-0 hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600 transition-colors ${
+                              isActive ? 'bg-yellow-200 dark:bg-yellow-800/50 border-yellow-300 font-medium text-gray-900 dark:text-gray-100' : 'text-gray-700 dark:text-gray-300'
                             }`}
                           >
                             {label}
@@ -214,12 +214,12 @@ export function Sidebar({ meetings, activeMeetingId, setActiveMeetingId, onPrint
                           key={week.isoDate}
                           onClick={() => onNewMeeting(week.isoDate)}
                           disabled={isCreating || blocked}
-                          className={`w-full text-left px-4 py-1.5 border-b border-gray-100 last:border-0 transition-colors flex items-center justify-between group ${
+                          className={`w-full text-left px-4 py-1.5 border-b border-gray-100 dark:border-gray-700 last:border-0 transition-colors flex items-center justify-between group ${
                             blocked
                               ? 'text-gray-300 cursor-not-allowed'
                               : isPast
-                                ? 'text-gray-400 hover:bg-amber-50 hover:text-amber-600 cursor-pointer italic'
-                                : 'text-gray-400 hover:bg-sky-50 hover:text-sky-600 cursor-pointer'
+                                ? 'text-gray-400 dark:text-gray-300 hover:bg-amber-50 dark:hover:bg-amber-950/30 dark:bg-amber-950/30 dark:hover:bg-amber-950/30 hover:text-amber-600 cursor-pointer italic'
+                                : 'text-gray-400 dark:text-gray-300 hover:bg-sky-50 dark:hover:bg-sky-950/30 dark:bg-sky-950/30 dark:hover:bg-sky-950/30 hover:text-sky-600 cursor-pointer'
                           }`}
                           title={blocked ? t('sidebar.pastWeek') : `${t('sidebar.createWeekFor')} ${label}`}
                         >
@@ -236,7 +236,7 @@ export function Sidebar({ meetings, activeMeetingId, setActiveMeetingId, onPrint
         </div>
 
         {/* Add Meeting Button (next available week) */}
-        <div className="p-2 border-t border-gray-200">
+        <div className="p-2 border-t border-gray-200 dark:border-gray-700">
           <button
             onClick={() => onNewMeeting()}
             disabled={isCreating}

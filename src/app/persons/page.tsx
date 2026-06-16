@@ -105,7 +105,7 @@ function PersonEditor({ person, isNew, onClose, onSaved }: PersonEditorProps) {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
           <div className="flex items-center gap-2">
@@ -115,11 +115,11 @@ function PersonEditor({ person, isNew, onClose, onSaved }: PersonEditorProps) {
             <div>
               <div className="font-semibold">{isNew ? t('persons.newPersonTitle') : fullName(form as Person)}</div>
               {!isNew && person?.id && (
-                <div className="text-xs text-gray-500">{person.id.slice(0, 8)}…</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-300">{person.id.slice(0, 8)}…</div>
               )}
             </div>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded"><X size={18} /></button>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600 rounded"><X size={18} /></button>
         </div>
 
         {/* Tabs */}
@@ -139,7 +139,7 @@ function PersonEditor({ person, isNew, onClose, onSaved }: PersonEditorProps) {
                 className={`px-4 py-2 text-sm font-medium whitespace-nowrap flex items-center gap-1.5 border-b-2 transition-colors ${
                   tab === v
                     ? 'border-sky-500 text-sky-600'
-                    : 'border-transparent text-gray-600 hover:text-gray-900'
+                    : 'border-transparent text-gray-600 dark:text-gray-400 dark:text-gray-300 hover:text-gray-900 dark:text-gray-100'
                 }`}
               >
                 {icons[v]}
@@ -151,7 +151,7 @@ function PersonEditor({ person, isNew, onClose, onSaved }: PersonEditorProps) {
 
         {/* Tab content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded">{error}</div>}
+          {error && <div className="bg-red-50 dark:bg-red-950/30 text-red-700 text-sm p-2 rounded">{error}</div>}
 
           {tab === 'info' && (
             <div className="space-y-3">
@@ -294,7 +294,7 @@ function PersonEditor({ person, isNew, onClose, onSaved }: PersonEditorProps) {
                   <Field label={t('persons.cbsConductorAssign')}><Toggle value={!!form.can_be_cbs_conductor} onChange={(v) => handleChange('can_be_cbs_conductor', v)} /></Field>
                   <Field label={t('persons.cbsReaderAssign')}><Toggle value={!!form.can_be_cbs_reader} onChange={(v) => handleChange('can_be_cbs_reader', v)} /></Field>
                 </Grid>
-                <p className="text-xs text-gray-500 mt-1">These settings are used by the auto-assign feature on the Meetings page.</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-300 mt-1">These settings are used by the auto-assign feature on the Meetings page.</p>
               </Section>
             </div>
           )}
@@ -326,12 +326,12 @@ function PersonEditor({ person, isNew, onClose, onSaved }: PersonEditorProps) {
 
           {tab === 'emergency' && (
             <div className="space-y-3">
-              <p className="text-sm text-gray-500">Use the Contact section on the Information tab to store primary phone numbers used in emergencies. An Emergency Contact reference can be added later in a follow-up update.</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-300">Use the Contact section on the Information tab to store primary phone numbers used in emergencies. An Emergency Contact reference can be added later in a follow-up update.</p>
               <Section title={t('persons.section.emergency')}>
                 <Grid>
-                  <Field label={t('persons.phone1')}><div className="text-sm text-gray-700">{form.phone1 || '—'}</div></Field>
-                  <Field label={t('persons.phone2')}><div className="text-sm text-gray-700">{form.phone2 || '—'}</div></Field>
-                  <Field label={t('persons.email1')}><div className="text-sm text-gray-700">{form.email1 || '—'}</div></Field>
+                  <Field label={t('persons.phone1')}><div className="text-sm text-gray-700 dark:text-gray-300">{form.phone1 || '—'}</div></Field>
+                  <Field label={t('persons.phone2')}><div className="text-sm text-gray-700 dark:text-gray-300">{form.phone2 || '—'}</div></Field>
+                  <Field label={t('persons.email1')}><div className="text-sm text-gray-700 dark:text-gray-300">{form.email1 || '—'}</div></Field>
                 </Grid>
               </Section>
             </div>
@@ -339,8 +339,8 @@ function PersonEditor({ person, isNew, onClose, onSaved }: PersonEditorProps) {
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 p-3 border-t bg-gray-50">
-          <button onClick={onClose} className="px-3 py-1.5 text-sm border rounded hover:bg-gray-100">{t('persons.cancel')}</button>
+        <div className="flex justify-end gap-2 p-3 border-t bg-gray-50 dark:bg-gray-900">
+          <button onClick={onClose} className="px-3 py-1.5 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600">{t('persons.cancel')}</button>
           <button onClick={handleSave} disabled={saving} className="px-3 py-1.5 text-sm bg-sky-500 text-white rounded hover:bg-sky-600 disabled:opacity-50 flex items-center gap-1">
             <Save size={14} />
             {saving ? t('persons.saving') : t('persons.save')}
@@ -351,12 +351,12 @@ function PersonEditor({ person, isNew, onClose, onSaved }: PersonEditorProps) {
   );
 }
 
-const inputCls = 'w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-sky-400';
+const inputCls = 'w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-1 focus:ring-sky-400';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-xs font-semibold text-gray-500 uppercase mb-1.5">{title}</div>
+      <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 dark:text-gray-300 uppercase mb-1.5">{title}</div>
       <div className="space-y-2">{children}</div>
     </div>
   );
@@ -369,7 +369,7 @@ function Grid({ children }: { children: React.ReactNode }) {
 function Field({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={className}>
-      <div className="text-xs text-gray-600 mb-0.5">{label}</div>
+      <div className="text-xs text-gray-600 dark:text-gray-400 dark:text-gray-300 mb-0.5">{label}</div>
       {children}
     </div>
   );
@@ -381,7 +381,7 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
       onClick={() => onChange(!value)}
       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${value ? 'bg-sky-500' : 'bg-gray-300'}`}
     >
-      <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${value ? 'translate-x-5' : 'translate-x-1'}`} />
+      <span className={`inline-block h-3 w-3 transform rounded-full bg-white dark:bg-gray-800 transition-transform ${value ? 'translate-x-5' : 'translate-x-1'}`} />
     </button>
   );
 }
@@ -494,7 +494,7 @@ export default function PersonsPage() {
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-gray-50">
+    <div className="h-screen w-screen flex flex-col bg-gray-50 dark:bg-gray-900">
       {/* Top bar */}
       <header className="bg-sky-500 text-white shadow-sm flex-shrink-0">
         <div className="flex items-center justify-between px-4 py-2">
@@ -506,7 +506,7 @@ export default function PersonsPage() {
             <h1 className="font-semibold flex items-center gap-2"><UsersIcon size={18} /> Persons</h1>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={handleAdd} className="bg-white text-sky-600 px-3 py-1 rounded text-sm font-medium hover:bg-sky-50 flex items-center gap-1">
+            <button onClick={handleAdd} className="bg-white dark:bg-gray-800 text-sky-600 px-3 py-1 rounded text-sm font-medium hover:bg-sky-50 dark:hover:bg-sky-950/30 dark:bg-sky-950/30 dark:hover:bg-sky-950/30 flex items-center gap-1">
               <Plus size={14} /> New Person
             </button>
           </div>
@@ -516,7 +516,7 @@ export default function PersonsPage() {
       <div className="flex flex-1 overflow-hidden">
         {migrationPending && (
           <div className="absolute top-12 left-1/2 -translate-x-1/2 z-30 mt-2 max-w-2xl">
-            <div className="bg-amber-50 border border-amber-300 text-amber-900 text-sm rounded p-3 shadow flex items-start gap-2">
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-300 text-amber-900 text-sm rounded p-3 shadow flex items-start gap-2">
               <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
               <div>
                 <div className="font-medium">Database migration not yet applied.</div>
@@ -526,20 +526,20 @@ export default function PersonsPage() {
           </div>
         )}
         {/* Filter sidebar */}
-        <aside className="w-60 bg-white border-r flex-shrink-0 overflow-y-auto">
+        <aside className="w-60 bg-white dark:bg-gray-800 border-r flex-shrink-0 overflow-y-auto">
           <div className="p-2 border-b">
-            <div className="text-xs font-semibold text-gray-500 uppercase mb-1 flex items-center gap-1"><Filter size={12} /> {t('persons.filter')}</div>
+            <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 dark:text-gray-300 uppercase mb-1 flex items-center gap-1"><Filter size={12} /> {t('persons.filter')}</div>
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value as PersonFilter)}
-              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+              className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm"
             >
               {FILTER_VALUES.map((v) => (
                 <option key={v} value={v}>{t(`filter.${v}`)}</option>
               ))}
             </select>
           </div>
-          <div className="p-2 text-xs text-gray-500">
+          <div className="p-2 text-xs text-gray-500 dark:text-gray-400 dark:text-gray-300">
             {t('persons.count', {
               n: persons.length,
               noun: persons.length === 1 ? t('persons.count.person') : t('persons.count.people'),
@@ -548,23 +548,23 @@ export default function PersonsPage() {
         </aside>
 
         {/* List */}
-        <div className="w-80 bg-white border-r flex-shrink-0 flex flex-col">
+        <div className="w-80 bg-white dark:bg-gray-800 border-r flex-shrink-0 flex flex-col">
           <div className="p-2 border-b">
             <div className="relative">
-              <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 dark:text-gray-400 dark:text-gray-300" />
               <input
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Search by name…"
-                className="w-full pl-7 pr-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-sky-400"
+                className="w-full pl-7 pr-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-1 focus:ring-sky-400"
               />
             </div>
           </div>
           <div className="flex-1 overflow-y-auto">
-            {loading && <div className="p-4 text-sm text-gray-500">Loading…</div>}
+            {loading && <div className="p-4 text-sm text-gray-500 dark:text-gray-400 dark:text-gray-300">Loading…</div>}
             {error && <div className="p-4 text-sm text-red-600">{error}</div>}
             {!loading && !error && persons.length === 0 && (
-              <div className="p-4 text-sm text-gray-500 text-center">
+              <div className="p-4 text-sm text-gray-500 dark:text-gray-400 dark:text-gray-300 text-center">
                 No people found.
                 <div className="mt-2">
                   <button onClick={handleAdd} className="text-sky-600 hover:underline text-sm">+ Add the first one</button>
@@ -577,14 +577,14 @@ export default function PersonsPage() {
                 <button
                   key={p.id}
                   onClick={() => setSelectedId(p.id)}
-                  className={`w-full flex items-center gap-2 p-2 border-b hover:bg-gray-50 text-left ${isActive ? 'bg-sky-50' : ''}`}
+                  className={`w-full flex items-center gap-2 p-2 border-b hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900 dark:hover:bg-gray-700 text-left ${isActive ? 'bg-sky-50 dark:bg-sky-950/30' : ''}`}
                 >
                   <div className="w-9 h-9 rounded-full bg-sky-500 text-white flex items-center justify-center text-sm font-semibold flex-shrink-0">
                     {initials(p)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">{fullName(p)}</div>
-                    <div className="text-xs text-gray-500 truncate flex items-center gap-2">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-300 truncate flex items-center gap-2">
                       <span>{personRole(p, t)}</span>
                       {p.status === 'moved' && <span className="text-amber-600">• Moved</span>}
                       {p.status === 'removed' && <span className="text-red-600">• Removed</span>}
@@ -599,7 +599,7 @@ export default function PersonsPage() {
         {/* Detail panel */}
         <main className="flex-1 overflow-y-auto">
           {!selected ? (
-            <div className="h-full flex flex-col items-center justify-center text-gray-500">
+            <div className="h-full flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 dark:text-gray-300">
               <UserCircle2 size={64} className="mb-2 text-gray-300" />
               <div>Select a person from the list to see details</div>
               <button onClick={handleAdd} className="mt-3 text-sky-600 hover:underline text-sm">+ New Person</button>
@@ -612,14 +612,14 @@ export default function PersonsPage() {
                   {initials(selected)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h2 className="text-xl font-semibold text-gray-900">{fullName(selected)}</h2>
-                  <div className="text-sm text-gray-600">{personRole(selected, t)} • {selected.gender === 'male' ? t('persons.role.brother') : t('persons.role.sister')}</div>
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{fullName(selected)}</h2>
+                  <div className="text-sm text-gray-600 dark:text-gray-400 dark:text-gray-300">{personRole(selected, t)} • {selected.gender === 'male' ? t('persons.role.brother') : t('persons.role.sister')}</div>
                   <div className="flex flex-wrap gap-2 mt-1 text-xs">
                     {selected.status === 'moved' && <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded">Moved</span>}
                     {selected.status === 'removed' && <span className="px-2 py-0.5 bg-red-100 text-red-800 rounded">Removed</span>}
                     {selected.status === 'active' && <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded">Active</span>}
                     {ageFromDob(selected.date_of_birth) != null && (
-                      <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded">{ageFromDob(selected.date_of_birth)} years old</span>
+                      <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">{ageFromDob(selected.date_of_birth)} years old</span>
                     )}
                     {selected.is_elder && <span className="px-2 py-0.5 bg-sky-100 text-sky-800 rounded">Elder</span>}
                     {selected.is_ministerial_servant && <span className="px-2 py-0.5 bg-sky-100 text-sky-800 rounded">MS</span>}
@@ -629,9 +629,9 @@ export default function PersonsPage() {
                   </div>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
-                  <button onClick={() => handleEdit(selected)} className="p-2 hover:bg-gray-100 rounded" title="Edit"><Edit3 size={16} /></button>
-                  <button onClick={() => setMoveOpen(true)} className="p-2 hover:bg-gray-100 rounded" title="Move"><ArrowRightLeft size={16} /></button>
-                  <button onClick={() => handleDelete(selected)} className="p-2 hover:bg-gray-100 rounded text-red-600" title="Delete"><Trash2 size={16} /></button>
+                  <button onClick={() => handleEdit(selected)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600 rounded" title="Edit"><Edit3 size={16} /></button>
+                  <button onClick={() => setMoveOpen(true)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600 rounded" title="Move"><ArrowRightLeft size={16} /></button>
+                  <button onClick={() => handleDelete(selected)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600 rounded text-red-600" title="Delete"><Trash2 size={16} /></button>
                 </div>
               </div>
 
@@ -642,7 +642,7 @@ export default function PersonsPage() {
                     key={v}
                     onClick={() => setDetailTab(v)}
                     className={`px-3 py-2 text-sm font-medium whitespace-nowrap flex items-center gap-1.5 border-b-2 transition-colors ${
-                      detailTab === v ? 'border-sky-500 text-sky-600' : 'border-transparent text-gray-600 hover:text-gray-900'
+                      detailTab === v ? 'border-sky-500 text-sky-600' : 'border-transparent text-gray-600 dark:text-gray-400 dark:text-gray-300 hover:text-gray-900 dark:text-gray-100'
                     }`}
                   >
                     {detailTabIcons[v]} {t(`persons.tab.${v}`)}
@@ -661,7 +661,7 @@ export default function PersonsPage() {
                     <DetailRow icon={<Mail size={14} />} label="Email" value={selected.email1 || '—'} />
                     {selected.email2 && <DetailRow icon={<Mail size={14} />} label="Email 2" value={selected.email2} />}
                     {selected.address && <DetailRow icon={<MapPin size={14} />} label="Address" value={selected.address} />}
-                    {selected.notes && <div className="text-sm"><div className="text-xs text-gray-500">Notes</div><div className="whitespace-pre-wrap">{selected.notes}</div></div>}
+                    {selected.notes && <div className="text-sm"><div className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-300">Notes</div><div className="whitespace-pre-wrap">{selected.notes}</div></div>}
                   </div>
                 )}
 
@@ -713,7 +713,7 @@ export default function PersonsPage() {
                       ['Deaf', selected.is_deaf],
                     ]} />
                     <div className="text-sm">
-                      <div className="text-xs text-gray-500 mb-1">Availability</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-300 mb-1">Availability</div>
                       <div>
                         {selected.available_start && selected.available_end
                           ? `${selected.available_start} – ${selected.available_end}`
@@ -725,7 +725,7 @@ export default function PersonsPage() {
 
                 {detailTab === 'emergency' && (
                   <div className="space-y-3">
-                    <div className="text-sm text-gray-600">Primary contact information used in emergencies:</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 dark:text-gray-300">Primary contact information used in emergencies:</div>
                     <DetailRow icon={<Phone size={14} />} label="Phone 1" value={selected.phone1 || '—'} />
                     {selected.phone2 && <DetailRow icon={<Phone size={14} />} label="Phone 2" value={selected.phone2} />}
                     <DetailRow icon={<Mail size={14} />} label="Email" value={selected.email1 || '—'} />
@@ -752,18 +752,18 @@ export default function PersonsPage() {
       {/* Move modal */}
       {moveOpen && selected && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-4">
             <div className="text-lg font-semibold mb-2 flex items-center gap-2"><ArrowRightLeft size={18} /> Move {fullName(selected)}</div>
-            <div className="text-sm text-gray-600 mb-3">Mark this person as moved. Their record is kept for history but they will no longer appear in the active list.</div>
-            <label className="text-xs text-gray-600">Destination congregation (optional)</label>
+            <div className="text-sm text-gray-600 dark:text-gray-400 dark:text-gray-300 mb-3">Mark this person as moved. Their record is kept for history but they will no longer appear in the active list.</div>
+            <label className="text-xs text-gray-600 dark:text-gray-400 dark:text-gray-300">Destination congregation (optional)</label>
             <input
-              className="w-full mt-1 px-2 py-1.5 border border-gray-300 rounded text-sm"
+              className="w-full mt-1 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm"
               value={moveTo}
               onChange={(e) => setMoveTo(e.target.value)}
               placeholder="e.g. Eastside Congregation"
             />
             <div className="flex justify-end gap-2 mt-4">
-              <button onClick={() => { setMoveOpen(false); setMoveTo(''); }} className="px-3 py-1.5 text-sm border rounded hover:bg-gray-100">Cancel</button>
+              <button onClick={() => { setMoveOpen(false); setMoveTo(''); }} className="px-3 py-1.5 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600">Cancel</button>
               <button onClick={handleMove} className="px-3 py-1.5 text-sm bg-amber-500 text-white rounded hover:bg-amber-600">Mark as Moved</button>
             </div>
           </div>
@@ -776,10 +776,10 @@ export default function PersonsPage() {
 function DetailRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-start gap-2 text-sm">
-      <div className="text-gray-400 mt-0.5">{icon}</div>
+      <div className="text-gray-400 dark:text-gray-300 mt-0.5">{icon}</div>
       <div className="flex-1">
-        <div className="text-xs text-gray-500">{label}</div>
-        <div className="text-gray-900">{value}</div>
+        <div className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-300">{label}</div>
+        <div className="text-gray-900 dark:text-gray-100">{value}</div>
       </div>
     </div>
   );
@@ -789,9 +789,9 @@ function BoolSection({ title, items }: { title: string; items: [string, boolean 
   const truthy = items.filter(([, v]) => !!v);
   return (
     <div>
-      <div className="text-xs font-semibold text-gray-500 uppercase mb-1.5">{title}</div>
+      <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 dark:text-gray-300 uppercase mb-1.5">{title}</div>
       {truthy.length === 0 ? (
-        <div className="text-sm text-gray-400 italic">None</div>
+        <div className="text-sm text-gray-400 dark:text-gray-500 dark:text-gray-400 dark:text-gray-300 italic">None</div>
       ) : (
         <div className="flex flex-wrap gap-1.5">
           {truthy.map(([label]) => (

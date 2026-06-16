@@ -8,7 +8,7 @@ interface MeetingOverviewProps {
 
 export function MeetingOverview({ meeting, onEdit }: MeetingOverviewProps) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-border p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-border p-6">
       <div className="flex justify-between items-start">
         <div>
           <h2 className="text-2xl font-bold text-text">{meeting.title}</h2>

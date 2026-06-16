@@ -147,7 +147,7 @@ export default function TerritoriesPage() {
       <NavRail />
 
       {/* Panel izquierdo: lista + edición */}
-      <div className="w-80 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col">
+      <div className="w-80 flex-shrink-0 border-r border-slate-200 bg-white dark:bg-gray-800 flex flex-col">
         <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
           <h1 className="font-bold text-slate-800 flex items-center gap-2"><MapPin size={18} className="text-sky-600" /> Territorios</h1>
           {!drawing && (
@@ -158,15 +158,15 @@ export default function TerritoriesPage() {
         </div>
 
         {migrationPending && (
-          <div className="m-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+          <div className="m-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 text-amber-800 text-xs">
             Tabla <code>territories</code> no existe aún. Ejecuta <code>sql/territories_schema.sql</code> en el SQL Editor de Supabase y recarga.
           </div>
         )}
-        {error && <div className="m-3 p-2 rounded bg-red-50 text-red-700 text-xs">{error}</div>}
+        {error && <div className="m-3 p-2 rounded bg-red-50 dark:bg-red-950/30 text-red-700 text-xs">{error}</div>}
 
         {/* Formulario de dibujo */}
         {drawing && (
-          <div className="m-3 p-3 rounded-lg border border-sky-200 bg-sky-50 space-y-2">
+          <div className="m-3 p-3 rounded-lg border border-sky-200 bg-sky-50 dark:bg-sky-950/30 space-y-2">
             <p className="text-xs text-sky-800 flex items-center gap-1.5 font-medium">
               <Crosshair size={13} /> Haz clic en el mapa para marcar el polígono ({draft.length} puntos)
             </p>
@@ -201,7 +201,7 @@ export default function TerritoriesPage() {
           ) : (
             territories.map(t => (
               <button key={t.id} onClick={() => setSelectedId(t.id)}
-                className={`w-full text-left px-4 py-2.5 border-b border-slate-100 hover:bg-slate-50 flex items-center gap-2.5 ${selectedId === t.id ? 'bg-sky-50' : ''}`}>
+                className={`w-full text-left px-4 py-2.5 border-b border-slate-100 hover:bg-slate-50 flex items-center gap-2.5 ${selectedId === t.id ? 'bg-sky-50 dark:bg-sky-950/30' : ''}`}>
                 <span className="w-3.5 h-3.5 rounded-sm flex-shrink-0" style={{ background: t.color }} />
                 <span className="flex-1 min-w-0">
                   <span className="font-medium text-slate-800 truncate block">{t.number != null ? `${t.number}. ` : ''}{t.name}</span>
@@ -223,7 +223,7 @@ export default function TerritoriesPage() {
 
             <label className="block text-[11px] text-slate-500">Asignar a
               <select value={selected.assigned_to || ''} onChange={e => patchSelected({ assigned_to: e.target.value || null, status: e.target.value ? 'assigned' : 'available' })}
-                className="w-full mt-0.5 border border-slate-300 rounded px-2 py-1 text-sm bg-white">
+                className="w-full mt-0.5 border border-slate-300 rounded px-2 py-1 text-sm bg-white dark:bg-gray-800">
                 <option value="">— sin asignar —</option>
                 {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
@@ -232,17 +232,17 @@ export default function TerritoriesPage() {
             <div className="flex gap-2">
               <label className="flex-1 text-[11px] text-slate-500">Desde
                 <input type="date" value={selected.visit_start || ''} onChange={e => patchSelected({ visit_start: e.target.value || null })}
-                  className="w-full mt-0.5 border border-slate-300 rounded px-1.5 py-1 text-xs bg-white" />
+                  className="w-full mt-0.5 border border-slate-300 rounded px-1.5 py-1 text-xs bg-white dark:bg-gray-800" />
               </label>
               <label className="flex-1 text-[11px] text-slate-500">Hasta
                 <input type="date" value={selected.visit_end || ''} onChange={e => patchSelected({ visit_end: e.target.value || null })}
-                  className="w-full mt-0.5 border border-slate-300 rounded px-1.5 py-1 text-xs bg-white" />
+                  className="w-full mt-0.5 border border-slate-300 rounded px-1.5 py-1 text-xs bg-white dark:bg-gray-800" />
               </label>
             </div>
 
             <label className="block text-[11px] text-slate-500">Estado
               <select value={selected.status} onChange={e => patchSelected({ status: e.target.value as Territory['status'] })}
-                className="w-full mt-0.5 border border-slate-300 rounded px-2 py-1 text-sm bg-white">
+                className="w-full mt-0.5 border border-slate-300 rounded px-2 py-1 text-sm bg-white dark:bg-gray-800">
                 <option value="available">Disponible</option>
                 <option value="assigned">Asignado</option>
                 <option value="completed">Completado</option>
@@ -251,7 +251,7 @@ export default function TerritoriesPage() {
 
             <label className="block text-[11px] text-slate-500">Nota
               <textarea value={selected.note || ''} onChange={e => patchSelected({ note: e.target.value || null })} rows={2}
-                className="w-full mt-0.5 border border-slate-300 rounded px-2 py-1 text-xs bg-white resize-none" />
+                className="w-full mt-0.5 border border-slate-300 rounded px-2 py-1 text-xs bg-white dark:bg-gray-800 resize-none" />
             </label>
           </div>
         )}

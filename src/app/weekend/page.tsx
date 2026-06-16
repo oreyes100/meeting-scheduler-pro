@@ -131,7 +131,7 @@ export default function WeekendPage() {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center h-full text-gray-400 dark:text-gray-500 text-sm">Cargando…</div>;
+    return <div className="flex items-center justify-center h-full text-gray-400 dark:text-gray-500 dark:text-gray-400 dark:text-gray-300 text-sm">Cargando…</div>;
   }
 
   if (migrationNeeded) {
@@ -139,7 +139,7 @@ export default function WeekendPage() {
       <div className="flex flex-col items-center justify-center h-full gap-4 p-8 overflow-y-auto">
         <div className="max-w-2xl w-full">
           <h2 className="text-lg font-bold text-gray-700 dark:text-gray-300 mb-2 text-center">Configuración inicial requerida</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 mb-4 text-center">
+          <p className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 dark:text-gray-400 dark:text-gray-300 mb-4 text-center">
             Las tablas de Reunión de Fin de Semana no existen aún. Intenta la migración automática;
             si el rol de servicio no tiene permisos para crear tablas, copia el SQL y pégalo en el
             <strong> SQL Editor de Supabase</strong>.
@@ -185,7 +185,7 @@ export default function WeekendPage() {
                 </a>
                 <button
                   onClick={() => fetchData()}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:bg-gray-700 rounded text-sm"
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 rounded text-sm"
                 >
                   Ya lo ejecuté → Recargar
                 </button>

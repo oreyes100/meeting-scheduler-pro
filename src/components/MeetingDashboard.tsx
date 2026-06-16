@@ -88,7 +88,7 @@ export function MeetingDashboard({
   }, [formData]);
 
   if (!formData) {
-    return <div className="p-8 text-center text-gray-500 dark:text-gray-400 dark:text-gray-500">{t('meeting.selectMeeting')}</div>;
+    return <div className="p-8 text-center text-gray-500 dark:text-gray-400 dark:text-gray-500 dark:text-gray-400 dark:text-gray-300">{t('meeting.selectMeeting')}</div>;
   }
 
   const getWeekLabel = (dateString: string) => {
@@ -127,7 +127,7 @@ export function MeetingDashboard({
         <div className="flex justify-between items-center mb-2 px-2 border-b border-gray-200 dark:border-gray-700 pb-1 relative">
            <div className="w-1/3 flex gap-2">
              <button onClick={onAutoAssign} className="bg-blue-100 border border-blue-400 text-blue-800 px-2 py-0.5 rounded text-xs hover:bg-blue-200 shadow-sm">{t('meeting.autoAssign')}</button>
-             <button onClick={onClearAssignments} className="bg-gray-100 dark:bg-gray-700 border border-gray-400 text-gray-800 dark:text-gray-200 px-2 py-0.5 rounded text-xs hover:bg-gray-200 shadow-sm">{t('meeting.clear')}</button>
+             <button onClick={onClearAssignments} className="bg-gray-100 dark:bg-gray-700 border border-gray-400 text-gray-800 dark:text-gray-200 px-2 py-0.5 rounded text-xs hover:bg-gray-200 dark:bg-gray-600 shadow-sm">{t('meeting.clear')}</button>
              <button onClick={onRebuildParts} title={t('meeting.rebuildFromJW')} className="bg-amber-100 border border-amber-400 text-amber-800 px-2 py-0.5 rounded text-xs hover:bg-amber-200 shadow-sm">{t('meeting.rebuildFromJW')}</button>
              {autoAssigning && <span className="text-blue-600 font-bold ml-2">...</span>}
            </div>
@@ -189,7 +189,7 @@ export function MeetingDashboard({
                  </select>
                  <input type="text" className="w-[300px] border border-gray-300 dark:border-gray-600 p-0.5 h-6 ml-2 text-xs" value={treasuresTalk.title || ''} onChange={e => handlePartChange(treasuresTalk.id, 'title', e.target.value)} />
                  <input type="number" className="w-12 border border-gray-300 dark:border-gray-600 p-0.5 h-6 text-center text-xs ml-1" value={treasuresTalk.duration_minutes || ''} onChange={e => handlePartChange(treasuresTalk.id, 'duration_minutes', parseInt(e.target.value))} />
-                 <span className="text-gray-600 dark:text-gray-400 dark:text-gray-500 text-xs ml-1">{t('meeting.min')}</span>
+                 <span className="text-gray-600 dark:text-gray-400 dark:text-gray-500 dark:text-gray-400 dark:text-gray-300 text-xs ml-1">{t('meeting.min')}</span>
                  <div className="flex-1"></div>
                  <label className="w-[120px] text-gray-700 dark:text-gray-300 text-right pr-2">{gemsLabel}</label>
                  <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] p-0.5 h-6 text-xs" value={spiritualGems?.assigned_user_id || ''} onChange={e => spiritualGems && handlePartChange(spiritualGems.id, 'assigned_user_id', e.target.value)}>
@@ -198,7 +198,7 @@ export function MeetingDashboard({
                  </select>
                  <FileText size={14} className="text-[#3b82f6] ml-1" />
                  <input type="number" className="w-12 border border-gray-300 dark:border-gray-600 p-0.5 h-6 text-center text-xs ml-1" value={spiritualGems?.duration_minutes || ''} onChange={e => spiritualGems && handlePartChange(spiritualGems.id, 'duration_minutes', parseInt(e.target.value))} />
-                 <span className="text-gray-600 dark:text-gray-400 dark:text-gray-500 text-xs ml-1">{t('meeting.min')}</span>
+                 <span className="text-gray-600 dark:text-gray-400 dark:text-gray-500 dark:text-gray-400 dark:text-gray-300 text-xs ml-1">{t('meeting.min')}</span>
                </div>
              )}
 
@@ -209,7 +209,7 @@ export function MeetingDashboard({
                    <button className="px-4 text-white bg-gradient-to-b from-[#40b1e9] to-[#2591ca] text-xs font-semibold flex-1 max-w-[100px]">{t('meeting.aux1')}</button>
                    <div className="flex-1 border-b-[3px] border-[#3eb5f1]"></div>
                    <div className="flex items-center pr-1 border-b-[3px] border-[#3eb5f1]">
-                     <span className="text-[11px] text-gray-600 dark:text-gray-400 dark:text-gray-500 mr-1">{t('meeting.usualNumber')}</span>
+                     <span className="text-[11px] text-gray-600 dark:text-gray-400 dark:text-gray-500 dark:text-gray-400 dark:text-gray-300 mr-1">{t('meeting.usualNumber')}</span>
                      <button className="bg-gradient-to-b from-[#4fb8ef] to-[#2697ce] text-white border border-[#1b73a2] rounded-sm mr-1 shadow-sm"><Plus size={14}/></button>
                      <button className="bg-gradient-to-b from-[#e3f4fc] to-[#aee1f8] text-[#1b73a2] border border-[#7fcceb] rounded-sm shadow-sm"><Minus size={14}/></button>
                    </div>
@@ -251,7 +251,7 @@ export function MeetingDashboard({
                   <input type="text" className="w-[260px] border border-gray-300 dark:border-gray-600 p-0.5 h-6 ml-2 text-xs" value={part.title || ''} onChange={e => handlePartChange(part.id, 'title', e.target.value)} />
                   <FileText size={14} className="text-[#3b82f6] ml-1" />
                   <input type="number" className="w-10 border border-gray-300 dark:border-gray-600 p-0.5 h-6 text-center text-xs ml-1" value={part.duration_minutes || ''} onChange={e => handlePartChange(part.id, 'duration_minutes', parseInt(e.target.value))} />
-                  <span className="text-gray-600 dark:text-gray-400 dark:text-gray-500 text-xs ml-1">{t('meeting.min')}</span>
+                  <span className="text-gray-600 dark:text-gray-400 dark:text-gray-500 dark:text-gray-400 dark:text-gray-300 text-xs ml-1">{t('meeting.min')}</span>
 
                   <div className="flex-1"></div>
 
@@ -287,7 +287,7 @@ export function MeetingDashboard({
                     <input type="text" className={`w-[360px] border border-gray-300 dark:border-gray-600 p-0.5 h-6 ml-2 text-xs ${titleBg}`} value={part.title || ''} onChange={e => handlePartChange(part.id, 'title', e.target.value)} />
                     <FileText size={14} className="text-[#3b82f6] ml-1" />
                     <input type="number" className="w-10 border border-gray-300 dark:border-gray-600 p-0.5 h-6 text-center text-xs ml-1" value={part.duration_minutes || ''} onChange={e => handlePartChange(part.id, 'duration_minutes', parseInt(e.target.value))} />
-                    <span className="text-gray-600 dark:text-gray-400 dark:text-gray-500 text-xs ml-1">{t('meeting.min')}</span>
+                    <span className="text-gray-600 dark:text-gray-400 dark:text-gray-500 dark:text-gray-400 dark:text-gray-300 text-xs ml-1">{t('meeting.min')}</span>
 
                     <div className="flex-1"></div>
                    </div>
@@ -309,8 +309,8 @@ export function MeetingDashboard({
                   {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
                 </select>
                 <FileText size={14} className="text-[#3b82f6] ml-1" />
-                <span className="w-10 text-center text-gray-600 dark:text-gray-400 dark:text-gray-500 text-xs ml-1">30</span>
-                <span className="text-gray-600 dark:text-gray-400 dark:text-gray-500 text-xs ml-1">{t('meeting.min')}</span>
+                <span className="w-10 text-center text-gray-600 dark:text-gray-400 dark:text-gray-500 dark:text-gray-400 dark:text-gray-300 text-xs ml-1">30</span>
+                <span className="text-gray-600 dark:text-gray-400 dark:text-gray-500 dark:text-gray-400 dark:text-gray-300 text-xs ml-1">{t('meeting.min')}</span>
               </div>
               <div className="flex items-center">
                 <label className="w-[120px] text-gray-700 dark:text-gray-300 text-right pr-2 text-xs">{t('meeting.cbsReader')}</label>
