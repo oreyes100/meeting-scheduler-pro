@@ -148,14 +148,14 @@ export function MeetingDashboard({
            <div className="px-1 flex flex-col gap-1.5">
              <div className="flex items-center">
                 <label className="w-[120px] text-gray-700 dark:text-gray-300 text-right pr-2">{t('meeting.chairman')}</label>
-                <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] p-0.5 h-6 text-xs" value={formData.chairman_id || ''} onChange={e => handleMeetingChange('chairman_id', e.target.value)}>
+                <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={formData.chairman_id || ''} onChange={e => handleMeetingChange('chairman_id', e.target.value)}>
                   <option value=""></option>
                   {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
                 </select>
                 <FileText size={14} className="text-[#3b82f6] ml-1" />
                 <div className="flex-1"></div>
                 <label className="w-[120px] text-gray-700 dark:text-gray-300 text-right pr-2">{t('meeting.openingPrayer')}</label>
-                <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] p-0.5 h-6 text-xs" value={formData.opening_prayer_id || ''} onChange={e => handleMeetingChange('opening_prayer_id', e.target.value)}>
+                <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={formData.opening_prayer_id || ''} onChange={e => handleMeetingChange('opening_prayer_id', e.target.value)}>
                   <option value=""></option>
                   {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
                 </select>
@@ -166,7 +166,7 @@ export function MeetingDashboard({
                 <div className="w-[180px]"></div>
                 <div className="flex-1"></div>
                 <label className="w-[120px] text-gray-700 dark:text-gray-300 text-right pr-2">{t('meeting.closingPrayer')}</label>
-                <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] p-0.5 h-6 text-xs" value={formData.closing_prayer_id || ''} onChange={e => handleMeetingChange('closing_prayer_id', e.target.value)}>
+                <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={formData.closing_prayer_id || ''} onChange={e => handleMeetingChange('closing_prayer_id', e.target.value)}>
                   <option value=""></option>
                   {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
                 </select>
@@ -183,7 +183,7 @@ export function MeetingDashboard({
              {treasuresTalk && (
                <div className="flex items-center">
                  <label className="w-[120px] text-gray-700 dark:text-gray-300 text-right pr-2">{treasuresLabel}</label>
-                 <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] p-0.5 h-6 text-xs" value={treasuresTalk.assigned_user_id || ''} onChange={e => handlePartChange(treasuresTalk.id, 'assigned_user_id', e.target.value)}>
+                 <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={treasuresTalk.assigned_user_id || ''} onChange={e => handlePartChange(treasuresTalk.id, 'assigned_user_id', e.target.value)}>
                      <option value=""></option>
                      {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
                  </select>
@@ -192,7 +192,7 @@ export function MeetingDashboard({
                  <span className="text-gray-600 dark:text-gray-400 dark:text-gray-500 dark:text-gray-400 dark:text-gray-300 text-xs ml-1">{t('meeting.min')}</span>
                  <div className="flex-1"></div>
                  <label className="w-[120px] text-gray-700 dark:text-gray-300 text-right pr-2">{gemsLabel}</label>
-                 <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] p-0.5 h-6 text-xs" value={spiritualGems?.assigned_user_id || ''} onChange={e => spiritualGems && handlePartChange(spiritualGems.id, 'assigned_user_id', e.target.value)}>
+                 <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={spiritualGems?.assigned_user_id || ''} onChange={e => spiritualGems && handlePartChange(spiritualGems.id, 'assigned_user_id', e.target.value)}>
                      <option value=""></option>
                      {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
                  </select>
@@ -216,7 +216,7 @@ export function MeetingDashboard({
                  </div>
                  <div className="p-1.5 flex items-center bg-white dark:bg-gray-800 h-9">
                     <label className="w-[120px] text-gray-700 dark:text-gray-300 text-right pr-2 text-xs font-semibold">{bibleReadingLabel}</label>
-                    <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] p-0.5 h-6 text-xs" value={bibleReading.assigned_user_id || bibleReading.student_id || ''} onChange={e => handlePartChange(bibleReading.id, 'assigned_user_id', e.target.value)}>
+                    <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={bibleReading.assigned_user_id || bibleReading.student_id || ''} onChange={e => handlePartChange(bibleReading.id, 'assigned_user_id', e.target.value)}>
                        <option value=""></option>
                        {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
                     </select>
@@ -244,7 +244,7 @@ export function MeetingDashboard({
                     <option value="explaining_beliefs">{t('meeting.explainingBeliefs')}</option>
                     <option value="talk">{t('meeting.talk')}</option>
                   </select>
-                  <select className="w-[170px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] p-0.5 h-6 text-xs ml-1" value={part.assigned_user_id || part.student_id || ''} onChange={e => handlePartChange(part.id, 'assigned_user_id', e.target.value)}>
+                  <select className="w-[170px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200 ml-1" value={part.assigned_user_id || part.student_id || ''} onChange={e => handlePartChange(part.id, 'assigned_user_id', e.target.value)}>
                        <option value=""></option>
                        {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
                   </select>
@@ -256,7 +256,7 @@ export function MeetingDashboard({
                   <div className="flex-1"></div>
 
                   <label className="text-gray-700 dark:text-gray-300 text-right pr-2 text-xs">{t('meeting.assistant')}</label>
-                  <select className="w-[170px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] p-0.5 h-6 text-xs" value={part.assistant_user_id || ''} onChange={e => handlePartChange(part.id, 'assistant_user_id', e.target.value)}>
+                  <select className="w-[170px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={part.assistant_user_id || ''} onChange={e => handlePartChange(part.id, 'assistant_user_id', e.target.value)}>
                        <option value=""></option>
                        {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
                   </select>
@@ -274,7 +274,7 @@ export function MeetingDashboard({
               {livingParts.map((part: any, index: number) => {
                 // Alternating bg colors for living parts based on screenshot (blue then yellow then yellow)
                 const isBlue = index === 0;
-                const inputBg = isBlue ? "bg-[#b4d5eb]" : "bg-[#fdfad4]";
+                const inputBg = isBlue ? "bg-[#b4d5eb] dark:bg-[#1e3a4a] dark:text-gray-200" : "bg-[#fdfad4] dark:bg-[#3a3a1a] dark:text-gray-200";
                 const titleBg = "bg-white dark:bg-gray-800";
 
                 return (
@@ -304,7 +304,7 @@ export function MeetingDashboard({
             <div className="px-1 flex flex-col gap-1.5">
               <div className="flex items-center">
                 <label className="w-[120px] text-gray-700 dark:text-gray-300 text-right pr-2 text-xs">{t('meeting.cbsConductor')}</label>
-                <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] p-0.5 h-6 text-xs" value={formData.cbs_conductor_id || ''} onChange={e => handleMeetingChange('cbs_conductor_id', e.target.value)}>
+                <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={formData.cbs_conductor_id || ''} onChange={e => handleMeetingChange('cbs_conductor_id', e.target.value)}>
                   <option value=""></option>
                   {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
                 </select>
@@ -314,7 +314,7 @@ export function MeetingDashboard({
               </div>
               <div className="flex items-center">
                 <label className="w-[120px] text-gray-700 dark:text-gray-300 text-right pr-2 text-xs">{t('meeting.cbsReader')}</label>
-                <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] p-0.5 h-6 text-xs" value={formData.cbs_reader_id || ''} onChange={e => handleMeetingChange('cbs_reader_id', e.target.value)}>
+                <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={formData.cbs_reader_id || ''} onChange={e => handleMeetingChange('cbs_reader_id', e.target.value)}>
                   <option value=""></option>
                   {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
                 </select>
