@@ -147,6 +147,13 @@ export function CongregationForm() {
             </select>
           </Field>
           <Field label="Hora"><input type="time" className={inputCls} value={form.midweek_meeting_time || ''} onChange={e => set('midweek_meeting_time', e.target.value)} /></Field>
+          <Field label="Salas auxiliares (entre semana)">
+            <select className={inputCls} value={form.auxiliary_rooms ?? 0} onChange={e => set('auxiliary_rooms', parseInt(e.target.value))}>
+              <option value={0}>Ninguna</option>
+              <option value={1}>1 sala auxiliar</option>
+              <option value={2}>2 salas auxiliares</option>
+            </select>
+          </Field>
         </div>
       </section>
 

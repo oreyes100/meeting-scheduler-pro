@@ -42,6 +42,7 @@ interface PrintModalProps {
   selectedMeeting: any | null;
   allMeetings: any[];
   publishers: any[];
+  auxiliaryRooms?: number;
 }
 
 type ReportType = 's140' | 'combined' | 's89' | 'chairman';
@@ -170,7 +171,7 @@ function rowName(p: Part): string {
   return b ? `${a} & ${b}` : a;
 }
 
-export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetings, publishers }: PrintModalProps) {
+export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetings, publishers, auxiliaryRooms = 0 }: PrintModalProps) {
   const [reportType, setReportType] = useState<ReportType>('s140');
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     if (selectedMeeting) return selectedMeeting.date.substring(0, 7);
@@ -375,7 +376,7 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                             className="font-bold px-2 py-0.5"
                             style={{ background: YELLOW }}
                           >
-                            Limpieza&nbsp;&nbsp;{m.cleaning_group ?? '___'}&nbsp;&nbsp;&nbsp;&nbsp;HOSPITALIDAD&nbsp;&nbsp;{m.hospitality_group ?? '___'}
+                            Limpieza&nbsp;&nbsp;{m.cleaning_group ?? '___'}&nbsp;&nbsp;&nbsp;&nbsp;HOSPITALIDAD&nbsp;&nbsp;{wkHospitality(weekendByMonday[mondayOf(m.date)]) || '___'}
                           </span>
                           <span className="flex items-center gap-1.5">
                             <span className="text-[11px] font-semibold uppercase text-slate-500">Oración</span>
@@ -474,7 +475,7 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
 
                           <div className="flex items-center justify-between mt-1.5 text-sm">
                             <span className="font-bold px-2 py-0.5" style={{ background: YELLOW }}>
-                              Limpieza&nbsp;&nbsp;{m.cleaning_group ?? '___'}
+                              Limpieza&nbsp;&nbsp;{m.cleaning_group ?? '___'}&nbsp;&nbsp;&nbsp;&nbsp;HOSPITALIDAD&nbsp;&nbsp;{wkHospitality(weekendByMonday[mondayOf(m.date)]) || '___'}
                             </span>
                             <span className="flex items-center gap-1.5">
                               <span className="text-[11px] font-semibold uppercase text-slate-500">Oración final</span>

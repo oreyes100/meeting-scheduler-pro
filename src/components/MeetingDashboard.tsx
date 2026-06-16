@@ -17,6 +17,7 @@ interface DashboardProps {
   error: string | null;
   successMsg: string | null;
   midweekMeetingDay?: string | null;
+  auxiliaryRooms?: number;
 }
 
 export function MeetingDashboard({
@@ -27,9 +28,18 @@ export function MeetingDashboard({
   onRebuildParts,
   autoAssigning,
   midweekMeetingDay,
+  auxiliaryRooms = 0,
 }: DashboardProps) {
   const [formData, setFormData] = useState<any>(null);
+  const [assignHistory, setAssignHistory] = useState<Record<string, Record<string, { date: string; title: string }>>>({});
   const { t, locale } = useT();
+
+  useEffect(() => {
+    fetch('/api/assignment-history')
+      .then(r => r.json())
+      .then(j => setAssignHistory(j.history || {}))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (meeting) {
@@ -121,6 +131,24 @@ export function MeetingDashboard({
   const bibleReadingLabel = bibleReading ? t('meeting.bibleReading', { n: num(bibleReading.part_number) }) : '';
   const cbsLabel = t('meeting.cbsLabel');
 
+  const fmtLastAssign = (userId: string, roleKey: string): string => {
+    const h = assignHistory[userId]?.[roleKey];
+    if (!h) return '';
+    const d = new Date(h.date + 'T00:00:00');
+    const dateStr = d.toLocaleDateString(locale === 'es' ? 'es-MX' : 'en-US', { day: 'numeric', month: 'short' });
+    const title = h.title ? ` — ${h.title.slice(0, 30)}` : '';
+    return ` (${dateStr}${title})`;
+  };
+
+  const optionsFor = (canField: keyof Profile | null, roleKey: string, extraFilter?: (p: Profile) => boolean) => {
+    let list = publishers;
+    if (canField) list = list.filter(p => (p as any)[canField]);
+    if (extraFilter) list = list.filter(extraFilter);
+    return list.map(p => (
+      <option key={p.id} value={p.id}>{p.first_name} {p.last_name}{fmtLastAssign(p.id, roleKey)}</option>
+    ));
+  };
+
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-800 text-[13px] font-sans">
       {/* Top Title Bar - Gradient Blue */}
@@ -178,14 +206,14 @@ export function MeetingDashboard({
                 <label className="w-[120px] text-gray-700 dark:text-gray-300 text-right pr-2">{t('meeting.chairman')}</label>
                 <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={formData.chairman_id || ''} onChange={e => handleMeetingChange('chairman_id', e.target.value)}>
                   <option value=""></option>
-                  {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
+                  {optionsFor('can_be_chairman', 'chairman')}
                 </select>
                 <FileText size={14} className="text-[#3b82f6] ml-1" />
                 <div className="flex-1"></div>
                 <label className="w-[120px] text-gray-700 dark:text-gray-300 text-right pr-2">{t('meeting.openingPrayer')}</label>
                 <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={formData.opening_prayer_id || ''} onChange={e => handleMeetingChange('opening_prayer_id', e.target.value)}>
                   <option value=""></option>
-                  {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
+                  {optionsFor('can_do_prayers', 'opening_prayer')}
                 </select>
              </div>
 
@@ -196,7 +224,7 @@ export function MeetingDashboard({
                 <label className="w-[120px] text-gray-700 dark:text-gray-300 text-right pr-2">{t('meeting.closingPrayer')}</label>
                 <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={formData.closing_prayer_id || ''} onChange={e => handleMeetingChange('closing_prayer_id', e.target.value)}>
                   <option value=""></option>
-                  {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
+                  {optionsFor('can_do_prayers', 'closing_prayer')}
                 </select>
               </div>
 
@@ -219,7 +247,7 @@ export function MeetingDashboard({
                  <label className="w-[120px] text-gray-700 dark:text-gray-300 text-right pr-2">{treasuresLabel}</label>
                  <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={treasuresTalk.assigned_user_id || ''} onChange={e => handlePartChange(treasuresTalk.id, 'assigned_user_id', e.target.value)}>
                      <option value=""></option>
-                     {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
+                     {optionsFor('can_be_speaker', 'treasures_talk')}
                  </select>
                  <input type="text" className="w-[300px] border border-gray-300 dark:border-gray-600 p-0.5 h-6 ml-2 text-xs" value={treasuresTalk.title || ''} onChange={e => handlePartChange(treasuresTalk.id, 'title', e.target.value)} />
                  <input type="number" className="w-12 border border-gray-300 dark:border-gray-600 p-0.5 h-6 text-center text-xs ml-1" value={treasuresTalk.duration_minutes || ''} onChange={e => handlePartChange(treasuresTalk.id, 'duration_minutes', parseInt(e.target.value))} />
@@ -228,7 +256,7 @@ export function MeetingDashboard({
                  <label className="w-[120px] text-gray-700 dark:text-gray-300 text-right pr-2">{gemsLabel}</label>
                  <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={spiritualGems?.assigned_user_id || ''} onChange={e => spiritualGems && handlePartChange(spiritualGems.id, 'assigned_user_id', e.target.value)}>
                      <option value=""></option>
-                     {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
+                     {optionsFor('can_do_gems', 'spiritual_gems')}
                  </select>
                  <FileText size={14} className="text-[#3b82f6] ml-1" />
                  <input type="number" className="w-12 border border-gray-300 dark:border-gray-600 p-0.5 h-6 text-center text-xs ml-1" value={spiritualGems?.duration_minutes || ''} onChange={e => spiritualGems && handlePartChange(spiritualGems.id, 'duration_minutes', parseInt(e.target.value))} />
@@ -240,7 +268,7 @@ export function MeetingDashboard({
                <div className="mt-1 border border-[#64a5d8]">
                  <div className="flex border-b border-[#64a5d8] bg-white dark:bg-gray-800 h-7">
                    <button className="px-4 text-[#005c9e] border-b-[3px] border-[#3eb5f1] font-bold text-xs flex-1 max-w-[100px]">{t('meeting.main')}</button>
-                   <button className="px-4 text-white bg-gradient-to-b from-[#40b1e9] to-[#2591ca] text-xs font-semibold flex-1 max-w-[100px]">{t('meeting.aux1')}</button>
+                   {auxiliaryRooms >= 1 && <button className="px-4 text-white bg-gradient-to-b from-[#40b1e9] to-[#2591ca] text-xs font-semibold flex-1 max-w-[100px]">{t('meeting.aux1')}</button>}
                    <div className="flex-1 border-b-[3px] border-[#3eb5f1]"></div>
                    <div className="flex items-center pr-1 border-b-[3px] border-[#3eb5f1]">
                      <span className="text-[11px] text-gray-600 dark:text-gray-400 dark:text-gray-500 dark:text-gray-400 dark:text-gray-300 mr-1">{t('meeting.usualNumber')}</span>
@@ -252,7 +280,7 @@ export function MeetingDashboard({
                     <label className="w-[120px] text-gray-700 dark:text-gray-300 text-right pr-2 text-xs font-semibold">{bibleReadingLabel}</label>
                     <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={bibleReading.assigned_user_id || bibleReading.student_id || ''} onChange={e => handlePartChange(bibleReading.id, 'assigned_user_id', e.target.value)}>
                        <option value=""></option>
-                       {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
+                       {optionsFor('can_do_bible_reading', 'bible_reading')}
                     </select>
                     <input type="text" className="w-[300px] border border-gray-300 dark:border-gray-600 p-0.5 h-6 ml-2 text-xs" value={bibleReading.title || ''} onChange={e => handlePartChange(bibleReading.id, 'title', e.target.value)} />
                     <FileText size={14} className="text-[#3b82f6] ml-1" />
@@ -270,7 +298,7 @@ export function MeetingDashboard({
             <div className="px-1 flex flex-col gap-1.5">
               {studentParts.map((part: any) => {
                 const isTalk = part.student_part_type === 'talk';
-                const assigneeList = isTalk ? publishers.filter((p: any) => p.gender === 'male') : publishers;
+                const studentRoleKey = `student_${part.student_part_type || 'starting_conversation'}`;
                 return (
                 <div key={part.id} className="flex items-center">
                   <label className="w-[28px] text-gray-700 dark:text-gray-300 text-right pr-2 text-xs font-semibold">{part.part_number}.</label>
@@ -286,7 +314,7 @@ export function MeetingDashboard({
                   </select>
                   <select className="w-[170px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200 ml-1" value={part.assigned_user_id || part.student_id || ''} onChange={e => handlePartChange(part.id, 'assigned_user_id', e.target.value)}>
                        <option value=""></option>
-                       {assigneeList.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
+                       {optionsFor('can_do_student_parts', studentRoleKey, isTalk ? (p => p.gender === 'male') : undefined)}
                   </select>
                   <input type="text" className="w-[260px] border border-gray-300 dark:border-gray-600 p-0.5 h-6 ml-2 text-xs" value={part.title || ''} onChange={e => handlePartChange(part.id, 'title', e.target.value)} />
                   <FileText size={14} className="text-[#3b82f6] ml-1" />
@@ -300,7 +328,7 @@ export function MeetingDashboard({
                   <label className="text-gray-700 dark:text-gray-300 text-right pr-2 text-xs">{t('meeting.assistant')}</label>
                   <select className="w-[170px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={part.assistant_user_id || ''} onChange={e => handlePartChange(part.id, 'assistant_user_id', e.target.value)}>
                        <option value=""></option>
-                       {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
+                       {optionsFor('can_be_assistant', 'assistant')}
                   </select>
                   </>
                   )}
@@ -327,7 +355,7 @@ export function MeetingDashboard({
                     <label className="w-[120px] text-gray-700 dark:text-gray-300 pr-2 text-xs">{t('meeting.living', { n: part.part_number })}</label>
                     <select className={`w-[180px] border border-gray-300 dark:border-gray-600 ${inputBg} p-0.5 h-6 text-xs`} value={part.assigned_user_id || part.student_id || ''} onChange={e => handlePartChange(part.id, 'assigned_user_id', e.target.value)}>
                          <option value=""></option>
-                         {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
+                         {optionsFor('can_be_speaker', 'living_part')}
                     </select>
                     <input type="text" className={`w-[360px] border border-gray-300 dark:border-gray-600 p-0.5 h-6 ml-2 text-xs ${titleBg}`} value={part.title || ''} onChange={e => handlePartChange(part.id, 'title', e.target.value)} />
                     <FileText size={14} className="text-[#3b82f6] ml-1" />
@@ -351,7 +379,7 @@ export function MeetingDashboard({
                 <label className="w-[120px] text-gray-700 dark:text-gray-300 text-right pr-2 text-xs">{t('meeting.cbsConductor')}</label>
                 <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={formData.cbs_conductor_id || ''} onChange={e => handleMeetingChange('cbs_conductor_id', e.target.value)}>
                   <option value=""></option>
-                  {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
+                  {optionsFor('can_be_cbs_conductor', 'cbs_conductor')}
                 </select>
                 <FileText size={14} className="text-[#3b82f6] ml-1" />
                 <span className="w-10 text-center text-gray-600 dark:text-gray-400 dark:text-gray-500 dark:text-gray-400 dark:text-gray-300 text-xs ml-1">30</span>
@@ -361,7 +389,7 @@ export function MeetingDashboard({
                 <label className="w-[120px] text-gray-700 dark:text-gray-300 text-right pr-2 text-xs">{t('meeting.cbsReader')}</label>
                 <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={formData.cbs_reader_id || ''} onChange={e => handleMeetingChange('cbs_reader_id', e.target.value)}>
                   <option value=""></option>
-                  {publishers.map(p => <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}
+                  {optionsFor('can_be_cbs_reader', 'cbs_reader')}
                 </select>
                 <div className="w-[66px]"></div>
               </div>

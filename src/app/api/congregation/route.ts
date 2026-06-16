@@ -8,7 +8,7 @@ const ALLOWED = [
   'name', 'number', 'congregation_id', 'language', 'time_zone',
   'weekend_meeting_day', 'weekend_meeting_time', 'midweek_meeting_day', 'midweek_meeting_time',
   'zoom_meeting_id', 'zoom_password', 'zoom_link', 'dial_in_number',
-  'kingdom_hall_address', 'circuit', 'co_name', 'co_contact_details',
+  'kingdom_hall_address', 'circuit', 'co_name', 'co_contact_details', 'auxiliary_rooms',
 ];
 
 export async function GET() {

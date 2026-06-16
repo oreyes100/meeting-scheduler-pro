@@ -17,6 +17,7 @@ export default function MeetingsPage() {
   const [activeMeetingId, setActiveMeetingId] = useState<string | null>(null);
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [midweekDay, setMidweekDay] = useState<string | null>(null);
+  const [auxiliaryRooms, setAuxiliaryRooms] = useState(0);
 
   const fetchData = useCallback(async () => {
     if (typeof window === 'undefined') return;
@@ -80,7 +81,9 @@ export default function MeetingsPage() {
       const congRes = await fetch('/api/congregation');
       if (congRes.ok) {
         const congData = await congRes.json();
-        setMidweekDay(congData.settings?.midweek_meeting_day || null);
+        const cong = congData.congregation || congData.settings || {};
+        setMidweekDay(cong.midweek_meeting_day || null);
+        setAuxiliaryRooms(cong.auxiliary_rooms ?? 0);
       }
 
     } catch (err: unknown) {
@@ -255,6 +258,7 @@ export default function MeetingsPage() {
             error={error}
             successMsg={successMsg}
             midweekMeetingDay={midweekDay}
+            auxiliaryRooms={auxiliaryRooms}
           />
         </main>
       </div>
@@ -266,6 +270,7 @@ export default function MeetingsPage() {
         selectedMeeting={activeMeeting}
         allMeetings={meetings}
         publishers={publishers}
+        auxiliaryRooms={auxiliaryRooms}
       />
     </div>
   );
