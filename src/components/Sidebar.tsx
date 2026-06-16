@@ -135,7 +135,7 @@ export function Sidebar({ meetings, activeMeetingId, setActiveMeetingId, onPrint
   return (
     <div className="flex h-full bg-white dark:bg-gray-800 border-r border-border text-sm overflow-hidden select-none">
       {/* 1. Leftmost Mini Icon Bar */}
-      <div className="w-14 bg-sky-500 flex flex-col items-center py-4 space-y-6 text-white flex-shrink-0">
+      <div className="w-14 bg-sky-500 dark:bg-gray-900 flex flex-col items-center py-4 space-y-6 text-white flex-shrink-0">
         <button onClick={() => router.push('/congregation')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/congregation') ? 'bg-sky-600 shadow-inner' : ''}`} title="Congregación"><Home size={24} /></button>
         <button onClick={() => router.push('/persons')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/persons') ? 'bg-sky-600' : ''}`} title={t('sidebar.tooltip.persons')}><Users size={24} /></button>
         <button onClick={() => router.push('/meetings')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/meetings') ? 'bg-sky-600 shadow-inner' : ''}`} title={t('sidebar.tooltip.schedule')}><Calendar size={24} /></button>
