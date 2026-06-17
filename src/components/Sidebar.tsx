@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Users, Calendar, MapPin, Smartphone, UserX, Printer, HelpCircle, ChevronDown, ChevronRight, Plus, BookOpen, Home, Sun, Moon, Monitor, Briefcase, Eye, Mic, ClipboardList, Sparkles } from 'lucide-react';
+import { Users, Calendar, MapPin, Smartphone, UserX, Printer, HelpCircle, ChevronDown, ChevronRight, Plus, BookOpen, Home, Sun, Moon, Monitor, Briefcase, Eye, Mic, ClipboardList, Sparkles, Wrench, CalendarDays, GlassWater } from 'lucide-react';
 import { useT } from '@/lib/i18n';
 import { useTheme, type ThemeMode } from '@/lib/theme';
 import { LanguageSwitcher } from './LanguageSwitcher';
@@ -146,6 +146,10 @@ export function Sidebar({ meetings, activeMeetingId, setActiveMeetingId, onPrint
         <button onClick={() => router.push('/public-witnessing')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/public-witnessing') ? 'bg-sky-600 shadow-inner' : ''}`} title="Predicación Pública"><Eye size={24} /></button>
         <button onClick={() => router.push('/tasks')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/tasks') ? 'bg-sky-600 shadow-inner' : ''}`} title="Tareas"><ClipboardList size={24} /></button>
         <button onClick={() => router.push('/cleaning')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/cleaning') ? 'bg-sky-600 shadow-inner' : ''}`} title="Limpieza"><Sparkles size={24} /></button>
+        <button onClick={() => router.push('/maintenance')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/maintenance') ? 'bg-sky-600 shadow-inner' : ''}`} title="Mantenimiento"><Wrench size={24} /></button>
+        <button onClick={() => router.push('/co-visit')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/co-visit') ? 'bg-sky-600 shadow-inner' : ''}`} title="Visita Sup. Circuito"><GlassWater size={24} /></button>
+        <button onClick={() => router.push('/memorial')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/memorial') ? 'bg-sky-600 shadow-inner' : ''}`} title="Conmemoración"><Mic size={24} /></button>
+        <button onClick={() => router.push('/events')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/events') ? 'bg-sky-600 shadow-inner' : ''}`} title="Eventos"><CalendarDays size={24} /></button>
         <button onClick={() => alert('Mobile Sync module coming soon!')} className="p-2 hover:bg-sky-600 rounded-md transition-colors" title={t('sidebar.tooltip.mobile')}><Smartphone size={24} /></button>
         <div className="flex-1"></div>
         <button onClick={() => alert('Alerts coming soon!')} className="p-2 hover:bg-sky-600 rounded-md transition-colors relative" title={t('sidebar.tooltip.alerts')}>
