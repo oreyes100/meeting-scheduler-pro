@@ -4,9 +4,11 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Home, Users, Calendar, MapPin, BookOpen, Briefcase, Eye, Mic, ClipboardList, Sparkles, Wrench,
-  Sun, Moon, Plus, Trash2, Save, CalendarDays
+  Sun, Moon, Plus, Trash2, Save, CalendarDays, Printer
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
+import { IconSidebar } from '@/components/IconSidebar';
+import { printTableReport } from '@/lib/printReport';
 
 const EVENT_TYPES = [
   'Asamblea de circuito', 'Asamblea regional', 'Visita del superintendente de circuito',
@@ -28,6 +30,15 @@ export default function EventsPage() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const newEvent = () => setSelected({ type: EVENT_TYPES[0], name: '', single_day: false });
+
+  const printReport = () => {
+    const rows = events.map(ev => [
+      ev.type || '', ev.name || '',
+      `${ev.start_date || ''}${ev.end_date && !ev.single_day ? ` → ${ev.end_date}` : ''}`,
+      ev.group_name || '',
+    ]);
+    printTableReport({ title: 'Eventos de la Congregación', congName: 'Congregación', columns: ['Tipo', 'Nombre del evento', 'Fecha', 'Grupo'], rows });
+  };
 
   const save = async () => {
     if (selected.id) {
@@ -51,23 +62,15 @@ export default function EventsPage() {
 
   return (
     <div className={`flex h-screen ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'} font-sans`}>
-      <div className={`w-[52px] ${isDark ? 'bg-gray-900' : 'bg-sky-500'} flex flex-col items-center py-3 gap-3 shrink-0`}>
-        <button onClick={() => router.push('/congregation')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Home size={24} /></button>
-        <button onClick={() => router.push('/persons')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Users size={24} /></button>
-        <button onClick={() => router.push('/meetings')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Calendar size={24} /></button>
-        <button onClick={() => router.push('/weekend')} className="p-2 hover:bg-sky-600 rounded-md text-white"><BookOpen size={24} /></button>
-        <button onClick={() => router.push('/field-service')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Briefcase size={24} /></button>
-        <button onClick={() => router.push('/tasks')} className="p-2 hover:bg-sky-600 rounded-md text-white"><ClipboardList size={24} /></button>
-        <button onClick={() => router.push('/memorial')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Mic size={24} /></button>
-        <button className="p-2 bg-sky-600 shadow-inner rounded-md text-white"><CalendarDays size={24} /></button>
-        <div className="flex-1" />
-        <button onClick={() => setMode(isDark ? 'light' : 'dark')} className="p-2 hover:bg-sky-600 rounded-md text-white">{isDark ? <Sun size={20} /> : <Moon size={20} />}</button>
-      </div>
+      <IconSidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 text-white px-4 py-2 flex items-center justify-between shrink-0">
           <h1 className="font-bold text-lg">Eventos</h1>
-          <button onClick={newEvent} className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-sm font-medium flex items-center gap-1"><Plus size={14} /> Nuevo</button>
+          <div className="flex items-center gap-2">
+            <button onClick={newEvent} className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-sm font-medium flex items-center gap-1"><Plus size={14} /> Nuevo</button>
+            <button onClick={printReport} className="p-1.5 hover:bg-white/10 rounded" title="Imprimir"><Printer size={18} /></button>
+          </div>
         </div>
 
         <div className="flex-1 flex overflow-hidden">

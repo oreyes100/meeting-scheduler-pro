@@ -7,6 +7,7 @@ import {
   Sun, Moon, ChevronLeft, ChevronRight, Save, ClipboardList, Sparkles, Printer
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
+import { IconSidebar } from '@/components/IconSidebar';
 import { TasksPrintModal } from '@/components/TasksPrintModal';
 
 const DEFAULT_TASKS = [
@@ -149,23 +150,7 @@ export default function TasksPage() {
 
   return (
     <div className={`flex h-screen ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'} font-sans`}>
-      {/* Sidebar */}
-      <div className={`w-[52px] ${isDark ? 'bg-gray-900' : 'bg-sky-500'} flex flex-col items-center py-3 gap-3 shrink-0`}>
-        <button onClick={() => router.push('/congregation')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Home size={24} /></button>
-        <button onClick={() => router.push('/persons')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Users size={24} /></button>
-        <button onClick={() => router.push('/meetings')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Calendar size={24} /></button>
-        <button onClick={() => router.push('/weekend')} className="p-2 hover:bg-sky-600 rounded-md text-white"><BookOpen size={24} /></button>
-        <button onClick={() => router.push('/public-talks')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Mic size={24} /></button>
-        <button onClick={() => router.push('/territories')} className="p-2 hover:bg-sky-600 rounded-md text-white"><MapPin size={24} /></button>
-        <button onClick={() => router.push('/field-service')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Briefcase size={24} /></button>
-        <button onClick={() => router.push('/public-witnessing')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Eye size={24} /></button>
-        <button className="p-2 bg-sky-600 shadow-inner rounded-md text-white"><ClipboardList size={24} /></button>
-        <button onClick={() => router.push('/cleaning')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Sparkles size={24} /></button>
-        <div className="flex-1" />
-        <button onClick={() => setMode(isDark ? 'light' : 'dark')} className="p-2 hover:bg-sky-600 rounded-md text-white">
-          {isDark ? <Sun size={20} /> : <Moon size={20} />}
-        </button>
-      </div>
+      <IconSidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}

@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import {
-  Users, Calendar, MapPin, BookOpen, Home, Plus, Trash2, Save, X, Undo2, Check, Crosshair,
+  MapPin, Plus, Trash2, Save, X, Undo2, Check, Crosshair,
 } from 'lucide-react';
 import type { LatLng } from '@/components/TerritoryMap';
+import { IconSidebar } from '@/components/IconSidebar';
 
 const TerritoryMap = dynamic(() => import('@/components/TerritoryMap'), { ssr: false });
 
@@ -28,29 +28,6 @@ interface Territory {
 const PALETTE = ['#3d7d8e', '#c0392b', '#27ae60', '#8e44ad', '#d35400', '#2980b9', '#16a085', '#c9a227'];
 const STATUS_LABEL: Record<string, string> = { available: 'Disponible', assigned: 'Asignado', completed: 'Completado' };
 const STATUS_COLOR: Record<string, string> = { available: 'bg-slate-100 text-slate-600', assigned: 'bg-amber-100 text-amber-700', completed: 'bg-emerald-100 text-emerald-700' };
-
-function NavRail() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const item = (path: string, Icon: any, title: string) => (
-    <button
-      onClick={() => router.push(path)}
-      className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith(path) ? 'bg-sky-600 shadow-inner' : ''}`}
-      title={title}
-    >
-      <Icon size={24} />
-    </button>
-  );
-  return (
-    <div className="w-14 bg-sky-500 flex flex-col items-center py-4 space-y-6 text-white flex-shrink-0">
-      {item('/congregation', Home, 'Congregación')}
-      {item('/persons', Users, 'Publicadores')}
-      {item('/meetings', Calendar, 'Entre semana')}
-      {item('/weekend', BookOpen, 'Fin de semana')}
-      {item('/territories', MapPin, 'Territorios')}
-    </div>
-  );
-}
 
 export default function TerritoriesPage() {
   const [territories, setTerritories] = useState<Territory[]>([]);
@@ -143,8 +120,8 @@ export default function TerritoriesPage() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 text-sm">
-      <NavRail />
+    <div className="flex h-screen bg-slate-50 dark:bg-gray-900 dark:text-gray-100 text-sm">
+      <IconSidebar />
 
       {/* Panel izquierdo: lista + edición */}
       <div className="w-80 flex-shrink-0 border-r border-slate-200 bg-white dark:bg-gray-800 flex flex-col">

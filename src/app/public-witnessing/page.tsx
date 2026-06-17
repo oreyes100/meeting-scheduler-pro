@@ -2,8 +2,10 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Home, Users, Calendar, MapPin, BookOpen, Briefcase, Eye, ChevronLeft, ChevronRight, Plus, Trash2, Save, X, Sun, Moon } from 'lucide-react';
+import { Home, Users, Calendar, MapPin, BookOpen, Briefcase, Eye, ChevronLeft, ChevronRight, Plus, Trash2, Save, X, Sun, Moon, Printer } from 'lucide-react';
+import { printTableReport } from '@/lib/printReport';
 import { useTheme } from '@/lib/theme';
+import { IconSidebar } from '@/components/IconSidebar';
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DAY_LABELS: Record<string, string> = {
@@ -159,6 +161,17 @@ export default function PublicWitnessingPage() {
     return result;
   };
 
+  const printReport = () => {
+    const rows: string[][] = [];
+    for (const day of DAYS) {
+      for (const { shift, location } of getShiftsForDay(day)) {
+        const names = assignmentsForShift(shift.id!).map((a: any) => personName(a.user)).filter(Boolean).join(', ');
+        rows.push([DAY_LABELS[day] || day, `${location.name} (${location.cart_number})`, `${shift.start_time}-${shift.end_time}`, names]);
+      }
+    }
+    printTableReport({ title: 'Predicación Pública con Carritos', congName: 'Congregación', subtitle: weekRangeLabel(weekDate), columns: ['Día', 'Ubicación', 'Turno', 'Publicadores'], rows });
+  };
+
   const assignmentsForShift = (shiftId: string) =>
     assignments.filter(a => a.shift_id === shiftId);
 
@@ -169,19 +182,7 @@ export default function PublicWitnessingPage() {
   return (
     <div className={`flex h-screen ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'} font-sans`}>
       {/* Icon sidebar */}
-      <div className={`w-[52px] ${isDark ? 'bg-gray-900' : 'bg-sky-500'} flex flex-col items-center py-3 gap-3 shrink-0`}>
-        <button onClick={() => router.push('/congregation')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Home size={24} /></button>
-        <button onClick={() => router.push('/persons')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Users size={24} /></button>
-        <button onClick={() => router.push('/meetings')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Calendar size={24} /></button>
-        <button onClick={() => router.push('/weekend')} className="p-2 hover:bg-sky-600 rounded-md text-white"><BookOpen size={24} /></button>
-        <button onClick={() => router.push('/territories')} className="p-2 hover:bg-sky-600 rounded-md text-white"><MapPin size={24} /></button>
-        <button onClick={() => router.push('/field-service')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Briefcase size={24} /></button>
-        <button className="p-2 bg-sky-600 shadow-inner rounded-md text-white"><Eye size={24} /></button>
-        <div className="flex-1" />
-        <button onClick={() => setMode(isDark ? 'light' : 'dark')} className="p-2 hover:bg-sky-600 rounded-md text-white">
-          {isDark ? <Sun size={20} /> : <Moon size={20} />}
-        </button>
-      </div>
+      <IconSidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
@@ -190,6 +191,7 @@ export default function PublicWitnessingPage() {
           <div className="flex gap-2">
             <button onClick={() => setTab('schedule')} className={`px-3 py-1 rounded text-sm font-medium ${tab === 'schedule' ? 'bg-white/20' : 'hover:bg-white/10'}`}>Programa Semanal</button>
             <button onClick={() => setTab('locations')} className={`px-3 py-1 rounded text-sm font-medium ${tab === 'locations' ? 'bg-white/20' : 'hover:bg-white/10'}`}>Ubicaciones</button>
+            <button onClick={printReport} className="p-1.5 hover:bg-white/10 rounded" title="Imprimir"><Printer size={18} /></button>
           </div>
         </div>
 

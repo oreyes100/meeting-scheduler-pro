@@ -4,9 +4,11 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Home, Users, Calendar, MapPin, BookOpen, Briefcase, Eye,
-  Sun, Moon, ChevronLeft, ChevronRight, Plus, Trash2, Save, X, Mic, ClipboardList, Sparkles
+  Sun, Moon, ChevronLeft, ChevronRight, Plus, Trash2, Save, X, Mic, ClipboardList, Sparkles, Printer
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
+import { printTableReport } from '@/lib/printReport';
+import { IconSidebar } from '@/components/IconSidebar';
 
 const WEEK_COUNT = 40;
 
@@ -127,6 +129,31 @@ export default function PublicTalksPage() {
     setEditOutgoing(null);
   };
 
+  const printReport = () => {
+    if (tab === 'locales') {
+      const rows = weeks.map(week => {
+        const m = meetingForWeek(week);
+        const speakerName = m?.speaker_type === 'visiting'
+          ? (m?.visiting_speaker?.name || m?.visiting_speaker?.full_name || '')
+          : personName(m?.local_speaker);
+        const congregation = m?.speaker_type === 'visiting' ? (m?.visiting_speaker?.congregation_name || '') : (m ? 'Local' : '');
+        return [
+          fmtISO(getSunday(week)), speakerName, congregation,
+          m?.outline?.title || m?.public_talk_title || '',
+          personName(m?.chairman), personName(m?.wt_reader),
+          m?.hospitality_group || personName(m?.hospitality_person) || '',
+        ];
+      });
+      printTableReport({ title: 'Programa de Discursos Públicos', congName: 'Congregación', columns: ['Fecha', 'Orador', 'Congregación', 'Discurso público', 'Presidente', 'Lector', 'Hospitalidad'], rows });
+    } else {
+      const rows = weeks.map(week => [
+        fmtISO(getSunday(week)),
+        ...speakers.map(s => { const t = outgoingForWeek(week, s.id); return t ? (t.congregation_name || '—') : ''; }),
+      ]);
+      printTableReport({ title: 'Discursos Públicos Salientes', congName: 'Congregación', columns: ['Fin de semana', ...speakers.map(s => `${s.first_name} ${s.last_name}`)], rows });
+    }
+  };
+
   const isDark = mode === 'dark';
   const bgCard = isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
   const inputCls = `w-full border rounded px-2 py-1 text-sm ${isDark ? 'bg-gray-700 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`;
@@ -136,23 +163,7 @@ export default function PublicTalksPage() {
 
   return (
     <div className={`flex h-screen ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'} font-sans`}>
-      {/* Sidebar */}
-      <div className={`w-[52px] ${isDark ? 'bg-gray-900' : 'bg-sky-500'} flex flex-col items-center py-3 gap-3 shrink-0`}>
-        <button onClick={() => router.push('/congregation')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Home size={24} /></button>
-        <button onClick={() => router.push('/persons')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Users size={24} /></button>
-        <button onClick={() => router.push('/meetings')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Calendar size={24} /></button>
-        <button onClick={() => router.push('/weekend')} className="p-2 hover:bg-sky-600 rounded-md text-white"><BookOpen size={24} /></button>
-        <button className="p-2 bg-sky-600 shadow-inner rounded-md text-white"><Mic size={24} /></button>
-        <button onClick={() => router.push('/territories')} className="p-2 hover:bg-sky-600 rounded-md text-white"><MapPin size={24} /></button>
-        <button onClick={() => router.push('/field-service')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Briefcase size={24} /></button>
-        <button onClick={() => router.push('/public-witnessing')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Eye size={24} /></button>
-        <button onClick={() => router.push('/tasks')} className="p-2 hover:bg-sky-600 rounded-md text-white"><ClipboardList size={24} /></button>
-        <button onClick={() => router.push('/cleaning')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Sparkles size={24} /></button>
-        <div className="flex-1" />
-        <button onClick={() => setMode(isDark ? 'light' : 'dark')} className="p-2 hover:bg-sky-600 rounded-md text-white">
-          {isDark ? <Sun size={20} /> : <Moon size={20} />}
-        </button>
-      </div>
+      <IconSidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
@@ -161,6 +172,7 @@ export default function PublicTalksPage() {
           <div className="flex gap-2">
             <button onClick={() => setTab('locales')} className={`px-3 py-1 rounded text-sm font-medium ${tab === 'locales' ? 'bg-white/20' : 'hover:bg-white/10'}`}>Locales</button>
             <button onClick={() => setTab('salientes')} className={`px-3 py-1 rounded text-sm font-medium ${tab === 'salientes' ? 'bg-white/20' : 'hover:bg-white/10'}`}>Salientes</button>
+            <button onClick={printReport} className="p-1.5 hover:bg-white/10 rounded" title="Imprimir"><Printer size={18} /></button>
           </div>
         </div>
 

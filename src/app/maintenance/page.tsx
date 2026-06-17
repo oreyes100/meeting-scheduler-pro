@@ -4,9 +4,11 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Home, Users, Calendar, MapPin, BookOpen, Briefcase, Eye, Mic, ClipboardList, Sparkles,
-  Sun, Moon, Plus, Trash2, Save, X, Wrench
+  Sun, Moon, Plus, Trash2, Save, X, Wrench, Printer
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
+import { IconSidebar } from '@/components/IconSidebar';
+import { printTableReport } from '@/lib/printReport';
 
 function personName(p: any): string {
   if (!p) return '';
@@ -60,26 +62,25 @@ export default function MaintenancePage() {
 
   const filtered = categoryFilter ? tasks.filter(t => t.category === categoryFilter) : tasks;
   const assignedArr = (t: any): string[] => Array.isArray(t?.assigned_to) ? t.assigned_to : [];
+  const printReport = () => {
+    const rows = filtered.map(t => [
+      t.title, t.category || '', t.done ? 'Sí' : 'No',
+      assignedArr(t).filter(Boolean).map(id => personName(publishers.find(p => p.id === id))).join(', '),
+    ]);
+    printTableReport({ title: 'Mantenimiento', congName: 'Congregación', columns: ['Tarea', 'Categoría', 'Terminado', 'Asignado a'], rows });
+  };
 
   return (
     <div className={`flex h-screen ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'} font-sans`}>
-      <div className={`w-[52px] ${isDark ? 'bg-gray-900' : 'bg-sky-500'} flex flex-col items-center py-3 gap-3 shrink-0`}>
-        <button onClick={() => router.push('/congregation')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Home size={24} /></button>
-        <button onClick={() => router.push('/persons')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Users size={24} /></button>
-        <button onClick={() => router.push('/meetings')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Calendar size={24} /></button>
-        <button onClick={() => router.push('/weekend')} className="p-2 hover:bg-sky-600 rounded-md text-white"><BookOpen size={24} /></button>
-        <button onClick={() => router.push('/field-service')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Briefcase size={24} /></button>
-        <button onClick={() => router.push('/tasks')} className="p-2 hover:bg-sky-600 rounded-md text-white"><ClipboardList size={24} /></button>
-        <button onClick={() => router.push('/cleaning')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Sparkles size={24} /></button>
-        <button className="p-2 bg-sky-600 shadow-inner rounded-md text-white"><Wrench size={24} /></button>
-        <div className="flex-1" />
-        <button onClick={() => setMode(isDark ? 'light' : 'dark')} className="p-2 hover:bg-sky-600 rounded-md text-white">{isDark ? <Sun size={20} /> : <Moon size={20} />}</button>
-      </div>
+      <IconSidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="bg-gradient-to-r from-slate-600 to-slate-800 text-white px-4 py-2 flex items-center justify-between shrink-0">
           <h1 className="font-bold text-lg">Mantenimiento</h1>
-          <button onClick={addTask} className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-sm font-medium flex items-center gap-1"><Plus size={14} /> Nueva</button>
+          <div className="flex items-center gap-2">
+            <button onClick={addTask} className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-sm font-medium flex items-center gap-1"><Plus size={14} /> Nueva</button>
+            <button onClick={printReport} className="p-1.5 hover:bg-white/10 rounded" title="Imprimir"><Printer size={18} /></button>
+          </div>
         </div>
 
         <div className="flex-1 flex overflow-hidden">

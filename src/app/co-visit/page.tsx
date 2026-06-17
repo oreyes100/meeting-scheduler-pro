@@ -4,9 +4,11 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Home, Users, Calendar, BookOpen, Briefcase, ClipboardList, Sparkles, Wrench, CalendarDays, Mic,
-  Sun, Moon, ChevronLeft, ChevronRight, Plus, Trash2, Save, X
+  Sun, Moon, ChevronLeft, ChevronRight, Plus, Trash2, Save, X, Printer
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
+import { IconSidebar } from '@/components/IconSidebar';
+import { printTableReport } from '@/lib/printReport';
 
 const DAYS = ['tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DAY_LABELS: Record<string, string> = {
@@ -111,19 +113,21 @@ export default function CoVisitPage() {
   const activities = visit?.activities || [];
   const actFor = (day: string, slot: string) => activities.filter((a: any) => a.day === day && a.slot === slot);
 
+  const printReport = () => {
+    const rows: string[][] = [];
+    for (const day of DAYS) {
+      for (const slot of SLOTS) {
+        for (const a of actFor(day, slot)) {
+          rows.push([DAY_LABELS[day], SLOT_LABELS[slot], a.time || '', a.title || '', a.location || '']);
+        }
+      }
+    }
+    printTableReport({ title: 'Visita del Sup. de Circuito', congName: 'Congregación', subtitle: weekLabel(weekDate), columns: ['Día', 'Franja', 'Hora', 'Actividad', 'Lugar'], rows });
+  };
+
   return (
     <div className={`flex h-screen ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'} font-sans`}>
-      <div className={`w-[52px] ${isDark ? 'bg-gray-900' : 'bg-sky-500'} flex flex-col items-center py-3 gap-3 shrink-0`}>
-        <button onClick={() => router.push('/congregation')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Home size={24} /></button>
-        <button onClick={() => router.push('/persons')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Users size={24} /></button>
-        <button onClick={() => router.push('/meetings')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Calendar size={24} /></button>
-        <button onClick={() => router.push('/field-service')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Briefcase size={24} /></button>
-        <button onClick={() => router.push('/tasks')} className="p-2 hover:bg-sky-600 rounded-md text-white"><ClipboardList size={24} /></button>
-        <button onClick={() => router.push('/events')} className="p-2 hover:bg-sky-600 rounded-md text-white"><CalendarDays size={24} /></button>
-        <button className="p-2 bg-sky-600 shadow-inner rounded-md text-white"><Briefcase size={24} /></button>
-        <div className="flex-1" />
-        <button onClick={() => setMode(isDark ? 'light' : 'dark')} className="p-2 hover:bg-sky-600 rounded-md text-white">{isDark ? <Sun size={20} /> : <Moon size={20} />}</button>
-      </div>
+      <IconSidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="bg-gradient-to-r from-cyan-700 to-cyan-900 text-white px-4 py-2 flex items-center justify-between shrink-0">
@@ -135,6 +139,7 @@ export default function CoVisitPage() {
             {dirty && visit?.id && (
               <button onClick={() => persist(visit)} className="bg-white text-cyan-700 px-3 py-1 rounded text-xs font-bold hover:bg-cyan-50 flex items-center gap-1"><Save size={12} /> Guardar</button>
             )}
+            <button onClick={printReport} className="p-1.5 hover:bg-white/10 rounded" title="Imprimir"><Printer size={18} /></button>
           </div>
         </div>
 

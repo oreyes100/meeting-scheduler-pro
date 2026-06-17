@@ -7,6 +7,9 @@ import {
   Sun, Moon, ChevronLeft, ChevronRight, Save, Sparkles
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
+import { IconSidebar } from '@/components/IconSidebar';
+import { printTableReport } from '@/lib/printReport';
+import { Printer } from 'lucide-react';
 
 const INTERIOR_TASKS = [
   { key: 'limpieza_ligera', label: 'Limpieza ligera', slots: 2 },
@@ -135,26 +138,29 @@ export default function CleaningPage() {
   const selectCls = `w-full text-xs border rounded px-1 py-0.5 ${isDark ? 'bg-gray-700 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`;
 
   const userById = (id: string) => publishers.find(p => p.id === id);
+  const printReport = () => {
+    const cols = ['Fecha', ...activeTasks.map(t => t.label)];
+    const rows = weeks.map(wk => {
+      const asgn = allTasks[wk] || {};
+      return [weekLabel(wk), ...activeTasks.map(t => {
+        const val = asgn[t.key];
+        const ids = Array.isArray(val) ? val : (val ? [val] : []);
+        return ids.filter(Boolean).map((id: string) => idLabel(id)).join(' & ');
+      })];
+    });
+    printTableReport({ title: `Limpieza — ${tab === 'interior' ? 'Interior' : 'Exterior y Jardín'}`, congName: 'Congregación', columns: cols, rows });
+  };
+  const GROUPS = [1, 2, 3, 4];
+  const idLabel = (id: string, short = false): string => {
+    if (id?.startsWith('group:')) return `Grupo ${id.slice(6)}`;
+    const u = userById(id);
+    if (!u) return '';
+    return short ? `${u.first_name} ${u.last_name?.[0] || ''}.` : `${u.first_name} ${u.last_name}`;
+  };
 
   return (
     <div className={`flex h-screen ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'} font-sans`}>
-      {/* Sidebar */}
-      <div className={`w-[52px] ${isDark ? 'bg-gray-900' : 'bg-sky-500'} flex flex-col items-center py-3 gap-3 shrink-0`}>
-        <button onClick={() => router.push('/congregation')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Home size={24} /></button>
-        <button onClick={() => router.push('/persons')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Users size={24} /></button>
-        <button onClick={() => router.push('/meetings')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Calendar size={24} /></button>
-        <button onClick={() => router.push('/weekend')} className="p-2 hover:bg-sky-600 rounded-md text-white"><BookOpen size={24} /></button>
-        <button onClick={() => router.push('/public-talks')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Mic size={24} /></button>
-        <button onClick={() => router.push('/territories')} className="p-2 hover:bg-sky-600 rounded-md text-white"><MapPin size={24} /></button>
-        <button onClick={() => router.push('/field-service')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Briefcase size={24} /></button>
-        <button onClick={() => router.push('/public-witnessing')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Eye size={24} /></button>
-        <button onClick={() => router.push('/tasks')} className="p-2 hover:bg-sky-600 rounded-md text-white"><ClipboardList size={24} /></button>
-        <button className="p-2 bg-sky-600 shadow-inner rounded-md text-white"><Sparkles size={24} /></button>
-        <div className="flex-1" />
-        <button onClick={() => setMode(isDark ? 'light' : 'dark')} className="p-2 hover:bg-sky-600 rounded-md text-white">
-          {isDark ? <Sun size={20} /> : <Moon size={20} />}
-        </button>
-      </div>
+      <IconSidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
@@ -173,6 +179,7 @@ export default function CleaningPage() {
                 <Save size={12} /> {saving ? 'Guardando...' : 'Guardar'}
               </button>
             )}
+            <button onClick={printReport} className="p-1.5 hover:bg-white/10 rounded" title="Imprimir"><Printer size={18} /></button>
           </div>
         </div>
 
@@ -191,9 +198,14 @@ export default function CleaningPage() {
                                 value={getValue(task.key, slot)}
                                 onChange={e => setValue(task.key, slot, e.target.value)}>
                           <option value=""></option>
-                          {publishers.map(p => (
-                            <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>
-                          ))}
+                          <optgroup label="Grupos">
+                            {GROUPS.map(g => <option key={`group:${g}`} value={`group:${g}`}>Grupo {g}</option>)}
+                          </optgroup>
+                          <optgroup label="Publicadores">
+                            {publishers.map(p => (
+                              <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>
+                            ))}
+                          </optgroup>
                         </select>
                       </td>
                     </tr>
@@ -226,10 +238,7 @@ export default function CleaningPage() {
                   const cellName = (key: string) => {
                     const val = asgn[key];
                     const ids = Array.isArray(val) ? val : (typeof val === 'string' && val ? [val] : []);
-                    return ids.filter(Boolean).map((id: string) => {
-                      const u = userById(id);
-                      return u ? `${u.first_name} ${u.last_name?.[0] || ''}.` : '';
-                    }).filter(Boolean).join(' & ');
+                    return ids.filter(Boolean).map((id: string) => idLabel(id, true)).filter(Boolean).join(' & ');
                   };
                   return (
                     <tr key={week}

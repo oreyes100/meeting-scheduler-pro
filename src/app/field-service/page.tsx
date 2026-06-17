@@ -2,8 +2,10 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Home, Users, Calendar, MapPin, BookOpen, Briefcase, Eye, Sun, Moon, ChevronLeft, ChevronRight, Plus, Trash2, Save, UserPlus, X } from 'lucide-react';
+import { Home, Users, Calendar, MapPin, BookOpen, Briefcase, Eye, Sun, Moon, ChevronLeft, ChevronRight, Plus, Trash2, Save, UserPlus, X, Printer } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
+import { IconSidebar } from '@/components/IconSidebar';
+import { printTableReport } from '@/lib/printReport';
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DAY_LABELS: Record<string, string> = {
@@ -150,6 +152,15 @@ export default function FieldServicePage() {
   };
 
   // Schedule grid helpers
+  const printReport = () => {
+    const sorted = [...meetings].sort((a, b) => (a.day_of_week || '').localeCompare(b.day_of_week || '') || (a.meeting_time || '').localeCompare(b.meeting_time || ''));
+    const rows = sorted.map(m => [
+      DAY_LABELS[m.day_of_week] || m.day_of_week, m.meeting_time || '', m.location || '',
+      personName(m.conductor), m.group?.name || '', m.territory || '',
+    ]);
+    printTableReport({ title: 'Programa de Servicio del Campo', congName: 'Congregación', subtitle: weekRangeLabel(weekDate), columns: ['Día', 'Hora', 'Lugar', 'Conductor', 'Grupo', 'Territorio'], rows });
+  };
+
   const meetingsByDayPeriod = (day: string, period: string) =>
     meetings.filter(m => m.day_of_week === day && m.time_period === period);
 
@@ -170,19 +181,7 @@ export default function FieldServicePage() {
   return (
     <div className={`flex h-screen ${bgMain} font-sans`}>
       {/* Icon sidebar */}
-      <div className={`w-[52px] ${isDark ? 'bg-gray-900' : 'bg-sky-500'} flex flex-col items-center py-3 gap-3 shrink-0`}>
-        <button onClick={() => router.push('/congregation')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Home size={24} /></button>
-        <button onClick={() => router.push('/persons')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Users size={24} /></button>
-        <button onClick={() => router.push('/meetings')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Calendar size={24} /></button>
-        <button onClick={() => router.push('/weekend')} className="p-2 hover:bg-sky-600 rounded-md text-white"><BookOpen size={24} /></button>
-        <button onClick={() => router.push('/territories')} className="p-2 hover:bg-sky-600 rounded-md text-white"><MapPin size={24} /></button>
-        <button className="p-2 bg-sky-600 shadow-inner rounded-md text-white"><Briefcase size={24} /></button>
-        <button onClick={() => router.push('/public-witnessing')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Eye size={24} /></button>
-        <div className="flex-1" />
-        <button onClick={() => setMode(isDark ? 'light' : 'dark')} className="p-2 hover:bg-sky-600 rounded-md text-white">
-          {mode === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-        </button>
-      </div>
+      <IconSidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
@@ -191,6 +190,7 @@ export default function FieldServicePage() {
           <div className="flex gap-2">
             <button onClick={() => setTab('schedule')} className={`px-3 py-1 rounded text-sm font-medium ${tab === 'schedule' ? 'bg-white/20' : 'hover:bg-white/10'}`}>Programa Semanal</button>
             <button onClick={() => setTab('groups')} className={`px-3 py-1 rounded text-sm font-medium ${tab === 'groups' ? 'bg-white/20' : 'hover:bg-white/10'}`}>Grupos</button>
+            <button onClick={printReport} className="p-1.5 hover:bg-white/10 rounded" title="Imprimir"><Printer size={18} /></button>
           </div>
         </div>
 
