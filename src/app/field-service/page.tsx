@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Home, Users, Calendar, MapPin, BookOpen, Printer, Sun, Moon, ChevronLeft, ChevronRight, Plus, Trash2, Save, UserPlus, X } from 'lucide-react';
+import { Home, Users, Calendar, MapPin, BookOpen, Briefcase, Eye, Sun, Moon, ChevronLeft, ChevronRight, Plus, Trash2, Save, UserPlus, X } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -176,7 +176,8 @@ export default function FieldServicePage() {
         <button onClick={() => router.push('/meetings')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Calendar size={24} /></button>
         <button onClick={() => router.push('/weekend')} className="p-2 hover:bg-sky-600 rounded-md text-white"><BookOpen size={24} /></button>
         <button onClick={() => router.push('/territories')} className="p-2 hover:bg-sky-600 rounded-md text-white"><MapPin size={24} /></button>
-        <button className="p-2 bg-sky-600 shadow-inner rounded-md text-white"><Printer size={24} /></button>
+        <button className="p-2 bg-sky-600 shadow-inner rounded-md text-white"><Briefcase size={24} /></button>
+        <button onClick={() => router.push('/public-witnessing')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Eye size={24} /></button>
         <div className="flex-1" />
         <button onClick={() => setMode(isDark ? 'light' : 'dark')} className="p-2 hover:bg-sky-600 rounded-md text-white">
           {mode === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
