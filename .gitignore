@@ -62,3 +62,10 @@ __pycache__/
 logs/
 ```
 .vercel
+
+# Capacitor / Android
+/android/
+*.keystore
+*.jks
+keystore.properties
+capacitor-www/
