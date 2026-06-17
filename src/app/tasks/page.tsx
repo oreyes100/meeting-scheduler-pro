@@ -4,9 +4,10 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Home, Users, Calendar, MapPin, BookOpen, Briefcase, Eye, Mic,
-  Sun, Moon, ChevronLeft, ChevronRight, Save, ClipboardList, Sparkles
+  Sun, Moon, ChevronLeft, ChevronRight, Save, ClipboardList, Sparkles, Printer
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
+import { TasksPrintModal } from '@/components/TasksPrintModal';
 
 const DEFAULT_TASKS = [
   { key: 'acomodadores', label: 'Acomodadores', slots: 2 },
@@ -69,18 +70,23 @@ export default function TasksPage() {
   const [selectedWeek, setSelectedWeek] = useState(() => fmtISO(getMonday(new Date())));
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showPrint, setShowPrint] = useState(false);
+  const [cong, setCong] = useState<any>(null);
   const weeks = buildWeeks();
   const todayISO = fmtISO(getMonday(new Date()));
 
   const fetchData = useCallback(async () => {
     try {
-      const [tRes, pRes] = await Promise.all([
+      const [tRes, pRes, cRes] = await Promise.all([
         fetch('/api/congregation-tasks'),
         fetch('/api/users'),
+        fetch('/api/congregation'),
       ]);
       const tData = await tRes.json();
       const pData = await pRes.json();
+      const cData = await cRes.json();
       setPublishers(pData.users || []);
+      setCong(cData.congregation || cData.settings || null);
       // Index tasks by week_date
       const map: Record<string, any> = {};
       for (const t of tData.tasks || []) {
@@ -175,8 +181,20 @@ export default function TasksPage() {
                 <Save size={12} /> {saving ? 'Guardando...' : 'Guardar'}
               </button>
             )}
+            <button onClick={() => setShowPrint(true)} className="p-1.5 hover:bg-white/10 rounded" title="Imprimir"><Printer size={18} /></button>
           </div>
         </div>
+
+        {showPrint && (
+          <TasksPrintModal
+            tasks={DEFAULT_TASKS}
+            assignmentsByWeek={allTasks}
+            publishers={publishers}
+            congName={cong?.name || 'Congregación'}
+            congAddress={cong?.kingdom_hall_address}
+            onClose={() => setShowPrint(false)}
+          />
+        )}
 
         <div className="flex-1 flex overflow-hidden">
           {/* Left panel: current week assignment editor */}
