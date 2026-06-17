@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Home, Users, Calendar, MapPin, BookOpen, Briefcase, Eye,
-  Sun, Moon, ChevronLeft, ChevronRight, Plus, Trash2, Save, X, Mic
+  Sun, Moon, ChevronLeft, ChevronRight, Plus, Trash2, Save, X, Mic, ClipboardList, Sparkles
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 
@@ -146,6 +146,8 @@ export default function PublicTalksPage() {
         <button onClick={() => router.push('/territories')} className="p-2 hover:bg-sky-600 rounded-md text-white"><MapPin size={24} /></button>
         <button onClick={() => router.push('/field-service')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Briefcase size={24} /></button>
         <button onClick={() => router.push('/public-witnessing')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Eye size={24} /></button>
+        <button onClick={() => router.push('/tasks')} className="p-2 hover:bg-sky-600 rounded-md text-white"><ClipboardList size={24} /></button>
+        <button onClick={() => router.push('/cleaning')} className="p-2 hover:bg-sky-600 rounded-md text-white"><Sparkles size={24} /></button>
         <div className="flex-1" />
         <button onClick={() => setMode(isDark ? 'light' : 'dark')} className="p-2 hover:bg-sky-600 rounded-md text-white">
           {isDark ? <Sun size={20} /> : <Moon size={20} />}
