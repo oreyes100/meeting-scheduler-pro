@@ -5,8 +5,9 @@ const config: CapacitorConfig = {
   appName: 'Meeting Scheduler Pro',
   webDir: 'capacitor-www',
   server: {
-    url: 'https://meeting-scheduler-pro.vercel.app',
+    url: 'https://meeting-scheduler-pro.vercel.app/meetings',
     cleartext: false,
+    errorPath: 'error.html',
   },
 };
 
