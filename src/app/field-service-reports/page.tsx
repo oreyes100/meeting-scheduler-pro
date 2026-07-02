@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, Printer, X, Check } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { IconSidebar } from '@/components/IconSidebar';
+import { SyncStatus } from '@/components/SyncStatus';
 import { printTableReport } from '@/lib/printReport';
 
 const MONTH_LABELS = [
@@ -268,6 +269,7 @@ export default function FieldServiceReportsPage() {
   return (
     <div className={`flex h-screen ${bgMain} font-sans`}>
       <IconSidebar />
+      <SyncStatus />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}

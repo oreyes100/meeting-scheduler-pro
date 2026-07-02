@@ -9,6 +9,7 @@ import {
 import { Printer } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { IconSidebar } from '@/components/IconSidebar';
+import { SyncStatus } from '@/components/SyncStatus';
 import { printTableReport } from '@/lib/printReport';
 
 const DEFAULT_ROLES = [
@@ -94,6 +95,7 @@ export default function MemorialPage() {
   return (
     <div className={`flex h-screen ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'} font-sans`}>
       <IconSidebar />
+      <SyncStatus />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="bg-gradient-to-r from-red-700 to-red-900 text-white px-4 py-2 flex items-center justify-between shrink-0">

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { MeetingDashboard } from '@/components/MeetingDashboard';
+import { SyncStatus } from '@/components/SyncStatus';
 import { Sidebar } from '@/components/Sidebar';
 import PrintModal from '@/components/PrintModal';
 import { Profile } from '@/types';
@@ -233,6 +234,7 @@ export default function MeetingsPage() {
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900 font-sans">
+      <SyncStatus />
       {/* Sidebar */}
       <Sidebar 
         meetings={meetings}
@@ -259,6 +261,7 @@ export default function MeetingsPage() {
             successMsg={successMsg}
             midweekMeetingDay={midweekDay}
             auxiliaryRooms={auxiliaryRooms}
+            onPrint={() => setPrintModalOpen(true)}
           />
         </main>
       </div>

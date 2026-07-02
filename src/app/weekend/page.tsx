@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { WeekendDashboard } from '@/components/WeekendDashboard';
+import { SyncStatus } from '@/components/SyncStatus';
 import { Sidebar } from '@/components/Sidebar';
 import type { WeekendMeeting, PublicTalkOutline, PublicSpeaker, CongregationSettings } from '@/types';
 import { useT } from '@/lib/i18n';
@@ -203,6 +204,7 @@ export default function WeekendPage() {
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900 font-sans">
+      <SyncStatus />
       <Sidebar
         meetings={meetings}
         activeMeetingId={activeId}

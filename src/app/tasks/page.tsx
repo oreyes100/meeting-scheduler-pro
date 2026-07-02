@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { IconSidebar } from '@/components/IconSidebar';
+import { SyncStatus } from '@/components/SyncStatus';
 import { TasksPrintModal } from '@/components/TasksPrintModal';
 
 const DEFAULT_TASKS = [
@@ -151,6 +152,7 @@ export default function TasksPage() {
   return (
     <div className={`flex h-screen ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'} font-sans`}>
       <IconSidebar />
+      <SyncStatus pending={dirty} onSync={saveWeek} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}

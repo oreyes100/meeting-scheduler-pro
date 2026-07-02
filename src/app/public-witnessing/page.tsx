@@ -6,6 +6,7 @@ import { Home, Users, Calendar, MapPin, BookOpen, Briefcase, Eye, ChevronLeft, C
 import { printTableReport } from '@/lib/printReport';
 import { useTheme } from '@/lib/theme';
 import { IconSidebar } from '@/components/IconSidebar';
+import { SyncStatus } from '@/components/SyncStatus';
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DAY_LABELS: Record<string, string> = {
@@ -183,6 +184,7 @@ export default function PublicWitnessingPage() {
     <div className={`flex h-screen ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'} font-sans`}>
       {/* Icon sidebar */}
       <IconSidebar />
+      <SyncStatus />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}

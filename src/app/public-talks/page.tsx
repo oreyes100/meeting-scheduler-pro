@@ -9,6 +9,7 @@ import {
 import { useTheme } from '@/lib/theme';
 import { printTableReport } from '@/lib/printReport';
 import { IconSidebar } from '@/components/IconSidebar';
+import { SyncStatus } from '@/components/SyncStatus';
 
 const WEEK_COUNT = 40;
 
@@ -164,6 +165,7 @@ export default function PublicTalksPage() {
   return (
     <div className={`flex h-screen ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'} font-sans`}>
       <IconSidebar />
+      <SyncStatus />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}

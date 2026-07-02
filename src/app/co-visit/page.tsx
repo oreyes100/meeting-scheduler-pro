@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { IconSidebar } from '@/components/IconSidebar';
+import { SyncStatus } from '@/components/SyncStatus';
 import { printTableReport } from '@/lib/printReport';
 
 const DAYS = ['tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -128,6 +129,7 @@ export default function CoVisitPage() {
   return (
     <div className={`flex h-screen ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'} font-sans`}>
       <IconSidebar />
+      <SyncStatus pending={dirty} onSync={() => (visit?.id ? persist(visit) : Promise.resolve())} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="bg-gradient-to-r from-cyan-700 to-cyan-900 text-white px-4 py-2 flex items-center justify-between shrink-0">

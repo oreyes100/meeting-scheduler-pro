@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { SyncStatus } from '@/components/SyncStatus';
 import Link from 'next/link';
 import {
   Search, Plus, Trash2, Edit3, X, ChevronDown, Save, Phone, Mail, MapPin, Calendar, Heart, ArrowRightLeft, BookOpen, AlertTriangle, UserCircle2, Users as UsersIcon, Filter, ListChecks, User as UserIcon,
@@ -495,6 +496,7 @@ export default function PersonsPage() {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+      <SyncStatus />
       {/* Top bar */}
       <header className="bg-sky-500 text-white shadow-sm flex-shrink-0">
         <div className="flex items-center justify-between px-4 py-2">

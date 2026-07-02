@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Home, Users, Calendar, MapPin, BookOpen, Briefcase, Eye, Sun, Moon, ChevronLeft, ChevronRight, Plus, Trash2, Save, UserPlus, X, Printer } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { IconSidebar } from '@/components/IconSidebar';
+import { SyncStatus } from '@/components/SyncStatus';
 import { printTableReport } from '@/lib/printReport';
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -182,6 +183,7 @@ export default function FieldServicePage() {
     <div className={`flex h-screen ${bgMain} font-sans`}>
       {/* Icon sidebar */}
       <IconSidebar />
+      <SyncStatus />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}

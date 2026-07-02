@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import type { LatLng } from '@/components/TerritoryMap';
 import { IconSidebar } from '@/components/IconSidebar';
+import { SyncStatus } from '@/components/SyncStatus';
 
 const TerritoryMap = dynamic(() => import('@/components/TerritoryMap'), { ssr: false });
 
@@ -122,6 +123,7 @@ export default function TerritoriesPage() {
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-gray-900 dark:text-gray-100 text-sm">
       <IconSidebar />
+      <SyncStatus />
 
       {/* Panel izquierdo: lista + edición */}
       <div className="w-80 flex-shrink-0 border-r border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col">
