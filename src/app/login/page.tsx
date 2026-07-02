@@ -26,7 +26,7 @@ export default function LoginPage() {
 
       if (error) throw error;
 
-      router.push('/meetings');
+      router.push('/');
       router.refresh();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Invalid credentials. Please try again.');

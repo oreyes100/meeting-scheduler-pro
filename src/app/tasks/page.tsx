@@ -154,7 +154,7 @@ export default function TasksPage() {
       <IconSidebar />
       <SyncStatus pending={dirty} onSync={saveWeek} />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden pb-[52px] md:pb-0">
         {/* Header */}
         <div className="bg-gradient-to-r from-orange-600 to-orange-800 text-white px-4 py-2 flex items-center justify-between shrink-0">
           <h1 className="font-bold text-lg">Tareas</h1>
@@ -183,9 +183,9 @@ export default function TasksPage() {
           />
         )}
 
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           {/* Left panel: current week assignment editor */}
-          <div className={`w-[420px] border-r ${bgCard} p-4 overflow-y-auto shrink-0`}>
+          <div className={`w-full md:w-[420px] max-h-[45vh] md:max-h-none border-r ${bgCard} p-4 overflow-y-auto shrink-0`}>
             <h2 className="font-bold text-sm mb-3 text-orange-600">{weekLabel(selectedWeek)}</h2>
 
             <table className="w-full border-collapse mb-4">

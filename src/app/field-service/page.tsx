@@ -185,7 +185,7 @@ export default function FieldServicePage() {
       <IconSidebar />
       <SyncStatus />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden pb-[52px] md:pb-0">
         {/* Header */}
         <div className="bg-gradient-to-r from-[#4BA3E3] to-[#31708f] text-white px-4 py-2 flex items-center justify-between shrink-0">
           <h1 className="font-bold text-lg">Programa de Servicio del Campo</h1>
@@ -197,7 +197,7 @@ export default function FieldServicePage() {
         </div>
 
         {tab === 'schedule' ? (
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
             {/* Weekly calendar */}
             <div className="flex-1 flex flex-col overflow-auto p-3">
               {/* Week nav */}
@@ -270,7 +270,7 @@ export default function FieldServicePage() {
 
             {/* Meeting detail panel */}
             {selectedMeeting && (
-              <div className={`w-[300px] border-l ${bgCard} p-4 overflow-y-auto shrink-0`}>
+              <div className={`w-full md:w-[300px] max-h-[45vh] md:max-h-none border-l ${bgCard} p-4 overflow-y-auto shrink-0`}>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-bold text-sm">{DAY_LABELS[selectedMeeting.day_of_week]} {selectedMeeting.time_period?.toUpperCase()}</h3>
                   <button onClick={() => setSelectedMeeting(null)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
@@ -322,7 +322,7 @@ export default function FieldServicePage() {
           </div>
         ) : (
           /* Groups tab */
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
             <div className="flex-1 overflow-auto p-4">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold">Grupos de Servicio del Campo</h2>
@@ -366,7 +366,7 @@ export default function FieldServicePage() {
 
             {/* Edit group panel */}
             {editGroup && (
-              <div className={`w-[350px] border-l ${bgCard} p-4 overflow-y-auto shrink-0`}>
+              <div className={`w-full md:w-[350px] max-h-[45vh] md:max-h-none border-l ${bgCard} p-4 overflow-y-auto shrink-0`}>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-bold">Editar Grupo</h3>
                   <button onClick={() => setEditGroup(null)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>

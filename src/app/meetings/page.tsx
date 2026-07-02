@@ -233,7 +233,7 @@ export default function MeetingsPage() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900 font-sans">
+    <div className="flex flex-col md:flex-row h-screen bg-gray-50 dark:bg-gray-900 font-sans pb-[52px] md:pb-0">
       <SyncStatus />
       {/* Sidebar */}
       <Sidebar 

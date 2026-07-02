@@ -121,12 +121,12 @@ export default function TerritoriesPage() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-gray-900 dark:text-gray-100 text-sm">
+    <div className="flex flex-col md:flex-row h-screen bg-slate-50 dark:bg-gray-900 dark:text-gray-100 text-sm pb-[52px] md:pb-0">
       <IconSidebar />
       <SyncStatus />
 
       {/* Panel izquierdo: lista + edición */}
-      <div className="w-80 flex-shrink-0 border-r border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col">
+      <div className="w-full md:w-80 max-h-[45vh] md:max-h-none flex-shrink-0 border-b md:border-b-0 md:border-r border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col">
         <div className="px-4 py-3 border-b border-slate-200 dark:border-gray-700 flex items-center justify-between">
           <h1 className="font-bold text-slate-800 dark:text-gray-100 flex items-center gap-2"><MapPin size={18} className="text-sky-600" /> Territorios</h1>
           {!drawing && (

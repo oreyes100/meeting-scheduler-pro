@@ -402,6 +402,35 @@ export default function PersonsPage() {
   const [moveOpen, setMoveOpen] = useState(false);
   const [moveTo, setMoveTo] = useState('');
   const [detailTab, setDetailTab] = useState<Tab>('info');
+  const [fsGroups, setFsGroups] = useState<{ id: string; name: string }[]>([]);
+  const [groupByUser, setGroupByUser] = useState<Record<string, string>>({}); // user_id -> group_id
+
+  const fetchGroups = useCallback(async () => {
+    try {
+      const res = await fetch('/api/field-service-groups');
+      const data = await res.json();
+      const groups = data.groups || [];
+      setFsGroups(groups.map((g: any) => ({ id: g.id, name: g.name })));
+      const map: Record<string, string> = {};
+      for (const g of groups) for (const m of g.members || []) map[m.user_id] = g.id;
+      setGroupByUser(map);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { fetchGroups(); }, [fetchGroups]);
+
+  const assignGroup = async (userId: string, groupId: string) => {
+    setGroupByUser(prev => {
+      const next = { ...prev };
+      if (groupId) next[userId] = groupId; else delete next[userId];
+      return next;
+    });
+    await fetch('/api/field-service-groups/assign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, group_id: groupId || null }),
+    });
+  };
 
   const fetchPersons = useCallback(async () => {
     try {
@@ -576,10 +605,13 @@ export default function PersonsPage() {
             {persons.map((p) => {
               const isActive = selectedId === p.id;
               return (
-                <button
+                <div
                   key={p.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setSelectedId(p.id)}
-                  className={`w-full flex items-center gap-2 p-2 border-b hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900 dark:hover:bg-gray-700 text-left ${isActive ? 'bg-sky-50 dark:bg-sky-950/30' : ''}`}
+                  onKeyDown={(e) => { if (e.key === 'Enter') setSelectedId(p.id); }}
+                  className={`w-full flex items-center gap-2 p-2 border-b hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900 dark:hover:bg-gray-700 text-left cursor-pointer ${isActive ? 'bg-sky-50 dark:bg-sky-950/30' : ''}`}
                 >
                   <div className="w-9 h-9 rounded-full bg-sky-500 text-white flex items-center justify-center text-sm font-semibold flex-shrink-0">
                     {initials(p)}
@@ -592,7 +624,17 @@ export default function PersonsPage() {
                       {p.status === 'removed' && <span className="text-red-600">• Removed</span>}
                     </div>
                   </div>
-                </button>
+                  <select
+                    value={groupByUser[p.id] || ''}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => { e.stopPropagation(); assignGroup(p.id, e.target.value); }}
+                    title="Grupo de predicación"
+                    className="text-[11px] border border-gray-200 dark:border-gray-600 rounded px-1 py-0.5 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 max-w-[90px] flex-shrink-0"
+                  >
+                    <option value="">Sin grupo</option>
+                    {fsGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                  </select>
+                </div>
               );
             })}
           </div>
@@ -628,6 +670,17 @@ export default function PersonsPage() {
                     {selected.is_special_pioneer && <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded">Special Pioneer</span>}
                     {selected.is_regular_pioneer && <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded">Regular Pioneer</span>}
                     {(selected.is_auxiliary_pioneer || selected.auxiliary_pioneer_this_month) && <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded">Aux. Pioneer</span>}
+                    <span className="flex items-center gap-1">
+                      <span className="text-gray-500 dark:text-gray-400">Grupo:</span>
+                      <select
+                        value={groupByUser[selected.id] || ''}
+                        onChange={(e) => assignGroup(selected.id, e.target.value)}
+                        className="border border-gray-200 dark:border-gray-600 rounded px-1 py-0.5 bg-white dark:bg-gray-800 text-xs"
+                      >
+                        <option value="">Sin grupo</option>
+                        {fsGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                      </select>
+                    </span>
                   </div>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">

@@ -66,7 +66,7 @@ export default function EventsPage() {
       <IconSidebar />
       <SyncStatus />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden pb-[52px] md:pb-0">
         <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 text-white px-4 py-2 flex items-center justify-between shrink-0">
           <h1 className="font-bold text-lg">Eventos</h1>
           <div className="flex items-center gap-2">
@@ -75,9 +75,9 @@ export default function EventsPage() {
           </div>
         </div>
 
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           {/* Form */}
-          <div className={`w-[420px] border-r ${bgCard} p-4 overflow-y-auto shrink-0`}>
+          <div className={`w-full md:w-[420px] max-h-[45vh] md:max-h-none border-r ${bgCard} p-4 overflow-y-auto shrink-0`}>
             {selected ? (
               <>
                 <label className="block text-xs font-medium mb-1">Tipo</label>

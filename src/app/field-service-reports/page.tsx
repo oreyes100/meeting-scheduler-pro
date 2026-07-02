@@ -271,7 +271,7 @@ export default function FieldServiceReportsPage() {
       <IconSidebar />
       <SyncStatus />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden pb-[52px] md:pb-0">
         {/* Header */}
         <div className="bg-gradient-to-r from-[#4BA3E3] to-[#31708f] text-white px-4 py-2 flex items-center justify-between shrink-0">
           <h1 className="font-bold text-lg">Predicación y Asistencia a las reuniones (S-1)</h1>
@@ -307,7 +307,7 @@ export default function FieldServiceReportsPage() {
         )}
 
         {tab === 'publishers' && (
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           {/* Tabla de captura mensual */}
           <div className="flex-1 flex flex-col overflow-auto p-3">
             {/* Selector de grupo */}

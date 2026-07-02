@@ -76,7 +76,7 @@ export default function MaintenancePage() {
       <IconSidebar />
       <SyncStatus />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden pb-[52px] md:pb-0">
         <div className="bg-gradient-to-r from-slate-600 to-slate-800 text-white px-4 py-2 flex items-center justify-between shrink-0">
           <h1 className="font-bold text-lg">Mantenimiento</h1>
           <div className="flex items-center gap-2">
@@ -85,9 +85,9 @@ export default function MaintenancePage() {
           </div>
         </div>
 
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           {/* List */}
-          <div className={`w-[320px] border-r ${bgCard} flex flex-col shrink-0`}>
+          <div className={`w-full md:w-[320px] max-h-[45vh] md:max-h-none border-r ${bgCard} flex flex-col shrink-0`}>
             <div className="p-2 border-b border-gray-200 dark:border-gray-700">
               <select className={inputCls} value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
                 <option value="">Ninguna categoría</option>
