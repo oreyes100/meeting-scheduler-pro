@@ -69,3 +69,31 @@ Registro de decisiones arquitectónicas cerradas. No proponer alternativas a est
 **Por qué**: La UI divide CBS en 2 campos separados; la parte en `meeting_parts` es un placeholder estructural. El contador de auto-assign reporta 8/9 — comportamiento conocido, no bug.
 
 **Estado**: CERRADO. Bug conocido documentado, no accionable sin cambio de esquema.
+
+## [2026-07-01] Historial git: reconciliación del import zip via merge -s ours
+
+**Contexto**: La copia local vino de un zip de GitHub (sin `.git`); el remoto tiene historial propio (main=4748c57).
+
+**Decisión**: `git init` + commit del estado local completo (`ca17835`) + `merge -s ours origin/main` (`8c3f9d2`). El árbol local se conserva íntegro como fuente de verdad; el historial queda conectado y el push es fast-forward.
+
+**Por qué**: `push --force` destruiría el historial remoto; rebase generaría conflictos masivos sin ganancia.
+
+**Alternativa descartada**: force-push (destructivo); clonar el remoto y re-aplicar cambios a mano (propenso a error con 177 archivos).
+
+**Estado**: CERRADO.
+
+---
+
+## [2026-07-01] Informes de Predicación: 3 pestañas S-1 sin nuevas tablas/endpoints
+
+**Contexto**: NWS Desktop tiene el reporte "Predicación y Asistencia a las reuniones (S-1)" con 3 divisiones (Congregación, JW.org (S-1), Publicadores) y filtro por grupo en la pestaña Publicadores. MSP ya tenía una versión de una sola pestaña (sesión 3) sin filtro por grupo.
+
+**Decisión**: Restructurar `field-service-reports/page.tsx` en 3 pestañas reutilizando el `totals` ya calculado (sin nueva query) para Congregación/JW.org, y consumiendo `/api/field-service-groups` (ya existía para otro módulo) para el filtro de la pestaña Publicadores. No se tocó schema ni se agregaron endpoints.
+
+**Por qué**: El gap real era estructura de UI + un filtro faltante, no datos faltantes — `field_service_group_members` ya tenía todo lo necesario.
+
+**Alternativa descartada**: Agregar columnas "Crédito"/"Tardío" y botón "Enviado a la sucursal" funcional para paridad visual completa con NWS — descartada porque no fueron pedidas explícitamente y requerirían nuevas columnas en `field_service_reports` (no inventar schema sin confirmación).
+
+**Estado**: CERRADO (estructura). Commit pendiente de confirmación explícita.
+
+---

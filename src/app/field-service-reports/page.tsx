@@ -76,11 +76,16 @@ const emptyReport = (userId: string, month: string): Report => ({
   notes: null,
 });
 
+type Tab = 'congregation' | 'jw' | 'publishers';
+
 export default function FieldServiceReportsPage() {
   const { mode } = useTheme();
+  const [tab, setTab] = useState<Tab>('publishers');
   const [month, setMonth] = useState(() => firstOfMonth(new Date()));
   const [publishers, setPublishers] = useState<any[]>([]);
   const [reports, setReports] = useState<Record<string, Report>>({});
+  const [groups, setGroups] = useState<any[]>([]);
+  const [groupFilter, setGroupFilter] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null); // user_id guardándose
   const [detailUser, setDetailUser] = useState<any | null>(null);
@@ -93,12 +98,14 @@ export default function FieldServiceReportsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [uRes, rRes] = await Promise.all([
+      const [uRes, rRes, gRes] = await Promise.all([
         fetch('/api/users'),
         fetch(`/api/field-service-reports?month=${month}`),
+        fetch('/api/field-service-groups'),
       ]);
       const uData = await uRes.json();
       const rData = await rRes.json();
+      const gData = await gRes.json();
       setPublishers((uData.users || []).filter((u: any) =>
         u.is_active !== false && u.status !== 'moved' &&
         (u.is_publisher !== false || u.is_unbaptized_publisher)
@@ -106,11 +113,21 @@ export default function FieldServiceReportsPage() {
       const map: Record<string, Report> = {};
       for (const r of rData.reports || []) map[r.user_id] = r;
       setReports(map);
+      setGroups(gData.groups || []);
     } catch { /* ignore */ }
     setLoading(false);
   }, [month]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Solo miembros del grupo elegido (tab Publicadores) — vacío = todos los grupos
+  const filteredPublishers = useMemo(() => {
+    if (!groupFilter) return publishers;
+    const g = groups.find((x: any) => x.id === groupFilter);
+    if (!g) return publishers;
+    const ids = new Set((g.members || []).map((m: any) => m.user_id));
+    return publishers.filter(p => ids.has(p.id));
+  }, [publishers, groups, groupFilter]);
 
   // Historial S-21 del publicador seleccionado (año de servicio sep–ago)
   useEffect(() => {
@@ -255,24 +272,53 @@ export default function FieldServiceReportsPage() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-[#4BA3E3] to-[#31708f] text-white px-4 py-2 flex items-center justify-between shrink-0">
-          <h1 className="font-bold text-lg">Informes de Predicación</h1>
-          <button onClick={printMonth} className="p-1.5 hover:bg-white/10 rounded" title="Imprimir mes">
-            <Printer size={18} />
+          <h1 className="font-bold text-lg">Predicación y Asistencia a las reuniones (S-1)</h1>
+          <div className="flex gap-2 items-center">
+            <button onClick={() => setTab('congregation')} className={`px-3 py-1 rounded text-sm font-medium ${tab === 'congregation' ? 'bg-white/20' : 'hover:bg-white/10'}`}>Congregación</button>
+            <button onClick={() => setTab('jw')} className={`px-3 py-1 rounded text-sm font-medium ${tab === 'jw' ? 'bg-white/20' : 'hover:bg-white/10'}`}>JW.org (S-1)</button>
+            <button onClick={() => setTab('publishers')} className={`px-3 py-1 rounded text-sm font-medium ${tab === 'publishers' ? 'bg-white/20' : 'hover:bg-white/10'}`}>Publicadores</button>
+            <button onClick={printMonth} className="p-1.5 hover:bg-white/10 rounded" title="Imprimir mes">
+              <Printer size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Navegación de mes — compartida por las 3 pestañas */}
+        <div className="flex items-center justify-center gap-4 py-3 shrink-0">
+          <button onClick={() => setMonth(addMonths(month, -1))} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded">
+            <ChevronLeft size={24} className="text-blue-600" />
+          </button>
+          <h2 className="text-lg font-bold text-red-600">{monthLabel(month)}</h2>
+          <button onClick={() => setMonth(addMonths(month, 1))} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded">
+            <ChevronRight size={24} className="text-blue-600" />
           </button>
         </div>
 
+        {(tab === 'congregation' || tab === 'jw') && !loading && (
+          <div className="px-3 pb-3 shrink-0">
+            {tab === 'congregation' ? (
+              <CongregationSummary totals={totals} publisherCount={publishers.length} monthLabel={monthLabel(month)} bgCard={bgCard} />
+            ) : (
+              <JwSummary totals={totals} publisherCount={publishers.length} bgCard={bgCard} />
+            )}
+          </div>
+        )}
+
+        {tab === 'publishers' && (
         <div className="flex-1 flex overflow-hidden">
           {/* Tabla de captura mensual */}
           <div className="flex-1 flex flex-col overflow-auto p-3">
-            {/* Navegación de mes */}
-            <div className="flex items-center justify-center gap-4 mb-3">
-              <button onClick={() => setMonth(addMonths(month, -1))} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded">
-                <ChevronLeft size={24} className="text-blue-600" />
-              </button>
-              <h2 className="text-lg font-bold text-red-600">{monthLabel(month)}</h2>
-              <button onClick={() => setMonth(addMonths(month, 1))} className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded">
-                <ChevronRight size={24} className="text-blue-600" />
-              </button>
+            {/* Selector de grupo */}
+            <div className="flex items-center justify-end gap-2 mb-3">
+              <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Grupo</label>
+              <select
+                className={`text-sm border rounded px-2 py-1 ${isDark ? 'bg-gray-700 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
+                value={groupFilter}
+                onChange={e => setGroupFilter(e.target.value)}
+              >
+                <option value="">Todos los grupos</option>
+                {groups.map((g: any) => <option key={g.id} value={g.id}>{g.name}</option>)}
+              </select>
             </div>
 
             {loading ? (
@@ -290,7 +336,7 @@ export default function FieldServiceReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {publishers.map(p => {
+                  {filteredPublishers.map(p => {
                     const r = reports[p.id] || emptyReport(p.id, month);
                     const cat = categoryOf(p);
                     const showHours = cat !== 'publisher';
@@ -334,43 +380,6 @@ export default function FieldServiceReportsPage() {
                   })}
                 </tbody>
               </table>
-            )}
-
-            {/* Totales del mes (estilo S-1) */}
-            {!loading && (
-              <div className={`mt-4 border rounded-lg ${bgCard} p-3`}>
-                <h3 className="font-bold text-sm mb-2">Totales — {monthLabel(month)}</h3>
-                <table className="text-sm border-collapse">
-                  <thead>
-                    <tr>
-                      <th className="pr-6 text-left font-medium text-gray-500 dark:text-gray-400">Categoría</th>
-                      <th className="pr-6 text-right font-medium text-gray-500 dark:text-gray-400">Informaron</th>
-                      <th className="pr-6 text-right font-medium text-gray-500 dark:text-gray-400">Horas</th>
-                      <th className="pr-6 text-right font-medium text-gray-500 dark:text-gray-400">Estudios</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td className="pr-6">Publicadores</td>
-                      <td className="pr-6 text-right">{totals.publisher.reported} / {totals.publisher.count}</td>
-                      <td className="pr-6 text-right">—</td>
-                      <td className="pr-6 text-right">{totals.publisher.studies}</td>
-                    </tr>
-                    <tr>
-                      <td className="pr-6">Precursores auxiliares</td>
-                      <td className="pr-6 text-right">{totals.auxiliary.reported}</td>
-                      <td className="pr-6 text-right">{totals.auxiliary.hours}</td>
-                      <td className="pr-6 text-right">{totals.auxiliary.studies}</td>
-                    </tr>
-                    <tr>
-                      <td className="pr-6">Precursores regulares</td>
-                      <td className="pr-6 text-right">{totals.regular.reported} / {totals.regular.count}</td>
-                      <td className="pr-6 text-right">{totals.regular.hours}</td>
-                      <td className="pr-6 text-right">{totals.regular.studies}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
             )}
           </div>
 
@@ -427,6 +436,80 @@ export default function FieldServiceReportsPage() {
             </div>
           )}
         </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CongregationSummary({ totals, publisherCount, monthLabel, bgCard }: { totals: any; publisherCount: number; monthLabel: string; bgCard: string }) {
+  const totalReported = totals.publisher.reported + totals.auxiliary.reported + totals.regular.reported;
+  const totalHours = totals.auxiliary.hours + totals.regular.hours;
+  const totalStudies = totals.publisher.studies + totals.auxiliary.studies + totals.regular.studies;
+  return (
+    <div className={`border rounded-lg ${bgCard} p-3`}>
+      <h3 className="font-bold text-sm mb-2">{monthLabel}</h3>
+      <table className="text-sm border-collapse w-full">
+        <thead>
+          <tr>
+            <th className="pr-6 text-left font-medium text-gray-500 dark:text-gray-400">Tipo</th>
+            <th className="pr-6 text-right font-medium text-gray-500 dark:text-gray-400">Número de informes</th>
+            <th className="pr-6 text-right font-medium text-gray-500 dark:text-gray-400">Horas</th>
+            <th className="pr-6 text-right font-medium text-gray-500 dark:text-gray-400">Cursos bíblicos</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="border-t">
+            <td className="pr-6 py-1">Publicadores</td>
+            <td className="pr-6 text-right">{totals.publisher.reported}</td>
+            <td className="pr-6 text-right">—</td>
+            <td className="pr-6 text-right">{totals.publisher.studies}</td>
+          </tr>
+          <tr>
+            <td className="pr-6 py-1">Precursores Auxiliares</td>
+            <td className="pr-6 text-right">{totals.auxiliary.reported}</td>
+            <td className="pr-6 text-right">{totals.auxiliary.hours}</td>
+            <td className="pr-6 text-right">{totals.auxiliary.studies}</td>
+          </tr>
+          <tr>
+            <td className="pr-6 py-1">Precursores regulares</td>
+            <td className="pr-6 text-right">{totals.regular.reported}</td>
+            <td className="pr-6 text-right">{totals.regular.hours}</td>
+            <td className="pr-6 text-right">{totals.regular.studies}</td>
+          </tr>
+          <tr className="border-t font-bold">
+            <td className="pr-6 py-1">Total</td>
+            <td className="pr-6 text-right">{totalReported}</td>
+            <td className="pr-6 text-right">{totalHours}</td>
+            <td className="pr-6 text-right">{totalStudies}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p className="text-sm mt-3">Publicadores activos <strong>{publisherCount}</strong></p>
+    </div>
+  );
+}
+
+function JwSummary({ totals, publisherCount, bgCard }: { totals: any; publisherCount: number; bgCard: string }) {
+  const cards = [
+    { label: 'Publicadores', informes: totals.publisher.reported, horas: null as number | null, cursos: totals.publisher.studies },
+    { label: 'Precursores Auxiliares', informes: totals.auxiliary.reported, horas: totals.auxiliary.hours, cursos: totals.auxiliary.studies },
+    { label: 'Precursores regulares', informes: totals.regular.reported, horas: totals.regular.hours, cursos: totals.regular.studies },
+  ];
+  return (
+    <div>
+      <div className={`border rounded-lg ${bgCard} p-3 mb-3`}>
+        <p className="text-sm">Publicadores activos <strong>{publisherCount}</strong></p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {cards.map(c => (
+          <div key={c.label} className={`border rounded-lg ${bgCard} p-3`}>
+            <h4 className="font-bold text-sm mb-2">{c.label}</h4>
+            <p className="text-sm">Número de informes <strong>{c.informes}</strong></p>
+            {c.horas !== null && <p className="text-sm">Horas <strong>{c.horas}</strong></p>}
+            <p className="text-sm">Cursos bíblicos <strong>{c.cursos}</strong></p>
+          </div>
+        ))}
       </div>
     </div>
   );
