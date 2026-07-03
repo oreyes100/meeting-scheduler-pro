@@ -42,6 +42,7 @@ export default function PermissionsPage() {
         app_role: selected.app_role,
         permissions: selected.permissions || [],
         auth_email: selected.auth_email || null,
+        username: selected.username || null,
       }),
     });
     setUsers(prev => prev.map(u => u.id === selected.id ? selected : u));
@@ -85,7 +86,7 @@ export default function PermissionsPage() {
                 <button key={u.id} onClick={() => { setSelected({ ...u }); setDirty(false); }}
                   className={`w-full text-left px-3 py-2 border-b border-gray-100 dark:border-gray-700 text-sm ${selected?.id === u.id ? (isDark ? 'bg-gray-700' : 'bg-gray-100') : (isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50')}`}>
                   <div className="font-medium truncate">{name(u)}</div>
-                  <div className="text-xs text-gray-400">{u.app_role || 'publisher'}{u.auth_email ? ` · ${u.auth_email}` : ''}</div>
+                  <div className="text-xs text-gray-400">{u.app_role || 'publisher'}{u.username ? ` · ${u.username}` : (u.auth_email ? ` · ${u.auth_email}` : '')}</div>
                 </button>
               ))}
             </div>
@@ -100,7 +101,11 @@ export default function PermissionsPage() {
                 <label className="block text-xs font-medium mb-1">Correo de acceso (login)</label>
                 <input className={inputCls} placeholder="correo@ejemplo.com" value={selected.auth_email || ''}
                        onChange={e => { setSelected({ ...selected, auth_email: e.target.value }); setDirty(true); }} />
-                <p className="text-xs text-gray-400 mt-1">Debe coincidir con el correo con el que inicia sesión.</p>
+
+                <label className="block text-xs font-medium mb-1 mt-3">Nombre de usuario (alternativa al correo)</label>
+                <input className={inputCls} placeholder="nombreapellido" value={selected.username || ''}
+                       onChange={e => { setSelected({ ...selected, username: e.target.value }); setDirty(true); }} />
+                <p className="text-xs text-gray-400 mt-1">Puede iniciar sesión con el correo o con este usuario.</p>
 
                 <label className="block text-xs font-medium mb-1 mt-4">Rol</label>
                 <select className={inputCls} value={selected.app_role || 'publisher'}

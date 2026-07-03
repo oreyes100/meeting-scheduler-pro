@@ -226,4 +226,5 @@ export interface CongregationSettings {
   co_name: string | null;
   co_contact_details: string | null;
   auxiliary_rooms: string | null;
+  field_service_group_count?: number | null;
 }

@@ -74,18 +74,23 @@ export default function CleaningPage() {
   const weeks = buildWeeks();
   const todayISO = fmtISO(getMonday(new Date()));
 
+  const [groupCount, setGroupCount] = useState(4);
+
   const fetchData = useCallback(async () => {
     try {
-      const [tRes, pRes] = await Promise.all([
+      const [tRes, pRes, cRes] = await Promise.all([
         fetch('/api/cleaning-assignments'),
         fetch('/api/users'),
+        fetch('/api/congregation'),
       ]);
       const tData = await tRes.json();
       const pData = await pRes.json();
+      const cData = await cRes.json();
       setPublishers(pData.users || []);
       const map: Record<string, any> = {};
       for (const t of tData.tasks || []) map[t.week_date] = t.assignments || {};
       setAllTasks(map);
+      setGroupCount(cData.congregation?.field_service_group_count ?? 4);
     } catch { /* ignore */ }
   }, []);
 
@@ -151,7 +156,7 @@ export default function CleaningPage() {
     });
     printTableReport({ title: `Limpieza — ${tab === 'interior' ? 'Interior' : 'Exterior y Jardín'}`, congName: 'Congregación', columns: cols, rows });
   };
-  const GROUPS = [1, 2, 3, 4];
+  const GROUPS = Array.from({ length: groupCount }, (_, i) => i + 1);
   const idLabel = (id: string, short = false): string => {
     if (id?.startsWith('group:')) return `Grupo ${id.slice(6)}`;
     const u = userById(id);
