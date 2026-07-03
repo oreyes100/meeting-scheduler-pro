@@ -39,32 +39,49 @@ export function IconSidebar() {
   }
 
   return (
-    <div className={`${isDark ? 'bg-gray-900' : 'bg-sky-500'} shrink-0
-        flex md:flex-col items-center gap-1 md:gap-2 md:py-3 md:w-[52px]
-        fixed bottom-0 left-0 right-0 z-40 h-[52px] px-1 overflow-x-auto
-        md:static md:h-auto md:px-0 md:overflow-x-visible md:overflow-y-auto`}>
-      <button onClick={() => router.push('/')} title="Inicio"
-        className="p-2 rounded-md text-white hover:bg-sky-600 transition-colors shrink-0">
-        <LayoutGrid size={22} />
-      </button>
-      {visible.map(({ key, path, Icon, title }) => {
-        const active = pathname === path || pathname?.startsWith(path + '/');
-        return (
-          <button key={key} onClick={() => router.push(path)} title={title}
-            className={`p-2 rounded-md text-white transition-colors shrink-0 ${active ? 'bg-sky-600 shadow-inner' : 'hover:bg-sky-600'}`}>
-            <Icon size={22} />
-          </button>
-        );
-      })}
-      <div className="hidden md:block md:flex-1" />
-      <button onClick={() => setMode(isDark ? 'light' : 'dark')} title="Tema"
-        className="p-2 rounded-md text-white hover:bg-sky-600 transition-colors shrink-0">
-        {isDark ? <Sun size={20} /> : <Moon size={20} />}
-      </button>
-      <button onClick={logout} title="Cerrar sesión"
-        className="p-2 rounded-md text-white hover:bg-red-600 transition-colors shrink-0">
-        <LogOut size={20} />
-      </button>
-    </div>
+    <>
+      {/* Cluster fijo (solo móvil): tema + salir, siempre alcanzables sin importar
+          cuántos módulos tenga la barra inferior ni el scroll horizontal. */}
+      <div className="md:hidden fixed z-50 flex gap-1.5" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 8px)', right: 8 }}>
+        <button onClick={() => setMode(isDark ? 'light' : 'dark')} title="Tema"
+          className="p-2 rounded-full bg-black/40 backdrop-blur text-white shadow-lg">
+          {isDark ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
+        <button onClick={logout} title="Cerrar sesión"
+          className="p-2 rounded-full bg-black/40 backdrop-blur text-white shadow-lg">
+          <LogOut size={16} />
+        </button>
+      </div>
+
+      <div className={`${isDark ? 'bg-gray-900' : 'bg-sky-500'} shrink-0
+          flex md:flex-col items-center gap-1 md:gap-2 md:py-3 md:w-[52px]
+          fixed bottom-0 left-0 right-0 z-40 h-[52px] px-1 overflow-x-auto
+          md:static md:h-auto md:px-0 md:overflow-x-visible md:overflow-y-auto`}
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        <button onClick={() => router.push('/')} title="Inicio"
+          className="p-2 rounded-md text-white hover:bg-sky-600 transition-colors shrink-0">
+          <LayoutGrid size={22} />
+        </button>
+        {visible.map(({ key, path, Icon, title }) => {
+          const active = pathname === path || pathname?.startsWith(path + '/');
+          return (
+            <button key={key} onClick={() => router.push(path)} title={title}
+              className={`p-2 rounded-md text-white transition-colors shrink-0 ${active ? 'bg-sky-600 shadow-inner' : 'hover:bg-sky-600'}`}>
+              <Icon size={22} />
+            </button>
+          );
+        })}
+        <div className="hidden md:block md:flex-1" />
+        {/* Tema + salir: solo en la columna de escritorio (en móvil viven en el cluster fijo de arriba) */}
+        <button onClick={() => setMode(isDark ? 'light' : 'dark')} title="Tema"
+          className="hidden md:block p-2 rounded-md text-white hover:bg-sky-600 transition-colors shrink-0">
+          {isDark ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
+        <button onClick={logout} title="Cerrar sesión"
+          className="hidden md:block p-2 rounded-md text-white hover:bg-red-600 transition-colors shrink-0">
+          <LogOut size={20} />
+        </button>
+      </div>
+    </>
   );
 }

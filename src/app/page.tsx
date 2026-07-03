@@ -22,7 +22,7 @@ export default function Home() {
   };
 
   return (
-    <div className={`min-h-screen ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
+    <div className={`h-screen overflow-y-auto ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
       {/* Hero */}
       <div className="bg-gradient-to-b from-sky-500 to-sky-400 dark:from-sky-900 dark:to-gray-900 text-white text-center pt-10 pb-8 px-4 relative">
         <div className="absolute top-3 right-3 flex gap-2">
