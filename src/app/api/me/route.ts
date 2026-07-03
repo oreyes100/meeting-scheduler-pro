@@ -19,7 +19,7 @@ export async function GET() {
     const email = user.email.toLowerCase();
     const { data: rows } = await supabase
       .from('users')
-      .select('id, name, first_name, last_name, app_role, permissions, auth_email, email1')
+      .select('id, name, first_name, last_name, app_role, permissions, auth_email, email1, is_regular_pioneer, is_special_pioneer, is_auxiliary_pioneer')
       .or(`auth_email.eq.${email},email1.eq.${email}`)
       .limit(1);
 
@@ -31,6 +31,9 @@ export async function GET() {
       name: row?.name || [row?.first_name, row?.last_name].filter(Boolean).join(' ') || email,
       app_role: row?.app_role || 'admin', // sin fila vinculada = admin (cuenta de gestión)
       permissions: Array.isArray(row?.permissions) ? row.permissions : [],
+      is_regular_pioneer: !!row?.is_regular_pioneer,
+      is_special_pioneer: !!row?.is_special_pioneer,
+      is_auxiliary_pioneer: !!row?.is_auxiliary_pioneer,
     });
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Error' }, { status: 500 });

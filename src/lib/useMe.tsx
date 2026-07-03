@@ -9,6 +9,9 @@ export interface Me {
   name?: string;
   app_role: 'admin' | 'elder' | 'publisher';
   permissions: string[];
+  is_regular_pioneer?: boolean;
+  is_special_pioneer?: boolean;
+  is_auxiliary_pioneer?: boolean;
 }
 
 let cache: Me | null = null;
@@ -24,6 +27,9 @@ async function fetchMe(): Promise<Me> {
     name: data.name,
     app_role: data.app_role || 'publisher',
     permissions: Array.isArray(data.permissions) ? data.permissions : [],
+    is_regular_pioneer: !!data.is_regular_pioneer,
+    is_special_pioneer: !!data.is_special_pioneer,
+    is_auxiliary_pioneer: !!data.is_auxiliary_pioneer,
   };
 }
 

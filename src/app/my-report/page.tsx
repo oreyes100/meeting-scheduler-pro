@@ -20,6 +20,7 @@ function monthLabel(iso: string): string {
 export default function MyReportPage() {
   const { mode } = useTheme();
   const { me, loading: meLoading } = useMe();
+  const isPioneer = !!me?.is_regular_pioneer || !!me?.is_special_pioneer;
   const [month, setMonth] = useState(() => monthISO(-1)); // por defecto: mes anterior
   const [form, setForm] = useState({ participated: true, is_auxiliary_pioneer: false, hours: '' as string, bible_studies: '' as string, notes: '' });
   const [history, setHistory] = useState<any[]>([]);
@@ -114,14 +115,16 @@ export default function MyReportPage() {
                   Participé en la predicación este mes
                 </label>
 
-                <label className="flex items-center gap-2 mt-2 text-sm">
-                  <input type="checkbox" checked={form.is_auxiliary_pioneer} onChange={e => set({ is_auxiliary_pioneer: e.target.checked })} />
-                  Fui precursor auxiliar este mes
-                </label>
+                {!isPioneer && (
+                  <label className="flex items-center gap-2 mt-2 text-sm">
+                    <input type="checkbox" checked={form.is_auxiliary_pioneer} onChange={e => set({ is_auxiliary_pioneer: e.target.checked })} />
+                    Fui precursor auxiliar este mes
+                  </label>
+                )}
 
-                {form.is_auxiliary_pioneer && (
+                {(isPioneer || form.is_auxiliary_pioneer) && (
                   <>
-                    <label className="block text-xs font-medium mb-1 mt-3">Horas</label>
+                    <label className="block text-xs font-medium mb-1 mt-3">Horas{isPioneer ? ' (precursor)' : ''}</label>
                     <input type="number" inputMode="decimal" min={0} step={0.5} className={inputCls} value={form.hours}
                            onChange={e => set({ hours: e.target.value })} />
                   </>
