@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Save, Search } from 'lucide-react';
+import { Save, Search, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { IconSidebar } from '@/components/IconSidebar';
 import { SyncStatus } from '@/components/SyncStatus';
@@ -22,6 +22,10 @@ export default function PermissionsPage() {
   const [selected, setSelected] = useState<any | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwMsg, setPwMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
 
   const fetchUsers = useCallback(async () => {
     const res = await fetch('/api/permissions');
@@ -48,6 +52,26 @@ export default function PermissionsPage() {
     setUsers(prev => prev.map(u => u.id === selected.id ? selected : u));
     setSaving(false);
     setDirty(false);
+  };
+
+  const changePassword = async () => {
+    if (!selected || newPassword.length < 6) return;
+    setPwSaving(true);
+    setPwMsg(null);
+    try {
+      const res = await fetch('/api/permissions/set-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: selected.id, password: newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo cambiar la contraseña');
+      setPwMsg({ type: 'ok', text: 'Contraseña actualizada.' });
+      setNewPassword('');
+    } catch (e: unknown) {
+      setPwMsg({ type: 'error', text: e instanceof Error ? e.message : 'Error' });
+    }
+    setPwSaving(false);
   };
 
   const togglePerm = (key: string) => {
@@ -83,7 +107,7 @@ export default function PermissionsPage() {
             </div>
             <div className="flex-1 overflow-y-auto">
               {filtered.map(u => (
-                <button key={u.id} onClick={() => { setSelected({ ...u }); setDirty(false); }}
+                <button key={u.id} onClick={() => { setSelected({ ...u }); setDirty(false); setNewPassword(''); setPwMsg(null); }}
                   className={`w-full text-left px-3 py-2 border-b border-gray-100 dark:border-gray-700 text-sm ${selected?.id === u.id ? (isDark ? 'bg-gray-700' : 'bg-gray-100') : (isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50')}`}>
                   <div className="font-medium truncate">{name(u)}</div>
                   <div className="text-xs text-gray-400">{u.app_role || 'publisher'}{u.username ? ` · ${u.username}` : (u.auth_email ? ` · ${u.auth_email}` : '')}</div>
@@ -106,6 +130,28 @@ export default function PermissionsPage() {
                 <input className={inputCls} placeholder="nombreapellido" value={selected.username || ''}
                        onChange={e => { setSelected({ ...selected, username: e.target.value }); setDirty(true); }} />
                 <p className="text-xs text-gray-400 mt-1">Puede iniciar sesión con el correo o con este usuario.</p>
+
+                <div className={`mt-4 p-3 rounded-lg border ${bgCard}`}>
+                  <h3 className="font-bold text-sm mb-2 flex items-center gap-1.5"><KeyRound size={15} /> Cambiar contraseña</h3>
+                  {!selected.auth_email ? (
+                    <p className="text-xs text-gray-400">Vincula un correo de acceso arriba antes de poder asignar contraseña.</p>
+                  ) : (
+                    <>
+                      <div className="relative">
+                        <input type={showPassword ? 'text' : 'password'} className={`${inputCls} pr-9`} placeholder="Nueva contraseña (mín. 6 caracteres)"
+                               value={newPassword} onChange={e => { setNewPassword(e.target.value); setPwMsg(null); }} />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400">
+                          {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                        </button>
+                      </div>
+                      <button onClick={changePassword} disabled={pwSaving || newPassword.length < 6}
+                              className="mt-2 bg-gray-700 dark:bg-gray-600 text-white text-xs py-1.5 px-4 rounded font-medium hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                        {pwSaving ? 'Guardando…' : 'Cambiar contraseña'}
+                      </button>
+                      {pwMsg && <p className={`text-xs mt-1.5 ${pwMsg.type === 'ok' ? 'text-green-600' : 'text-red-600'}`}>{pwMsg.text}</p>}
+                    </>
+                  )}
+                </div>
 
                 <label className="block text-xs font-medium mb-1 mt-4">Rol</label>
                 <select className={inputCls} value={selected.app_role || 'publisher'}
