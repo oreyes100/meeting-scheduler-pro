@@ -2,10 +2,11 @@
 
 import React, { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Sun, Moon, LayoutGrid } from 'lucide-react';
+import { Sun, Moon, LayoutGrid, LogOut } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { MODULES, moduleByPath } from '@/lib/modules';
 import { useMe, canAccess } from '@/lib/useMe';
+import { supabase } from '@/lib/supabase';
 
 export function IconSidebar() {
   const router = useRouter();
@@ -15,6 +16,11 @@ export function IconSidebar() {
   const isDark = mode === 'dark';
 
   const visible = MODULES.filter(m => canAccess(me, m.key, m.adminOnly));
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+    router.push('/login');
+  };
 
   // Gate: si el módulo actual no está permitido, redirigir al primero visible
   const current = moduleByPath(pathname);
@@ -54,6 +60,10 @@ export function IconSidebar() {
       <button onClick={() => setMode(isDark ? 'light' : 'dark')} title="Tema"
         className="p-2 rounded-md text-white hover:bg-sky-600 transition-colors shrink-0">
         {isDark ? <Sun size={20} /> : <Moon size={20} />}
+      </button>
+      <button onClick={logout} title="Cerrar sesión"
+        className="p-2 rounded-md text-white hover:bg-red-600 transition-colors shrink-0">
+        <LogOut size={20} />
       </button>
     </div>
   );

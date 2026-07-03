@@ -1,14 +1,16 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { SyncStatus } from '@/components/SyncStatus';
 import Link from 'next/link';
 import {
-  Search, Plus, Trash2, Edit3, X, ChevronDown, Save, Phone, Mail, MapPin, Calendar, Heart, ArrowRightLeft, BookOpen, AlertTriangle, UserCircle2, Users as UsersIcon, Filter, ListChecks, User as UserIcon,
+  Search, Plus, Trash2, Edit3, X, ChevronDown, Save, Phone, Mail, MapPin, Calendar, Heart, ArrowRightLeft, BookOpen, AlertTriangle, UserCircle2, Users as UsersIcon, Filter, ListChecks, User as UserIcon, LogOut,
 } from 'lucide-react';
 import type { Person, PersonFilter, PersonStatus, PersonGender } from '@/types';
 import { useT } from '@/lib/i18n';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { supabase } from '@/lib/supabase';
 
 const FILTER_VALUES: PersonFilter[] = [
   'everyone', 'families', 'active_publishers', 'irregular_publishers', 'inactive_publishers',
@@ -389,6 +391,8 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
 
 export default function PersonsPage() {
   const { t } = useT();
+  const router = useRouter();
+  const logout = async () => { await supabase.auth.signOut(); router.push('/login'); };
   const [persons, setPersons] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -539,6 +543,9 @@ export default function PersonsPage() {
           <div className="flex items-center gap-2">
             <button onClick={handleAdd} className="bg-white dark:bg-gray-800 text-sky-600 px-3 py-1 rounded text-sm font-medium hover:bg-sky-50 dark:hover:bg-sky-950/30 dark:bg-sky-950/30 dark:hover:bg-sky-950/30 flex items-center gap-1">
               <Plus size={14} /> New Person
+            </button>
+            <button onClick={logout} title="Cerrar sesión" className="p-1.5 rounded hover:bg-white/20 text-white">
+              <LogOut size={16} />
             </button>
           </div>
         </div>
