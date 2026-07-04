@@ -123,7 +123,7 @@ export default function AttendancePage() {
   function section(title: string, color: string, dates: string[], type: 'midweek' | 'weekend') {
     const cellsFor = (field: 'in_person' | 'online') => dates.map(d => rows[`${d}|${type}`]?.[field] ?? null);
     const weekTotal = (i: number) => (cellsFor('in_person')[i] || 0) + ((showOnline ? cellsFor('online')[i] : 0) || 0);
-    const rowTotal = (field: 'in_person' | 'online') => cellsFor(field).reduce((a, v) => a + (v || 0), 0);
+    const rowTotal = (field: 'in_person' | 'online') => cellsFor(field).reduce((a: number, v) => a + (v || 0), 0);
     const rowAvg = (field: 'in_person' | 'online') => {
       const vals = cellsFor(field).filter(v => v != null) as number[];
       return vals.length ? Math.round((vals.reduce((a, v) => a + v, 0) / vals.length) * 10) / 10 : 0;
