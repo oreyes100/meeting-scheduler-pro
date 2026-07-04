@@ -154,6 +154,10 @@ export function CongregationForm() {
               <option value="2">2 salas auxiliares</option>
             </select>
           </Field>
+          <Field label="Grupos de predicación">
+            <input type="number" min={1} max={30} className={inputCls} value={form.field_service_group_count ?? 4}
+                   onChange={e => set('field_service_group_count', e.target.value)} />
+          </Field>
         </div>
       </section>
 

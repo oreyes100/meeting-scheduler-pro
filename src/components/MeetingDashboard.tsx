@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Profile } from '@/types';
-import { Plus, Minus, FileText } from 'lucide-react';
+import { Plus, Minus, FileText, Printer } from 'lucide-react';
 import { useT } from '@/lib/i18n';
 
 
@@ -18,6 +18,7 @@ interface DashboardProps {
   successMsg: string | null;
   midweekMeetingDay?: string | null;
   auxiliaryRooms?: number;
+  onPrint?: () => void;
 }
 
 export function MeetingDashboard({
@@ -26,6 +27,7 @@ export function MeetingDashboard({
   onAutoAssign,
   onClearAssignments,
   onRebuildParts,
+  onPrint,
   autoAssigning,
   midweekMeetingDay,
   auxiliaryRooms = 0,
@@ -165,9 +167,10 @@ export function MeetingDashboard({
         {/* Date and Songs Header */}
         <div className="flex justify-between items-center mb-2 px-2 border-b border-gray-200 dark:border-gray-700 pb-1 relative">
            <div className="w-1/3 flex gap-2">
-             <button onClick={onAutoAssign} className="bg-blue-100 border border-blue-400 text-blue-800 px-2 py-0.5 rounded text-xs hover:bg-blue-200 shadow-sm">{t('meeting.autoAssign')}</button>
-             <button onClick={onClearAssignments} className="bg-gray-100 dark:bg-gray-700 border border-gray-400 text-gray-800 dark:text-gray-200 px-2 py-0.5 rounded text-xs hover:bg-gray-200 dark:bg-gray-600 shadow-sm">{t('meeting.clear')}</button>
-             <button onClick={onRebuildParts} title={t('meeting.rebuildFromJW')} className="bg-amber-100 border border-amber-400 text-amber-800 px-2 py-0.5 rounded text-xs hover:bg-amber-200 shadow-sm">{t('meeting.rebuildFromJW')}</button>
+             <button onClick={onAutoAssign} className="bg-blue-100 dark:bg-blue-900/40 border border-blue-400 dark:border-blue-600 text-blue-800 dark:text-blue-200 px-2 py-0.5 rounded text-xs hover:bg-blue-200 dark:hover:bg-blue-800/50 shadow-sm">{t('meeting.autoAssign')}</button>
+             <button onClick={onClearAssignments} className="bg-gray-100 dark:bg-gray-700 border border-gray-400 dark:border-gray-600 text-gray-800 dark:text-gray-200 px-2 py-0.5 rounded text-xs hover:bg-gray-200 dark:hover:bg-gray-600 shadow-sm">{t('meeting.clear')}</button>
+             <button onClick={onRebuildParts} title={t('meeting.rebuildFromJW')} className="bg-amber-100 dark:bg-amber-900/40 border border-amber-400 dark:border-amber-600 text-amber-800 dark:text-amber-200 px-2 py-0.5 rounded text-xs hover:bg-amber-200 dark:hover:bg-amber-800/50 shadow-sm">{t('meeting.rebuildFromJW')}</button>
+             {onPrint && <button onClick={onPrint} title="Imprimir" className="bg-teal-100 dark:bg-teal-900/40 border border-teal-400 dark:border-teal-600 text-teal-800 dark:text-teal-200 px-2 py-0.5 rounded text-xs hover:bg-teal-200 dark:hover:bg-teal-800/50 shadow-sm flex items-center gap-1"><Printer size={12} /> Imprimir</button>}
              {autoAssigning && <span className="text-blue-600 font-bold ml-2">...</span>}
              <select className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-xs rounded px-1 py-0.5 ml-2" value={formData.assembly_type || ''} onChange={e => handleMeetingChange('assembly_type', e.target.value || null)}>
                <option value="">Normal</option>

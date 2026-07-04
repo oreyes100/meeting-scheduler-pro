@@ -1,8 +1,19 @@
 import React from 'react';
+import type { Viewport } from 'next';
 import './globals.css';
 import { LocaleProvider } from '@/lib/i18n';
 import { LocaleLang } from '@/components/LocaleLang';
 import { ThemeProvider, themeInitScript } from '@/lib/theme';
+
+// Permite pinch-to-zoom en móvil (Next.js no restringe el zoom por defecto,
+// pero lo hacemos explícito para que ningún cambio futuro lo bloquee sin querer).
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  viewportFit: 'cover',
+};
 
 export default function RootLayout({
   children,

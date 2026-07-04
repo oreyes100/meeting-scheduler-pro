@@ -38,7 +38,16 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // Exigir sesión: sin usuario → /login (APIs quedan libres; usan service key)
+  const { pathname } = request.nextUrl
+  const isPublic = pathname.startsWith('/login') || pathname.startsWith('/api')
+  if (!user && !isPublic) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    return NextResponse.redirect(url)
+  }
 
   return response
 }

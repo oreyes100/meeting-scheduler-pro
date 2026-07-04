@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import { Users, Calendar, MapPin, Smartphone, UserX, Printer, HelpCircle, ChevronDown, ChevronRight, Plus, BookOpen, Home, Sun, Moon, Monitor, Briefcase, Eye, Mic, ClipboardList, Sparkles, Wrench, CalendarDays, GlassWater } from 'lucide-react';
+import { Printer, ChevronDown, ChevronRight, Plus, Sun, Moon, Monitor } from 'lucide-react';
+import { IconSidebar } from './IconSidebar';
 import { useT } from '@/lib/i18n';
 import { useTheme, type ThemeMode } from '@/lib/theme';
 import { LanguageSwitcher } from './LanguageSwitcher';
@@ -45,8 +45,6 @@ function isoDate(date: Date): string {
 }
 
 export function Sidebar({ meetings, activeMeetingId, setActiveMeetingId, onPrint, onNewMeeting, isCreating, allowPast = false, monthsBack = 0 }: SidebarProps) {
-  const router = useRouter();
-  const pathname = usePathname();
   const { t, locale } = useT();
   const { mode, setMode } = useTheme();
   const cycleTheme = () => {
@@ -133,36 +131,12 @@ export function Sidebar({ meetings, activeMeetingId, setActiveMeetingId, onPrint
   };
 
   return (
-    <div className="flex h-full bg-white dark:bg-gray-800 border-r border-border text-sm overflow-hidden select-none">
-      {/* 1. Leftmost Mini Icon Bar */}
-      <div className="w-14 bg-sky-500 dark:bg-gray-900 flex flex-col items-center py-4 space-y-6 text-white flex-shrink-0">
-        <button onClick={() => router.push('/congregation')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/congregation') ? 'bg-sky-600 shadow-inner' : ''}`} title="Congregación"><Home size={24} /></button>
-        <button onClick={() => router.push('/persons')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/persons') ? 'bg-sky-600' : ''}`} title={t('sidebar.tooltip.persons')}><Users size={24} /></button>
-        <button onClick={() => router.push('/meetings')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/meetings') ? 'bg-sky-600 shadow-inner' : ''}`} title={t('sidebar.tooltip.schedule')}><Calendar size={24} /></button>
-        <button onClick={() => router.push('/weekend')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/weekend') ? 'bg-sky-600 shadow-inner' : ''}`} title="Reunión Fin de Semana"><BookOpen size={24} /></button>
-        <button onClick={() => router.push('/public-talks')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/public-talks') ? 'bg-sky-600 shadow-inner' : ''}`} title="Discursos Públicos"><Mic size={24} /></button>
-        <button onClick={() => router.push('/territories')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/territories') ? 'bg-sky-600 shadow-inner' : ''}`} title={t('sidebar.tooltip.territories')}><MapPin size={24} /></button>
-        <button onClick={() => router.push('/field-service')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/field-service') ? 'bg-sky-600 shadow-inner' : ''}`} title="Servicio del Campo"><Briefcase size={24} /></button>
-        <button onClick={() => router.push('/public-witnessing')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/public-witnessing') ? 'bg-sky-600 shadow-inner' : ''}`} title="Predicación Pública"><Eye size={24} /></button>
-        <button onClick={() => router.push('/tasks')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/tasks') ? 'bg-sky-600 shadow-inner' : ''}`} title="Tareas"><ClipboardList size={24} /></button>
-        <button onClick={() => router.push('/cleaning')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/cleaning') ? 'bg-sky-600 shadow-inner' : ''}`} title="Limpieza"><Sparkles size={24} /></button>
-        <button onClick={() => router.push('/maintenance')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/maintenance') ? 'bg-sky-600 shadow-inner' : ''}`} title="Mantenimiento"><Wrench size={24} /></button>
-        <button onClick={() => router.push('/co-visit')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/co-visit') ? 'bg-sky-600 shadow-inner' : ''}`} title="Visita Sup. Circuito"><GlassWater size={24} /></button>
-        <button onClick={() => router.push('/memorial')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/memorial') ? 'bg-sky-600 shadow-inner' : ''}`} title="Conmemoración"><Mic size={24} /></button>
-        <button onClick={() => router.push('/events')} className={`p-2 hover:bg-sky-600 rounded-md transition-colors ${pathname?.startsWith('/events') ? 'bg-sky-600 shadow-inner' : ''}`} title="Eventos"><CalendarDays size={24} /></button>
-        <button onClick={() => alert('Mobile Sync module coming soon!')} className="p-2 hover:bg-sky-600 rounded-md transition-colors" title={t('sidebar.tooltip.mobile')}><Smartphone size={24} /></button>
-        <div className="flex-1"></div>
-        <button onClick={() => alert('Alerts coming soon!')} className="p-2 hover:bg-sky-600 rounded-md transition-colors relative" title={t('sidebar.tooltip.alerts')}>
-          <UserX size={24} />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-        </button>
-        <button onClick={onPrint} className="p-2 hover:bg-sky-600 rounded-md transition-colors" title={t('sidebar.tooltip.print')}><Printer size={24} /></button>
-        <button onClick={cycleTheme} className="p-2 hover:bg-sky-600 rounded-md transition-colors" title={`Tema: ${mode === 'light' ? 'claro' : mode === 'dark' ? 'oscuro' : 'según sistema'}`}><ThemeIcon size={24} /></button>
-        <button onClick={() => alert('Help center coming soon!')} className="p-2 hover:bg-sky-600 rounded-md transition-colors" title={t('sidebar.tooltip.help')}><HelpCircle size={24} /></button>
-      </div>
+    <div className="flex h-auto md:h-full max-h-[40vh] md:max-h-none bg-white dark:bg-gray-800 border-b md:border-b-0 md:border-r border-border text-sm overflow-hidden select-none">
+      {/* 1. Leftmost Mini Icon Bar (compartido, con permisos) */}
+      <IconSidebar />
 
       {/* 2. Secondary Sidebar: Congregation and Months/Weeks */}
-      <div className="flex-1 flex flex-col w-56 flex-shrink-0">
+      <div className="flex-1 flex flex-col w-full md:w-56 flex-shrink-0">
         {/* Congregation Selector Header */}
         <div className="p-2 border-b border-gray-200 dark:border-gray-700">
           <div className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-800 flex justify-between items-center cursor-pointer">
@@ -172,6 +146,10 @@ export function Sidebar({ meetings, activeMeetingId, setActiveMeetingId, onPrint
           <div className="mt-2 px-1 flex items-center justify-between">
             <span className="font-medium text-gray-800 dark:text-gray-200 text-sm">{t('sidebar.language')}</span>
             <LanguageSwitcher />
+          </div>
+          <div className="mt-2 px-1 flex items-center justify-between">
+            <button onClick={onPrint} className="flex items-center gap-1 text-xs text-sky-700 dark:text-sky-300 hover:underline"><Printer size={13} /> {t('sidebar.tooltip.print')}</button>
+            <button onClick={cycleTheme} title={`Tema: ${mode === 'light' ? 'claro' : mode === 'dark' ? 'oscuro' : 'según sistema'}`} className="text-gray-500 dark:text-gray-300 hover:text-gray-800"><ThemeIcon size={15} /></button>
           </div>
         </div>
 

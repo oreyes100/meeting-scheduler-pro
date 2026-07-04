@@ -457,17 +457,17 @@ export const translations: Record<Locale, Record<string, string>> = {
 };
 
 export function getInitialLocale(): Locale {
-  if (typeof window === 'undefined') return 'en';
+  if (typeof window === 'undefined') return 'es';
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY) as Locale | null;
     if (stored === 'en' || stored === 'es') return stored;
   } catch {
     // ignore
   }
-  // Fall back to browser language
-  const browser = (typeof navigator !== 'undefined' && navigator.language) || 'en';
-  if (browser.toLowerCase().startsWith('es')) return 'es';
-  return 'en';
+  // Español por defecto; solo inglés si el navegador lo pide explícitamente.
+  const browser = (typeof navigator !== 'undefined' && navigator.language) || 'es';
+  if (browser.toLowerCase().startsWith('en')) return 'en';
+  return 'es';
 }
 
 export function persistLocale(locale: Locale): void {
@@ -489,7 +489,7 @@ interface LocaleContextValue {
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
 export function LocaleProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>('en');
+  const [locale, setLocaleState] = useState<Locale>('es');
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect

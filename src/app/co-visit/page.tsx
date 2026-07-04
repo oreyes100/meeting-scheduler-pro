@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { IconSidebar } from '@/components/IconSidebar';
+import { SyncStatus } from '@/components/SyncStatus';
 import { printTableReport } from '@/lib/printReport';
 
 const DAYS = ['tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -128,8 +129,9 @@ export default function CoVisitPage() {
   return (
     <div className={`flex h-screen ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'} font-sans`}>
       <IconSidebar />
+      <SyncStatus pending={dirty} onSync={() => (visit?.id ? persist(visit) : Promise.resolve())} />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden pb-[52px] md:pb-0">
         <div className="bg-gradient-to-r from-cyan-700 to-cyan-900 text-white px-4 py-2 flex items-center justify-between shrink-0">
           <h1 className="font-bold text-lg">Visita del Sup. de Circuito</h1>
           <div className="flex items-center gap-3">
@@ -143,9 +145,9 @@ export default function CoVisitPage() {
           </div>
         </div>
 
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           {/* Left: anfitrión, companions, activity composer */}
-          <div className={`w-[300px] border-r ${bgCard} p-3 overflow-y-auto shrink-0`}>
+          <div className={`w-full md:w-[300px] max-h-[45vh] md:max-h-none border-r ${bgCard} p-3 overflow-y-auto shrink-0`}>
             <label className="block text-xs font-medium mb-1">Anfitrión</label>
             <select className={inputCls} value={visit?.host_id || ''} onChange={e => setField('host_id', e.target.value || null)}>
               <option value=""></option>

@@ -9,6 +9,7 @@ import {
 import { useTheme } from '@/lib/theme';
 import { printTableReport } from '@/lib/printReport';
 import { IconSidebar } from '@/components/IconSidebar';
+import { SyncStatus } from '@/components/SyncStatus';
 
 const WEEK_COUNT = 40;
 
@@ -164,8 +165,9 @@ export default function PublicTalksPage() {
   return (
     <div className={`flex h-screen ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'} font-sans`}>
       <IconSidebar />
+      <SyncStatus />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden pb-[52px] md:pb-0">
         {/* Header */}
         <div className="bg-gradient-to-r from-teal-600 to-teal-800 text-white px-4 py-2 flex items-center justify-between shrink-0">
           <h1 className="font-bold text-lg">Discursos Públicos</h1>
@@ -178,7 +180,7 @@ export default function PublicTalksPage() {
 
         {tab === 'locales' ? (
           /* ── LOCALES: list of incoming public talk weeks ── */
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
             <div className="flex-1 overflow-auto p-3">
               <table className="w-full border-collapse text-sm">
                 <thead>
@@ -228,7 +230,7 @@ export default function PublicTalksPage() {
             </div>
 
             {selected && (
-              <div className={`w-[280px] border-l ${bgCard} p-4 overflow-y-auto shrink-0`}>
+              <div className={`w-full md:w-[280px] max-h-[45vh] md:max-h-none border-l ${bgCard} p-4 overflow-y-auto shrink-0`}>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-bold text-sm">{selected.date}</h3>
                   <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
@@ -242,7 +244,7 @@ export default function PublicTalksPage() {
           </div>
         ) : (
           /* ── SALIENTES: speakers as columns, weeks as rows ── */
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
             <div className="flex-1 overflow-auto p-3">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-bold">Discursos Públicos Salientes</h2>
@@ -288,7 +290,7 @@ export default function PublicTalksPage() {
             </div>
 
             {editOutgoing && (
-              <div className={`w-[280px] border-l ${bgCard} p-4 overflow-y-auto shrink-0`}>
+              <div className={`w-full md:w-[280px] max-h-[45vh] md:max-h-none border-l ${bgCard} p-4 overflow-y-auto shrink-0`}>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-bold text-sm">Discurso Saliente</h3>
                   <button onClick={() => setEditOutgoing(null)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>

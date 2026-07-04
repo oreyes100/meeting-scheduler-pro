@@ -19,14 +19,22 @@ export default function LoginPage() {
     setError(null);
 
     try {
+      const resolveRes = await fetch('/api/resolve-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: email }),
+      });
+      const resolveData = await resolveRes.json();
+      if (!resolveRes.ok) throw new Error(resolveData.error || 'Usuario no encontrado');
+
       const { error } = await supabase.auth.signInWithPassword({
-        email,
+        email: resolveData.email,
         password,
       });
 
       if (error) throw error;
 
-      router.push('/meetings');
+      router.push('/');
       router.refresh();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Invalid credentials. Please try again.');
@@ -58,7 +66,7 @@ export default function LoginPage() {
         </div>
 
         {/* Login Card */}
-        <div className="bg-white rounded-2xl border border-border shadow-xl p-8">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-border shadow-xl p-8">
           <form onSubmit={handleLogin} className="space-y-5">
             {error && (
               <div className="flex items-start gap-3 rounded-xl bg-danger-bg border border-danger-border p-4 animate-slide-down">
@@ -70,17 +78,17 @@ export default function LoginPage() {
             {/* Email */}
             <div className="space-y-2">
               <label htmlFor="email" className="block text-sm font-semibold text-text">
-                Email Address
+                Correo o usuario
               </label>
               <div className="relative">
                 <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
                 <input
                   id="email"
-                  type="email"
+                  type="text"
                   required
-                  autoComplete="email"
-                  className="block w-full rounded-xl border border-border bg-surface-secondary pl-10 pr-4 py-2.5 text-sm text-text placeholder:text-text-muted focus:border-primary focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all duration-200 outline-none"
-                  placeholder="name@example.com"
+                  autoComplete="username"
+                  className="block w-full rounded-xl border border-border bg-surface-secondary pl-10 pr-4 py-2.5 text-sm text-text placeholder:text-text-muted focus:border-primary focus:ring-2 focus:ring-primary/20 focus:bg-white dark:focus:bg-gray-800 transition-all duration-200 outline-none"
+                  placeholder="correo@ejemplo.com o usuario"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
@@ -99,7 +107,7 @@ export default function LoginPage() {
                   type={showPassword ? 'text' : 'password'}
                   required
                   autoComplete="current-password"
-                  className="block w-full rounded-xl border border-border bg-surface-secondary pl-10 pr-12 py-2.5 text-sm text-text placeholder:text-text-muted focus:border-primary focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all duration-200 outline-none"
+                  className="block w-full rounded-xl border border-border bg-surface-secondary pl-10 pr-12 py-2.5 text-sm text-text placeholder:text-text-muted focus:border-primary focus:ring-2 focus:ring-primary/20 focus:bg-white dark:focus:bg-gray-800 transition-all duration-200 outline-none"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -136,12 +144,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Test credentials hint */}
-          <div className="mt-6 pt-5 border-t border-border-light">
-            <p className="text-xs text-text-muted text-center">
-              Test account: <span className="font-medium text-text-secondary">test@example.com</span>
-            </p>
-          </div>
         </div>
       </div>
     </div>
