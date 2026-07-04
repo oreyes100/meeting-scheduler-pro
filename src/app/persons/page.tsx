@@ -8,6 +8,7 @@ import {
 import type { Person, PersonFilter, PersonStatus, PersonGender } from '@/types';
 import { useT } from '@/lib/i18n';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { IconSidebar } from '@/components/IconSidebar';
 
 const FILTER_VALUES: PersonFilter[] = [
   'everyone', 'families', 'active_publishers', 'irregular_publishers', 'inactive_publishers',
@@ -494,7 +495,9 @@ export default function PersonsPage() {
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+    <div className="h-screen w-screen flex bg-gray-50 dark:bg-gray-900">
+      <IconSidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
       {/* Top bar */}
       <header className="bg-sky-500 text-white shadow-sm flex-shrink-0">
         <div className="flex items-center justify-between px-4 py-2">
@@ -769,6 +772,7 @@ export default function PersonsPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

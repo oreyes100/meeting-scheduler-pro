@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import {
   Home, Users, Calendar, BookOpen, Mic, MapPin, Briefcase, Eye,
   ClipboardList, Sparkles, Wrench, GlassWater, Wine, CalendarDays,
-  FileText, Sun, Moon,
+  FileText, Sun, Moon, ClipboardCheck, UserCog, Archive,
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 
@@ -19,12 +19,15 @@ const NAV: { path: string; Icon: any; title: string }[] = [
   { path: '/field-service', Icon: Briefcase, title: 'Servicio del Campo' },
   { path: '/field-service-reports', Icon: FileText, title: 'Informes de Predicación' },
   { path: '/public-witnessing', Icon: Eye, title: 'Predicación Pública' },
+  { path: '/attendance', Icon: ClipboardCheck, title: 'Asistencia a las reuniones' },
   { path: '/tasks', Icon: ClipboardList, title: 'Tareas' },
   { path: '/cleaning', Icon: Sparkles, title: 'Limpieza' },
   { path: '/maintenance', Icon: Wrench, title: 'Mantenimiento' },
   { path: '/co-visit', Icon: GlassWater, title: 'Visita Sup. Circuito' },
   { path: '/memorial', Icon: Wine, title: 'Conmemoración' },
   { path: '/events', Icon: CalendarDays, title: 'Eventos' },
+  { path: '/responsibilities', Icon: UserCog, title: 'Responsabilidades en la Congregación' },
+  { path: '/backup', Icon: Archive, title: 'Respaldar y Restaurar' },
 ];
 
 export function IconSidebar() {

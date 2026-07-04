@@ -17,6 +17,8 @@
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.1",
     "@tanstack/react-query": "^5.100.14",
+    "@types/archiver": "^8.0.0",
+    "archiver": "^8.0.0",
     "clsx": "^2.1.1",
     "docx": "^9.7.1",
     "dotenv": "^17.4.2",
