@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getSessionContext } from '@/lib/serverContext';
 import type { Person } from '@/types';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-// Field name with optional fallback list: try new field, then old field, then null.
 const PERSON_FIELDS = [
   'id',
   'first_name', 'middle_name', 'last_name', 'suffix', 'display_name',
@@ -26,12 +26,12 @@ const PERSON_FIELDS = [
 
 export async function GET(request: Request) {
   try {
+    const ctx = await getSessionContext();
     const supabase = createClient(supabaseUrl, supabaseKey);
     const { searchParams } = new URL(request.url);
     const filter = searchParams.get('filter') || 'everyone';
     const search = (searchParams.get('q') || '').trim();
 
-    // Try full field list with filters first
     try {
       let query = supabase
         .from('users')
@@ -39,6 +39,7 @@ export async function GET(request: Request) {
         .order('last_name', { ascending: true, nullsFirst: false })
         .order('first_name', { ascending: true, nullsFirst: false });
 
+      if (ctx.congreId) query = query.eq('congregation_id', ctx.congreId);
       query = applyFilter(query, filter);
 
       const { data, error } = await query;
@@ -47,16 +48,13 @@ export async function GET(request: Request) {
       const persons = (data || []).map((r) => normalize(r as unknown as Record<string, unknown>));
       return NextResponse.json({ persons: search ? accentSearch(persons, search) : persons });
     } catch (e: unknown) {
-      // Migration not applied: fall back to legacy schema
       console.warn('Person full query failed, using legacy fallback. Raw error:', e);
-      const msg = e instanceof Error ? e.message : JSON.stringify(e);
       let legacyQuery = supabase
         .from('users')
-        .select('id, name, email, available_start, available_end')
-        .order('name', { ascending: true });
-      if (search) {
-        legacyQuery = legacyQuery.ilike('name', `%${search.toLowerCase()}%`);
-      }
+        .select('id, name, email, available_start, available_end');
+      if (ctx.congreId) legacyQuery = legacyQuery.eq('congregation_id', ctx.congreId);
+      legacyQuery = legacyQuery.order('name', { ascending: true });
+      if (search) legacyQuery = legacyQuery.ilike('name', `%${search.toLowerCase()}%`);
       const { data, error } = await legacyQuery;
       if (error) throw error;
       return NextResponse.json({
@@ -71,7 +69,6 @@ export async function GET(request: Request) {
   }
 }
 
-// Strips diacritics so "martinez" matches "Martínez"
 function deaccent(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 }
@@ -86,7 +83,6 @@ function accentSearch(persons: Person[], q: string): Person[] {
 }
 
 function normalize(row: Record<string, unknown>): Person {
-  // Map legacy `name` field to display_name if display_name is missing.
   const first_name = (row.first_name as string | null) ?? null;
   const last_name = (row.last_name as string | null) ?? null;
   const display_name = (row.display_name as string | null) ?? (row.name as string | null) ?? null;
@@ -155,96 +151,56 @@ function normalize(row: Record<string, unknown>): Person {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applyFilter(query: any, filter: string): any {
   switch (filter) {
-    case 'everyone':
-      return query.neq('status', 'moved');
-    case 'families':
-      return query.eq('is_family_head', true).neq('status', 'moved');
-    case 'active_publishers':
-      return query.eq('is_active', true).neq('status', 'moved');
-    case 'irregular_publishers':
-      return query.eq('is_active', true).eq('is_publisher', true).neq('status', 'moved');
-    case 'inactive_publishers':
-      return query.eq('is_active', false).neq('status', 'moved');
-    case 'publishers':
-      return query.eq('is_publisher', true).neq('status', 'moved');
-    case 'unbaptized_publishers':
-      return query.eq('is_unbaptized_publisher', true).neq('status', 'moved');
-    case 'non_publishers':
-      return query.eq('is_publisher', false).eq('is_unbaptized_publisher', false).neq('status', 'moved');
-    case 'elders':
-      return query.eq('is_elder', true).neq('status', 'moved');
-    case 'ministerial_servants':
-      return query.eq('is_ministerial_servant', true).neq('status', 'moved');
-    case 'appointed_brothers':
-      return query.or('is_elder.eq.true,is_ministerial_servant.eq.true').eq('gender', 'male').neq('status', 'moved');
-    case 'non_appointed_active_brothers':
-      return query.eq('gender', 'male').eq('is_active', true).eq('is_elder', false).eq('is_ministerial_servant', false).neq('status', 'moved');
-    case 'brothers':
-      return query.eq('gender', 'male').neq('status', 'moved');
-    case 'sisters':
-      return query.eq('gender', 'female').neq('status', 'moved');
-    case 'all_pioneers':
-      return query.or(
-        'is_regular_pioneer.eq.true,is_special_pioneer.eq.true,is_auxiliary_pioneer.eq.true,auxiliary_pioneer_this_month.eq.true'
-      ).neq('status', 'moved');
-    case 'special_pioneers':
-      return query.eq('is_special_pioneer', true).neq('status', 'moved');
-    case 'regular_pioneers':
-      return query.eq('is_regular_pioneer', true).neq('status', 'moved');
-    case 'auxiliary_pioneers':
-      return query.or('is_auxiliary_pioneer.eq.true,auxiliary_pioneer_this_month.eq.true').neq('status', 'moved');
-    case 'family_heads':
-      return query.eq('is_family_head', true).neq('status', 'moved');
-    case 'elderly':
-      return query.eq('is_elderly', true).neq('status', 'moved');
-    case 'children':
-      return query.eq('is_child', true).neq('status', 'moved');
-    case 'blind':
-      return query.eq('is_blind', true).neq('status', 'moved');
-    case 'deaf':
-      return query.eq('is_deaf', true).neq('status', 'moved');
-    case 'anointed':
-      return query.eq('is_anointed', true).neq('status', 'moved');
-    case 'ldc_volunteers':
-      return query.eq('is_ldc_volunteer', true).neq('status', 'moved');
-    case 'kh_key':
-      return query.eq('has_kh_key', true).neq('status', 'moved');
-    case 'custom_spiritual_1':
-      return query.eq('custom_spiritual_1', true).neq('status', 'moved');
-    case 'custom_spiritual_2':
-      return query.eq('custom_spiritual_2', true).neq('status', 'moved');
-    case 'custom_spiritual_3':
-      return query.eq('custom_spiritual_3', true).neq('status', 'moved');
-    case 'custom_spiritual_4':
-      return query.eq('custom_spiritual_4', true).neq('status', 'moved');
-    case 'custom_spiritual_5':
-      return query.eq('custom_spiritual_5', true).neq('status', 'moved');
-    case 'custom_spiritual_6':
-      return query.eq('custom_spiritual_6', true).neq('status', 'moved');
-    case 'reports_directly_to_branch':
-      return query.eq('reports_directly_to_branch', true).neq('status', 'moved');
-    case 'removed':
-      return query.eq('status', 'removed');
-    case 'moved':
-      return query.eq('status', 'moved');
-    default:
-      return query.neq('status', 'moved');
+    case 'everyone': return query.neq('status', 'moved');
+    case 'families': return query.eq('is_family_head', true).neq('status', 'moved');
+    case 'active_publishers': return query.eq('is_active', true).neq('status', 'moved');
+    case 'irregular_publishers': return query.eq('is_active', true).eq('is_publisher', true).neq('status', 'moved');
+    case 'inactive_publishers': return query.eq('is_active', false).neq('status', 'moved');
+    case 'publishers': return query.eq('is_publisher', true).neq('status', 'moved');
+    case 'unbaptized_publishers': return query.eq('is_unbaptized_publisher', true).neq('status', 'moved');
+    case 'non_publishers': return query.eq('is_publisher', false).eq('is_unbaptized_publisher', false).neq('status', 'moved');
+    case 'elders': return query.eq('is_elder', true).neq('status', 'moved');
+    case 'ministerial_servants': return query.eq('is_ministerial_servant', true).neq('status', 'moved');
+    case 'appointed_brothers': return query.or('is_elder.eq.true,is_ministerial_servant.eq.true').eq('gender', 'male').neq('status', 'moved');
+    case 'non_appointed_active_brothers': return query.eq('gender', 'male').eq('is_active', true).eq('is_elder', false).eq('is_ministerial_servant', false).neq('status', 'moved');
+    case 'brothers': return query.eq('gender', 'male').neq('status', 'moved');
+    case 'sisters': return query.eq('gender', 'female').neq('status', 'moved');
+    case 'all_pioneers': return query.or('is_regular_pioneer.eq.true,is_special_pioneer.eq.true,is_auxiliary_pioneer.eq.true,auxiliary_pioneer_this_month.eq.true').neq('status', 'moved');
+    case 'special_pioneers': return query.eq('is_special_pioneer', true).neq('status', 'moved');
+    case 'regular_pioneers': return query.eq('is_regular_pioneer', true).neq('status', 'moved');
+    case 'auxiliary_pioneers': return query.or('is_auxiliary_pioneer.eq.true,auxiliary_pioneer_this_month.eq.true').neq('status', 'moved');
+    case 'family_heads': return query.eq('is_family_head', true).neq('status', 'moved');
+    case 'elderly': return query.eq('is_elderly', true).neq('status', 'moved');
+    case 'children': return query.eq('is_child', true).neq('status', 'moved');
+    case 'blind': return query.eq('is_blind', true).neq('status', 'moved');
+    case 'deaf': return query.eq('is_deaf', true).neq('status', 'moved');
+    case 'anointed': return query.eq('is_anointed', true).neq('status', 'moved');
+    case 'ldc_volunteers': return query.eq('is_ldc_volunteer', true).neq('status', 'moved');
+    case 'kh_key': return query.eq('has_kh_key', true).neq('status', 'moved');
+    case 'custom_spiritual_1': return query.eq('custom_spiritual_1', true).neq('status', 'moved');
+    case 'custom_spiritual_2': return query.eq('custom_spiritual_2', true).neq('status', 'moved');
+    case 'custom_spiritual_3': return query.eq('custom_spiritual_3', true).neq('status', 'moved');
+    case 'custom_spiritual_4': return query.eq('custom_spiritual_4', true).neq('status', 'moved');
+    case 'custom_spiritual_5': return query.eq('custom_spiritual_5', true).neq('status', 'moved');
+    case 'custom_spiritual_6': return query.eq('custom_spiritual_6', true).neq('status', 'moved');
+    case 'reports_directly_to_branch': return query.eq('reports_directly_to_branch', true).neq('status', 'moved');
+    case 'removed': return query.eq('status', 'removed');
+    case 'moved': return query.eq('status', 'moved');
+    default: return query.neq('status', 'moved');
   }
 }
 
 export async function POST(request: Request) {
   try {
+    const ctx = await getSessionContext();
     const supabase = createClient(supabaseUrl, supabaseKey);
     const body = await request.json();
 
     const first_name = (body.first_name || '').trim();
-    if (!first_name) {
-      return NextResponse.json({ error: 'First name is required' }, { status: 400 });
-    }
+    if (!first_name) return NextResponse.json({ error: 'First name is required' }, { status: 400 });
 
     const last_name = (body.last_name || '').trim() || null;
-    const display_name = [first_name, body.middle_name, last_name, body.suffix]
-      .filter(Boolean).join(' ').trim() || null;
+    const display_name = [first_name, body.middle_name, last_name, body.suffix].filter(Boolean).join(' ').trim() || null;
 
     const fullInsert = {
       first_name,
@@ -300,33 +256,17 @@ export async function POST(request: Request) {
       disable_app_access: body.disable_app_access || false,
       name: display_name || first_name,
       email: body.email || `${first_name.toLowerCase()}.${Date.now()}@placeholder.local`,
+      congregation_id: ctx.congreId ?? null,
     };
 
-    // Try full insert first
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .insert(fullInsert)
-        .select()
-        .single();
+      const { data, error } = await supabase.from('users').insert(fullInsert).select().single();
       if (error) throw error;
       return NextResponse.json({ person: data });
     } catch (e: unknown) {
-      // Migration not applied: fall back to legacy insert
       console.warn('Person full insert failed, using legacy fallback. Raw error:', e);
-      const msg = e instanceof Error ? e.message : 'unknown';
       const legacyEmail = body.email || `${first_name.toLowerCase()}.${Date.now()}@placeholder.local`;
-      const legacyInsert = {
-        name: display_name || first_name,
-        email: legacyEmail,
-        available_start: null,
-        available_end: null,
-      };
-      const { data, error } = await supabase
-        .from('users')
-        .insert(legacyInsert)
-        .select()
-        .single();
+      const { data, error } = await supabase.from('users').insert({ name: display_name || first_name, email: legacyEmail, available_start: null, available_end: null, congregation_id: ctx.congreId ?? null }).select().single();
       if (error) throw error;
       return NextResponse.json({ person: data, migrationPending: true });
     }

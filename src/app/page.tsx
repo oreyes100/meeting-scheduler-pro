@@ -14,7 +14,7 @@ export default function Home() {
   const { me, loading } = useMe();
   const isDark = mode === 'dark';
 
-  const visible = MODULES.filter(m => canAccess(me, m.key, m.adminOnly));
+  const visible = MODULES.filter(m => canAccess(me, m.key, m.adminOnly, m.superAdminOnly));
 
   const logout = async () => {
     await supabase.auth.signOut();
@@ -39,7 +39,7 @@ export default function Home() {
           <Globe size={36} />
         </div>
         <h1 className="text-2xl md:text-3xl font-extrabold tracking-wide">MEETING SCHEDULER PRO</h1>
-        <p className="text-sm text-white/85 mt-1">Congregación La Estación — Pátzcuaro</p>
+        <p className="text-sm text-white/85 mt-1">{me?.congregation_name ? `Congregación ${me.congregation_name}${me.congregation_city ? ` — ${me.congregation_city}` : ''}` : 'Meeting Scheduler Pro'}</p>
         {me?.authenticated && <p className="text-xs text-white/70 mt-1">{me.name} · {me.app_role === 'admin' ? 'Administrador' : me.app_role === 'elder' ? 'Anciano' : 'Publicador'}</p>}
       </div>
 

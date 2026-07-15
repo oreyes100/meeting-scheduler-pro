@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getSessionContext } from '@/lib/serverContext';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-// GET ?month=YYYY-MM-01            → informes de todos los publicadores de ese mes
-// GET ?user_id=...&from=...&to=... → historial de un publicador (rango de meses)
 export async function GET(request: Request) {
   try {
+    const ctx = await getSessionContext();
     const supabase = createClient(supabaseUrl, supabaseKey);
     const { searchParams } = new URL(request.url);
     const month = searchParams.get('month');
@@ -15,11 +15,8 @@ export async function GET(request: Request) {
     const from = searchParams.get('from');
     const to = searchParams.get('to');
 
-    let query = supabase
-      .from('field_service_reports')
-      .select('*')
-      .order('month', { ascending: true });
-
+    let query = supabase.from('field_service_reports').select('*').order('month', { ascending: true });
+    if (ctx.congreId) query = query.eq('congregation_id', ctx.congreId);
     if (month) query = query.eq('month', month);
     if (userId) query = query.eq('user_id', userId);
     if (from) query = query.gte('month', from);
@@ -27,7 +24,6 @@ export async function GET(request: Request) {
 
     const { data, error } = await query;
     if (error) throw error;
-
     return NextResponse.json({ reports: data || [] });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Failed to fetch field service reports';
@@ -35,15 +31,13 @@ export async function GET(request: Request) {
   }
 }
 
-// POST → upsert por (user_id, month)
 export async function POST(request: Request) {
   try {
+    const ctx = await getSessionContext();
     const supabase = createClient(supabaseUrl, supabaseKey);
     const body = await request.json();
 
-    if (!body.user_id || !body.month) {
-      return NextResponse.json({ error: 'user_id and month are required' }, { status: 400 });
-    }
+    if (!body.user_id || !body.month) return NextResponse.json({ error: 'user_id and month are required' }, { status: 400 });
 
     const { data, error } = await supabase
       .from('field_service_reports')
@@ -56,9 +50,9 @@ export async function POST(request: Request) {
         bible_studies: body.bible_studies ?? null,
         notes: body.notes ?? null,
         updated_at: new Date().toISOString(),
+        congregation_id: ctx.congreId ?? null,
       }, { onConflict: 'user_id,month' })
-      .select()
-      .single();
+      .select().single();
 
     if (error) throw error;
     return NextResponse.json({ report: data });

@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
+import { getSessionContext } from '@/lib/serverContext';
 import { sb } from '@/lib/crud';
 
 export async function GET() {
   try {
-    const { data, error } = await sb()
+    const ctx = await getSessionContext();
+    let query = sb()
       .from('users')
       .select('id, name, first_name, last_name, email1, auth_email, app_role, permissions, username')
       .order('last_name', { ascending: true });
+    if (ctx.congreId) query = query.eq('congregation_id', ctx.congreId);
+    const { data, error } = await query;
     if (error) throw error;
     return NextResponse.json({ users: data || [] });
   } catch (e: unknown) {

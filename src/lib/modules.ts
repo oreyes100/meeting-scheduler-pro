@@ -1,7 +1,7 @@
 import {
   Home, Users, Calendar, BookOpen, Mic, MapPin, Briefcase, Eye,
   ClipboardList, Sparkles, Wrench, GlassWater, Wine, CalendarDays,
-  FileText, CalendarCheck, ShieldCheck, UsersRound, ClipboardCheck, UserCog, Archive, Banknote, type LucideIcon,
+  FileText, CalendarCheck, ShieldCheck, UsersRound, ClipboardCheck, UserCog, Archive, Banknote, Building2, type LucideIcon,
 } from 'lucide-react';
 
 export interface AppModule {
@@ -12,8 +12,10 @@ export interface AppModule {
   Icon: LucideIcon;
   /** visible para rol publisher por defecto */
   publisherDefault?: boolean;
-  /** solo admin */
+  /** solo admin de la congregación */
   adminOnly?: boolean;
+  /** solo super-admin global */
+  superAdminOnly?: boolean;
 }
 
 export const MODULES: AppModule[] = [
@@ -39,6 +41,7 @@ export const MODULES: AppModule[] = [
   { key: 'permissions', path: '/permissions', title: 'Privilegios', description: 'Control de acceso por usuario', Icon: ShieldCheck, adminOnly: true },
   { key: 'backup', path: '/backup', title: 'Respaldar y Restaurar', description: 'Exportar/importar la base de datos — puede borrar datos existentes', Icon: Archive, adminOnly: true },
   { key: 'cuentas', path: '/cuentas', title: 'Cuentas', description: 'Contabilidad de la congregación (S-26, S-30)', Icon: Banknote },
+  { key: 'super-admin', path: '/super-admin', title: 'Super Administrador', description: 'Gestionar congregaciones y módulos habilitados', Icon: Building2, superAdminOnly: true },
 ];
 
 export function moduleByPath(pathname: string | null): AppModule | undefined {
