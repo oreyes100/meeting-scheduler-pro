@@ -14,6 +14,15 @@ export function ExportMenu({ getData, className }: { getData: () => PrintTableOp
   const [dropPos, setDropPos] = useState({ top: 0, right: 0 });
   const btnRef = useRef<HTMLButtonElement>(null);
 
+  // Precargar módulos al montar para que el dynamic import sea instant al hacer clic.
+  // Sin esto, el user-gesture window de Chrome (~1s) expira antes de la descarga.
+  useEffect(() => {
+    import('xlsx').catch(() => {});
+    import('jspdf').catch(() => {});
+    import('jspdf-autotable').catch(() => {});
+    import('docx').catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {

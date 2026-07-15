@@ -1,4 +1,3 @@
-// Exportación de reportes tabulares a XLSX, PDF y DOCX.
 import type { PrintTableOptions } from './printReport';
 
 const TEAL: [number, number, number] = [61, 125, 142];
@@ -24,22 +23,18 @@ function downloadBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// Helper: resuelve módulos CJS/ESM que pueden llegar envueltos en .default
+// Resuelve módulos CJS/ESM que llegan envueltos en .default al hacer import()
 function unwrap<T>(mod: T): T {
   if (mod && typeof mod === 'object' && 'default' in (mod as any)) {
     const d = (mod as any).default;
-    // Si .default también tiene las claves esperadas, usarlo; si no, el módulo original
     if (d && typeof d === 'object' && Object.keys(d).length > 0) return d as T;
   }
   return mod;
 }
 
 export async function exportXlsx({ title, subtitle, columns, rows }: PrintTableOptions) {
-  console.log('[exportXlsx] importing xlsx...');
   const raw = await import('xlsx');
-  console.log('[exportXlsx] raw keys:', Object.keys(raw));
   const XLSX: any = unwrap(raw);
-  console.log('[exportXlsx] XLSX.utils:', !!XLSX?.utils, 'writeFile:', typeof XLSX?.writeFile);
   const data = [columns, ...rows.map(r => r.map(cellText))];
   const ws = XLSX.utils.aoa_to_sheet(data);
   ws['!cols'] = columns.map((c: string, i: number) => ({
@@ -47,21 +42,16 @@ export async function exportXlsx({ title, subtitle, columns, rows }: PrintTableO
   }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, (subtitle || 'Reporte').slice(0, 31));
-  // writeFile en browser dispara descarga
   XLSX.writeFile(wb, `${fileBase(title, subtitle)}.xlsx`);
 }
 
 export async function exportPdf({ title, congName, subtitle, columns, rows }: PrintTableOptions) {
-  console.log('[exportPdf] importing jspdf...');
   const jsPDFMod = await import('jspdf');
-  console.log('[exportPdf] jspdf keys:', Object.keys(jsPDFMod).slice(0, 5));
   const jsPDFLib: any = unwrap(jsPDFMod);
   const JsPDF = jsPDFLib.jsPDF ?? jsPDFLib;
-  console.log('[exportPdf] JsPDF type:', typeof JsPDF);
 
   const autoTableMod = await import('jspdf-autotable');
   const autoTable: any = (autoTableMod as any).default ?? autoTableMod;
-  console.log('[exportPdf] autoTable type:', typeof autoTable);
 
   const doc = new JsPDF({ orientation: columns.length > 6 ? 'landscape' : 'portrait' });
   const pageW = doc.internal.pageSize.getWidth();
@@ -86,17 +76,12 @@ export async function exportPdf({ title, congName, subtitle, columns, rows }: Pr
     alternateRowStyles: { fillColor: [238, 244, 246] },
   });
 
-  console.log('[exportPdf] generating blob...');
-  // output puede ser sync o async según versión de jsPDF
-  const rawOutput = doc.output('blob');
-  const blob: Blob = rawOutput instanceof Promise ? await rawOutput : rawOutput as Blob;
-  console.log('[exportPdf] blob type:', blob?.constructor?.name, 'size:', (blob as any)?.size);
+  // Usar blob + downloadBlob para control explícito del nombre de archivo
+  const blob: Blob = await Promise.resolve(doc.output('blob'));
   downloadBlob(blob, `${fileBase(title, subtitle)}.pdf`);
-  console.log('[exportPdf] done');
 }
 
 export async function exportDocx({ title, congName, subtitle, columns, rows }: PrintTableOptions) {
-  console.log('[exportDocx] importing docx...');
   const docxMod = await import('docx');
   const docx: any = unwrap(docxMod);
   const {
