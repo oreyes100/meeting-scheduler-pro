@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Save, Search, KeyRound, Eye, EyeOff } from 'lucide-react';
+import { Save, Search, KeyRound, Eye, EyeOff, Building2 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { IconSidebar } from '@/components/IconSidebar';
 import { SyncStatus } from '@/components/SyncStatus';
 import { MODULES } from '@/lib/modules';
+import { useMe } from '@/lib/useMe';
 
 const ROLES = [
   { value: 'admin', label: 'Administrador (todo)' },
@@ -15,9 +16,13 @@ const ROLES = [
 
 const GRANTABLE = MODULES.filter(m => !m.adminOnly && m.key !== 'my-report');
 
+interface Congregation { id: string; name: string; city: string | null; }
+
 export default function PermissionsPage() {
   const { mode } = useTheme();
+  const { me } = useMe();
   const [users, setUsers] = useState<any[]>([]);
+  const [congregations, setCongregations] = useState<Congregation[]>([]);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<any | null>(null);
   const [saving, setSaving] = useState(false);
@@ -33,7 +38,21 @@ export default function PermissionsPage() {
     setUsers(data.users || []);
   }, []);
 
+  const fetchCongregations = useCallback(async () => {
+    if (!me?.is_super_admin) return;
+    const res = await fetch('/api/super-admin/congregations');
+    const data = await res.json();
+    setCongregations(data.congregations || []);
+  }, [me?.is_super_admin]);
+
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
+  useEffect(() => { fetchCongregations(); }, [fetchCongregations]);
+
+  const congreName = (id: string | null) => {
+    if (!id) return '—';
+    const c = congregations.find(c => c.id === id);
+    return c ? `${c.name}${c.city ? ` (${c.city})` : ''}` : id.slice(0, 8) + '…';
+  };
 
   const save = async () => {
     if (!selected) return;
@@ -47,6 +66,7 @@ export default function PermissionsPage() {
         permissions: selected.permissions || [],
         auth_email: selected.auth_email || null,
         username: selected.username || null,
+        congregation_id: me?.is_super_admin ? (selected.congregation_id || null) : undefined,
       }),
     });
     setUsers(prev => prev.map(u => u.id === selected.id ? selected : u));
@@ -111,6 +131,7 @@ export default function PermissionsPage() {
                   className={`w-full text-left px-3 py-2 border-b border-gray-100 dark:border-gray-700 text-sm ${selected?.id === u.id ? (isDark ? 'bg-gray-700' : 'bg-gray-100') : (isDark ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50')}`}>
                   <div className="font-medium truncate">{name(u)}</div>
                   <div className="text-xs text-gray-400">{u.app_role || 'publisher'}{u.username ? ` · ${u.username}` : (u.auth_email ? ` · ${u.auth_email}` : '')}</div>
+                  {me?.is_super_admin && u.congregation_id && <div className="text-xs text-violet-400 truncate">{congreName(u.congregation_id)}</div>}
                 </button>
               ))}
             </div>
@@ -130,6 +151,20 @@ export default function PermissionsPage() {
                 <input className={inputCls} placeholder="nombreapellido" value={selected.username || ''}
                        onChange={e => { setSelected({ ...selected, username: e.target.value }); setDirty(true); }} />
                 <p className="text-xs text-gray-400 mt-1">Puede iniciar sesión con el correo o con este usuario.</p>
+
+                {me?.is_super_admin && (
+                  <div className="mt-4">
+                    <label className="block text-xs font-medium mb-1 flex items-center gap-1"><Building2 size={12} /> Congregación asignada</label>
+                    <select className={inputCls} value={selected.congregation_id || ''}
+                            onChange={e => { setSelected({ ...selected, congregation_id: e.target.value || null }); setDirty(true); }}>
+                      <option value="">Sin congregación</option>
+                      {congregations.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}{c.city ? ` — ${c.city}` : ''}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-400 mt-1">Solo super-admin puede reasignar usuarios entre congregaciones.</p>
+                  </div>
+                )}
 
                 <div className={`mt-4 p-3 rounded-lg border ${bgCard}`}>
                   <h3 className="font-bold text-sm mb-2 flex items-center gap-1.5"><KeyRound size={15} /> Cambiar contraseña</h3>
