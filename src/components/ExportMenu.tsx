@@ -42,7 +42,12 @@ export function ExportMenu({ getData, className }: { getData: () => PrintTableOp
   const runExport = async (fn: (d: PrintTableOptions) => void | Promise<void>) => {
     setOpen(false);
     setBusy(true);
-    try { await fn(getData()); } catch (e) { console.error('Export falló:', e); }
+    try {
+      await fn(getData());
+    } catch (e) {
+      console.error('Export falló:', e);
+      alert(`Error al exportar:\n${e instanceof Error ? e.message : String(e)}`);
+    }
     setBusy(false);
   };
 
