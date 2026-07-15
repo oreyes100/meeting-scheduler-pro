@@ -6,7 +6,7 @@ import { useTheme } from '@/lib/theme';
 import { IconSidebar } from '@/components/IconSidebar';
 import { SyncStatus } from '@/components/SyncStatus';
 
-const CUENTAS_URL = 'https://cuentas-congregacion.vercel.app';
+const CUENTAS_URL = 'https://cuentas-congregacion-bay.vercel.app';
 
 export default function CuentasPage() {
   const { mode } = useTheme();
