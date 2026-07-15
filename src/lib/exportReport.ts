@@ -86,9 +86,11 @@ export async function exportPdf({ title, congName, subtitle, columns, rows }: Pr
     alternateRowStyles: { fillColor: [238, 244, 246] },
   });
 
-  console.log('[exportPdf] saving...');
-  // Usar blob + downloadBlob para evitar que doc.save() sea bloqueado
-  const blob = doc.output('blob');
+  console.log('[exportPdf] generating blob...');
+  // output puede ser sync o async según versión de jsPDF
+  const rawOutput = doc.output('blob');
+  const blob: Blob = rawOutput instanceof Promise ? await rawOutput : rawOutput as Blob;
+  console.log('[exportPdf] blob type:', blob?.constructor?.name, 'size:', (blob as any)?.size);
   downloadBlob(blob, `${fileBase(title, subtitle)}.pdf`);
   console.log('[exportPdf] done');
 }
