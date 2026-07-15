@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Printer, X, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Check } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { IconSidebar } from '@/components/IconSidebar';
 import { SyncStatus } from '@/components/SyncStatus';
-import { printTableReport, type PrintTableOptions } from '@/lib/printReport';
+import type { PrintTableOptions } from '@/lib/printReport';
 import { ExportMenu } from '@/components/ExportMenu';
 
 const MONTH_LABELS = [
@@ -220,8 +220,7 @@ export default function FieldServiceReportsPage() {
     };
   };
 
-  const printS21 = () => {
-    if (!detailUser) return;
+  const getS21Data = (): PrintTableOptions => {
     const months = serviceYearMonths(serviceYear);
     const byMonth: Record<string, Report> = {};
     for (const r of history) byMonth[r.month] = r;
@@ -236,13 +235,13 @@ export default function FieldServiceReportsPage() {
         r?.notes || '',
       ];
     });
-    printTableReport({
+    return {
       title: `Registro de publicador — ${personName(detailUser)}`,
       congName: 'Congregación',
       subtitle: `Año de servicio ${serviceYear}-${serviceYear + 1}`,
       columns: ['Mes', 'Informó', 'Prec. aux.', 'Horas', 'Estudios', 'Notas'],
       rows,
-    });
+    };
   };
 
   const isDark = mode === 'dark';
@@ -391,8 +390,8 @@ export default function FieldServiceReportsPage() {
             <div className={`w-[380px] border-l ${bgCard} p-4 overflow-y-auto shrink-0`}>
               <div className="flex items-center justify-between mb-1">
                 <h3 className="font-bold text-sm">{personName(detailUser)} <span className="text-gray-400 text-xs">{roleLabel(detailUser)}</span></h3>
-                <div className="flex gap-1">
-                  <button onClick={printS21} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" title="Imprimir registro"><Printer size={16} /></button>
+                <div className="flex gap-1 items-center">
+                  <ExportMenu getData={getS21Data} className="text-gray-400" />
                   <button onClick={() => setDetailUser(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={16} /></button>
                 </div>
               </div>

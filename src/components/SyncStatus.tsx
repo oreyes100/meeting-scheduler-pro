@@ -76,11 +76,11 @@ export function SyncStatus({ pending = false, onSync, className }: Props) {
       type="button"
       onClick={handleClick}
       title={label}
-      className={`fixed z-50 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold shadow-lg border transition-colors ${
+      className={`fixed z-40 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold shadow-lg border transition-colors ${
         green
           ? 'bg-green-600 border-green-500 text-white hover:bg-green-700'
           : 'bg-red-600 border-red-500 text-white hover:bg-red-700'
-      } ${className || 'top-2 right-3'}`}
+      } ${className || 'bottom-16 right-3 md:bottom-3'}`}
     >
       <Icon size={13} className={spinning ? 'animate-spin' : ''} />
       <span className="hidden sm:inline">{label}</span>
