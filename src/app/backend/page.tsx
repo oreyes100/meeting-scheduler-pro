@@ -35,6 +35,7 @@ export default function BackendPage() {
   const [congres, setCongres] = useState<Congregation[]>([]);
   const [fetching, setFetching] = useState(true);
   const [globalErr, setGlobalErr] = useState<string | null>(null);
+  const [migrationPending, setMigrationPending] = useState(false);
 
   /* Provisioning state */
   const [prov, setProv] = useState({
@@ -64,6 +65,7 @@ export default function BackendPage() {
       const res = await fetch('/api/super-admin/congregations');
       const d = await res.json();
       setCongres(d.congregations || []);
+      setMigrationPending(!!d.migration_pending);
     } catch (e: unknown) {
       setGlobalErr(e instanceof Error ? e.message : 'Error');
     } finally { setFetching(false); }
@@ -158,6 +160,14 @@ export default function BackendPage() {
           <div className="p-3 rounded-lg bg-red-900/30 border border-red-700 text-red-300 text-sm flex items-center gap-2">
             <X size={13} /> {globalErr}
             <button onClick={() => setGlobalErr(null)} className="ml-auto"><X size={13} /></button>
+          </div>
+        )}
+
+        {migrationPending && (
+          <div className="p-4 rounded-xl border border-yellow-600 bg-yellow-900/15 text-sm">
+            <p className="font-semibold text-yellow-300 mb-1">⚠ Migración de base de datos pendiente</p>
+            <p className="text-yellow-200/80 text-xs">La tabla <code className="bg-yellow-900/40 px-1 rounded">congregations</code> aún no existe. Ejecuta la migración en el SQL Editor de Supabase para activar el soporte multi-congregación.</p>
+            <p className="text-yellow-200/60 text-xs mt-1">Archivo: <code className="bg-yellow-900/40 px-1 rounded">supabase/migrations/20260715000000_multi_congregation.sql</code></p>
           </div>
         )}
 

@@ -15,7 +15,9 @@ export async function GET() {
     .from('congregations')
     .select('*')
     .order('name');
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Table may not exist yet (migration pending)
+  if (error) return NextResponse.json({ congregations: [], migration_pending: true });
 
   // User counts per congregation
   const { data: counts } = await sb()
