@@ -21,17 +21,34 @@ export async function getSessionContext(): Promise<SessionContext> {
   if (!user?.email) return { userId: null, congreId: null, isSuperAdmin: false, email: null };
 
   const email = user.email.toLowerCase();
-  const { data } = await sb()
+
+  // Env-var super-admin list works before AND after migration
+  const envAdmins = (process.env.SUPER_ADMIN_EMAILS || '')
+    .split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+  const envIsSuperAdmin = envAdmins.includes(email);
+
+  // Try post-migration columns; fall back gracefully if they don't exist yet
+  const { data, error } = await sb()
     .from('users')
     .select('id, congregation_id, is_super_admin')
     .or(`auth_email.eq.${email},email1.eq.${email}`)
     .limit(1);
 
+  if (error) {
+    // Columns not yet migrated — id-only fallback
+    const { data: fb } = await sb()
+      .from('users')
+      .select('id')
+      .or(`auth_email.eq.${email},email1.eq.${email}`)
+      .limit(1);
+    return { userId: fb?.[0]?.id ?? null, congreId: null, isSuperAdmin: envIsSuperAdmin, email };
+  }
+
   const row = data?.[0];
   return {
     userId: row?.id ?? null,
     congreId: row?.congregation_id ?? null,
-    isSuperAdmin: !!row?.is_super_admin,
+    isSuperAdmin: envIsSuperAdmin || !!row?.is_super_admin,
     email,
   };
 }

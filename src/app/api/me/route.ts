@@ -15,7 +15,14 @@ export async function GET() {
     if (!user?.email) return NextResponse.json({ authenticated: false });
 
     const email = user.email.toLowerCase();
-    const { data: rows } = await sb()
+
+    // Env-var super-admin check works before AND after migration
+    const envAdmins = (process.env.SUPER_ADMIN_EMAILS || '')
+      .split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+    const envIsSuperAdmin = envAdmins.includes(email);
+
+    // Try post-migration query; fall back if new columns don't exist yet
+    const { data: rows, error } = await sb()
       .from('users')
       .select(`
         id, name, first_name, last_name, app_role, permissions, auth_email, email1,
@@ -26,7 +33,19 @@ export async function GET() {
       .or(`auth_email.eq.${email},email1.eq.${email}`)
       .limit(1);
 
-    const row = rows?.[0] as any || null;
+    let row: any = null;
+    if (error) {
+      // Columns not yet migrated — query only stable columns
+      const { data: fb } = await sb()
+        .from('users')
+        .select('id, name, first_name, last_name, app_role, permissions, auth_email, email1, is_regular_pioneer, is_special_pioneer, is_auxiliary_pioneer')
+        .or(`auth_email.eq.${email},email1.eq.${email}`)
+        .limit(1);
+      row = fb?.[0] ?? null;
+    } else {
+      row = rows?.[0] ?? null;
+    }
+
     const congre = row?.congregations ?? null;
 
     return NextResponse.json({
@@ -43,7 +62,7 @@ export async function GET() {
       congregation_name: congre?.name || null,
       congregation_city: congre?.city || null,
       enabled_modules: Array.isArray(congre?.enabled_modules) ? congre.enabled_modules : null,
-      is_super_admin: !!row?.is_super_admin,
+      is_super_admin: envIsSuperAdmin || !!row?.is_super_admin,
     });
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Error' }, { status: 500 });
