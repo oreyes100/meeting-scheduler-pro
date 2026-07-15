@@ -52,14 +52,16 @@ export async function exportXlsx({ title, subtitle, columns, rows }: PrintTableO
 }
 
 export async function exportPdf({ title, congName, subtitle, columns, rows }: PrintTableOptions) {
+  console.log('[exportPdf] importing jspdf...');
   const jsPDFMod = await import('jspdf');
-  // jspdf puede llegar como { jsPDF } o { default: { jsPDF } }
+  console.log('[exportPdf] jspdf keys:', Object.keys(jsPDFMod).slice(0, 5));
   const jsPDFLib: any = unwrap(jsPDFMod);
   const JsPDF = jsPDFLib.jsPDF ?? jsPDFLib;
+  console.log('[exportPdf] JsPDF type:', typeof JsPDF);
 
   const autoTableMod = await import('jspdf-autotable');
-  // jspdf-autotable v5: la función es el export default
   const autoTable: any = (autoTableMod as any).default ?? autoTableMod;
+  console.log('[exportPdf] autoTable type:', typeof autoTable);
 
   const doc = new JsPDF({ orientation: columns.length > 6 ? 'landscape' : 'portrait' });
   const pageW = doc.internal.pageSize.getWidth();
@@ -84,10 +86,15 @@ export async function exportPdf({ title, congName, subtitle, columns, rows }: Pr
     alternateRowStyles: { fillColor: [238, 244, 246] },
   });
 
-  doc.save(`${fileBase(title, subtitle)}.pdf`);
+  console.log('[exportPdf] saving...');
+  // Usar blob + downloadBlob para evitar que doc.save() sea bloqueado
+  const blob = doc.output('blob');
+  downloadBlob(blob, `${fileBase(title, subtitle)}.pdf`);
+  console.log('[exportPdf] done');
 }
 
 export async function exportDocx({ title, congName, subtitle, columns, rows }: PrintTableOptions) {
+  console.log('[exportDocx] importing docx...');
   const docxMod = await import('docx');
   const docx: any = unwrap(docxMod);
   const {
