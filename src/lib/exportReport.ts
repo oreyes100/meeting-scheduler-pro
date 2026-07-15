@@ -35,8 +35,11 @@ function unwrap<T>(mod: T): T {
 }
 
 export async function exportXlsx({ title, subtitle, columns, rows }: PrintTableOptions) {
+  console.log('[exportXlsx] importing xlsx...');
   const raw = await import('xlsx');
+  console.log('[exportXlsx] raw keys:', Object.keys(raw));
   const XLSX: any = unwrap(raw);
+  console.log('[exportXlsx] XLSX.utils:', !!XLSX?.utils, 'writeFile:', typeof XLSX?.writeFile);
   const data = [columns, ...rows.map(r => r.map(cellText))];
   const ws = XLSX.utils.aoa_to_sheet(data);
   ws['!cols'] = columns.map((c: string, i: number) => ({

@@ -43,9 +43,13 @@ export function ExportMenu({ getData, className }: { getData: () => PrintTableOp
     setOpen(false);
     setBusy(true);
     try {
-      await fn(getData());
+      console.log('[ExportMenu] getData...');
+      const data = getData();
+      console.log('[ExportMenu] rows:', data.rows.length, 'cols:', data.columns.length);
+      await fn(data);
+      console.log('[ExportMenu] done');
     } catch (e) {
-      console.error('Export falló:', e);
+      console.error('[ExportMenu] Export falló:', e);
       alert(`Error al exportar:\n${e instanceof Error ? e.message : String(e)}`);
     }
     setBusy(false);
