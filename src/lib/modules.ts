@@ -1,7 +1,7 @@
 import {
   Home, Users, Calendar, BookOpen, Mic, MapPin, Briefcase, Eye,
   ClipboardList, Sparkles, Wrench, GlassWater, Wine, CalendarDays,
-  FileText, CalendarCheck, ShieldCheck, UsersRound, ClipboardCheck, UserCog, Archive, type LucideIcon,
+  FileText, CalendarCheck, ShieldCheck, UsersRound, ClipboardCheck, UserCog, Archive, Banknote, type LucideIcon,
 } from 'lucide-react';
 
 export interface AppModule {
@@ -38,6 +38,7 @@ export const MODULES: AppModule[] = [
   { key: 'group-reports', path: '/group-reports', title: 'Informes de mi Grupo', description: 'Captura los informes pendientes de tu grupo de predicación', Icon: UsersRound },
   { key: 'permissions', path: '/permissions', title: 'Privilegios', description: 'Control de acceso por usuario', Icon: ShieldCheck, adminOnly: true },
   { key: 'backup', path: '/backup', title: 'Respaldar y Restaurar', description: 'Exportar/importar la base de datos — puede borrar datos existentes', Icon: Archive, adminOnly: true },
+  { key: 'cuentas', path: '/cuentas', title: 'Cuentas', description: 'Contabilidad de la congregación (S-26, S-30)', Icon: Banknote },
 ];
 
 export function moduleByPath(pathname: string | null): AppModule | undefined {
