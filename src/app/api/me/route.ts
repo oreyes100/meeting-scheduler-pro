@@ -31,6 +31,7 @@ export async function GET() {
         congregations ( name, city, enabled_modules )
       `)
       .or(`auth_email.eq.${email},email1.eq.${email}`)
+      .order('updated_at', { ascending: false, nullsFirst: false })
       .limit(1);
 
     let row: any = null;

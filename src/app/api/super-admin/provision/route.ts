@@ -73,30 +73,65 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Error creating auth user: ${authErr.message}` }, { status: 500 });
   }
 
-  // 3. Create users table row
+  // 3. Upsert users table row — update if email already exists, insert otherwise
   const displayName = [admin_first_name.trim(), admin_last_name?.trim()].filter(Boolean).join(' ');
-  const { data: userRow, error: uErr } = await adminClient
+  const username = admin_username?.trim().toLowerCase() || null;
+
+  const { data: existing } = await adminClient
     .from('users')
-    .insert({
-      first_name: admin_first_name.trim(),
-      last_name: admin_last_name?.trim() || null,
-      name: displayName,
-      display_name: displayName,
-      email: email,
-      email1: email,
-      auth_email: email,
-      username: admin_username?.trim().toLowerCase() || null,
-      app_role: 'admin',
-      permissions: [],
-      congregation_id: congre.id,
-      is_active: true,
-      is_publisher: false,
-      status: 'active',
-    })
-    .select().single();
+    .select('id')
+    .or(`auth_email.eq.${email},email1.eq.${email}`)
+    .limit(1)
+    .single();
+
+  let userRow: any = null;
+  let uErr: any = null;
+
+  if (existing?.id) {
+    // Row already exists — reassign to the new congregation
+    const { data, error } = await adminClient
+      .from('users')
+      .update({
+        first_name: admin_first_name.trim(),
+        last_name: admin_last_name?.trim() || null,
+        name: displayName,
+        display_name: displayName,
+        auth_email: email,
+        email1: email,
+        username: username ?? undefined,
+        app_role: 'admin',
+        congregation_id: congre.id,
+        is_active: true,
+        is_super_admin: false,
+      })
+      .eq('id', existing.id)
+      .select().single();
+    userRow = data; uErr = error;
+  } else {
+    const { data, error } = await adminClient
+      .from('users')
+      .insert({
+        first_name: admin_first_name.trim(),
+        last_name: admin_last_name?.trim() || null,
+        name: displayName,
+        display_name: displayName,
+        email,
+        email1: email,
+        auth_email: email,
+        username,
+        app_role: 'admin',
+        permissions: [],
+        congregation_id: congre.id,
+        is_active: true,
+        is_publisher: false,
+        is_super_admin: false,
+        status: 'active',
+      })
+      .select().single();
+    userRow = data; uErr = error;
+  }
 
   if (uErr) {
-    // Roll back auth user and congregation on users table failure
     await adminClient.auth.admin.deleteUser(authData.user!.id);
     await adminClient.from('congregations').delete().eq('id', congre.id);
     return NextResponse.json({ error: `Error creating user record: ${uErr.message}` }, { status: 500 });
