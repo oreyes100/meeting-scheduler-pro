@@ -6,6 +6,8 @@ import { useTheme } from '@/lib/theme';
 import { IconSidebar } from '@/components/IconSidebar';
 import { SyncStatus } from '@/components/SyncStatus';
 import { useMe } from '@/lib/useMe';
+import { ExportMenu } from '@/components/ExportMenu';
+import type { PrintTableOptions } from '@/lib/printReport';
 
 interface Report {
   id?: string;
@@ -136,6 +138,26 @@ export default function GroupReportsPage() {
 
   const pending = useMemo(() => members.filter(p => !reports[p.id]?.participated).length, [members, reports]);
 
+  // Datos del grupo para imprimir/exportar
+  const getGroupData = (): PrintTableOptions => ({
+    title: 'Informes de mi Grupo',
+    congName: groupName || 'Congregación',
+    subtitle: monthLabel(month),
+    columns: ['Publicador', 'Categoría', 'Informó', 'Prec. aux.', 'Horas', 'Estudios', 'Notas'],
+    rows: members.map(p => {
+      const r = reports[p.id];
+      return [
+        `${personName(p)} ${roleLabel(p)}`.trim(),
+        isPioneerFlag(p) ? 'Prec. regular' : r?.is_auxiliary_pioneer ? 'Prec. auxiliar' : 'Publicador',
+        r?.participated ? 'Sí' : '—',
+        r?.is_auxiliary_pioneer ? 'Sí' : '',
+        r?.hours != null ? String(r.hours) : '',
+        r?.bible_studies != null ? String(r.bible_studies) : '',
+        r?.notes || '',
+      ];
+    }),
+  });
+
   const isDark = mode === 'dark';
   const bgMain = isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900';
   const bgCard = isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
@@ -148,8 +170,9 @@ export default function GroupReportsPage() {
       <SyncStatus />
 
       <div className="flex-1 flex flex-col overflow-hidden pb-[52px] md:pb-0">
-        <div className="bg-gradient-to-r from-purple-600 to-purple-800 text-white px-4 py-2 shrink-0">
+        <div className="bg-gradient-to-r from-purple-600 to-purple-800 text-white px-4 py-2 shrink-0 flex items-center justify-between">
           <h1 className="font-bold text-lg">Informes de mi Grupo{groupName ? ` — ${groupName}` : ''}</h1>
+          {groupName && <ExportMenu getData={getGroupData} />}
         </div>
 
         <div className="flex items-center justify-center gap-4 py-3 shrink-0">

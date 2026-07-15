@@ -5,7 +5,8 @@ import { ChevronLeft, ChevronRight, Printer, X, Check } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { IconSidebar } from '@/components/IconSidebar';
 import { SyncStatus } from '@/components/SyncStatus';
-import { printTableReport } from '@/lib/printReport';
+import { printTableReport, type PrintTableOptions } from '@/lib/printReport';
+import { ExportMenu } from '@/components/ExportMenu';
 
 const MONTH_LABELS = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -195,8 +196,10 @@ export default function FieldServiceReportsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [publishers, reports]);
 
-  const printMonth = () => {
-    const rows = publishers.map(p => {
+  // Datos del mes para imprimir/exportar (respeta el filtro de grupo activo)
+  const getMonthData = (): PrintTableOptions => {
+    const groupName = groupFilter ? groups.find((g: any) => g.id === groupFilter)?.name : '';
+    const rows = filteredPublishers.map(p => {
       const r = reports[p.id];
       const cat = categoryOf(p);
       return [
@@ -208,13 +211,13 @@ export default function FieldServiceReportsPage() {
         r?.notes || '',
       ];
     });
-    printTableReport({
+    return {
       title: 'Informes de Predicación',
       congName: 'Congregación',
-      subtitle: monthLabel(month),
+      subtitle: `${monthLabel(month)}${groupName ? ` — ${groupName}` : ''}`,
       columns: ['Publicador', 'Categoría', 'Informó', 'Horas', 'Estudios', 'Notas'],
       rows,
-    });
+    };
   };
 
   const printS21 = () => {
@@ -279,9 +282,7 @@ export default function FieldServiceReportsPage() {
             <button onClick={() => setTab('congregation')} className={`px-3 py-1 rounded text-sm font-medium ${tab === 'congregation' ? 'bg-white/20' : 'hover:bg-white/10'}`}>Congregación</button>
             <button onClick={() => setTab('jw')} className={`px-3 py-1 rounded text-sm font-medium ${tab === 'jw' ? 'bg-white/20' : 'hover:bg-white/10'}`}>JW.org (S-1)</button>
             <button onClick={() => setTab('publishers')} className={`px-3 py-1 rounded text-sm font-medium ${tab === 'publishers' ? 'bg-white/20' : 'hover:bg-white/10'}`}>Publicadores</button>
-            <button onClick={printMonth} className="p-1.5 hover:bg-white/10 rounded" title="Imprimir mes">
-              <Printer size={18} />
-            </button>
+            <ExportMenu getData={getMonthData} />
           </div>
         </div>
 
