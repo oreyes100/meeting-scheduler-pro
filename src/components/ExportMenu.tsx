@@ -26,9 +26,10 @@ export function ExportMenu({ getData, className }: { getData: () => PrintTableOp
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (btnRef.current && !btnRef.current.closest('[data-export-menu]')?.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const target = e.target as Node;
+      const insideRoot = btnRef.current?.closest('[data-export-menu="root"]')?.contains(target);
+      const insideDropdown = (document.querySelector('[data-export-menu="dropdown"]') as HTMLElement | null)?.contains(target);
+      if (!insideRoot && !insideDropdown) setOpen(false);
     };
     const onScroll = () => setOpen(false);
     document.addEventListener('mousedown', onDown);
