@@ -32,7 +32,6 @@ export async function getSessionContext(): Promise<SessionContext> {
     .from('users')
     .select('id, congregation_id, is_super_admin')
     .or(`auth_email.eq.${email},email1.eq.${email}`)
-    .order('updated_at', { ascending: false, nullsFirst: false })
     .limit(1);
 
   if (error) {
