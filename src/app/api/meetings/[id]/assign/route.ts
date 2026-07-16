@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { sb } from '@/lib/crud';
+import { getSessionContext } from '@/lib/serverContext';
 import { runAutoAssignment } from '@/services/auto-assign-service.js';
 
 export async function POST(
@@ -6,6 +8,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await getSessionContext();
     const { id: meetingId } = await params;
 
     if (!meetingId) {
@@ -15,12 +18,15 @@ export async function POST(
       );
     }
 
-    // Debug: Check environment variables
-    console.log('🔍 DEBUG: Checking environment variables');
-    console.log('SUPABASE_URL:', process.env.SUPABASE_URL || 'NOT SET');
-    console.log('SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SET (length: ' + process.env.SUPABASE_SERVICE_ROLE_KEY.length + ')' : 'NOT SET');
-    console.log('NEXT_PUBLIC_SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL || 'NOT SET');
-    console.log('NEXT_PUBLIC_SUPABASE_ANON_KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'SET (length: ' + process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.length + ')' : 'NOT SET');
+    if (ctx.congreId && !ctx.isSuperAdmin) {
+      const { data: meeting } = await sb()
+        .from('meetings')
+        .select('id')
+        .eq('id', meetingId)
+        .eq('congregation_id', ctx.congreId)
+        .maybeSingle();
+      if (!meeting) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
 
     console.log(`🤖 Triggering auto-assignment for meeting: ${meetingId}`);
     const result = await runAutoAssignment(meetingId);

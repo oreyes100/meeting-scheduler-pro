@@ -1,18 +1,16 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+import { sb } from '@/lib/crud';
+import { getSessionContext } from '@/lib/serverContext';
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const ctx = await getSessionContext();
+    const supabase = sb();
     const { id } = await params;
     const body = await request.json();
 
-    // Update group details
     if (body.group) {
-      const { error } = await supabase
+      let query = supabase
         .from('field_service_groups')
         .update({
           name: body.group.name,
@@ -23,15 +21,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
           updated_at: new Date().toISOString(),
         })
         .eq('id', id);
+      if (ctx.congreId && !ctx.isSuperAdmin) query = query.eq('congregation_id', ctx.congreId);
+      const { error } = await query;
       if (error) throw error;
     }
 
-    // Sync members
     if (body.members) {
-      // Delete existing members
       await supabase.from('field_service_group_members').delete().eq('group_id', id);
 
-      // Insert new members
       if (body.members.length > 0) {
         const rows = body.members.map((m: any, i: number) => ({
           group_id: id,
@@ -53,10 +50,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const ctx = await getSessionContext();
+    const supabase = sb();
     const { id } = await params;
 
-    const { error } = await supabase.from('field_service_groups').delete().eq('id', id);
+    let query = supabase.from('field_service_groups').delete().eq('id', id);
+    if (ctx.congreId && !ctx.isSuperAdmin) query = query.eq('congregation_id', ctx.congreId);
+    const { error } = await query;
     if (error) throw error;
     return NextResponse.json({ success: true });
   } catch (error: unknown) {

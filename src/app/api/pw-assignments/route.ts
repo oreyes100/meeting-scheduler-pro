@@ -1,16 +1,15 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { sb } from '@/lib/crud';
+import { getSessionContext } from '@/lib/serverContext';
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
+// TODO: pw_assignments table needs congregation_id column before filtering can be applied
 export async function GET(request: Request) {
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    await getSessionContext();
     const { searchParams } = new URL(request.url);
     const weekDate = searchParams.get('week');
 
-    let query = supabase
+    let query = sb()
       .from('pw_assignments')
       .select(`
         *,
@@ -40,10 +39,10 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    await getSessionContext();
     const body = await request.json();
 
-    const { data, error } = await supabase
+    const { data, error } = await sb()
       .from('pw_assignments')
       .insert({
         shift_id: body.shift_id,
@@ -69,13 +68,13 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    await getSessionContext();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
 
-    const { error } = await supabase.from('pw_assignments').delete().eq('id', id);
+    const { error } = await sb().from('pw_assignments').delete().eq('id', id);
     if (error) throw error;
     return NextResponse.json({ success: true });
   } catch (error: unknown) {

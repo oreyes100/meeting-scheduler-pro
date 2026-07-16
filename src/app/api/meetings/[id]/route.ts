@@ -1,18 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+import { sb } from '@/lib/crud';
+import { getSessionContext } from '@/lib/serverContext';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await getSessionContext();
     const { id } = await params;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = sb();
 
-    const { data: meeting, error: mError } = await supabase
+    let mQuery = supabase
       .from('meetings')
       .select(`
         *,
@@ -22,9 +21,11 @@ export async function GET(
         cbs_conductor:cbs_conductor_id ( id, name ),
         cbs_reader:cbs_reader_id ( id, name )
       `)
-      .eq('id', id)
-      .single();
+      .eq('id', id);
 
+    if (ctx.congreId && !ctx.isSuperAdmin) mQuery = mQuery.eq('congregation_id', ctx.congreId);
+
+    const { data: meeting, error: mError } = await mQuery.single();
     if (mError) throw mError;
 
     const { data: parts, error: pError } = await supabase
@@ -63,13 +64,14 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await getSessionContext();
     const { id } = await params;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = sb();
     const body = await request.json();
 
     const { parts, ...meetingData } = body;
 
-    const { error: mError } = await supabase
+    let mUpdate = supabase
       .from('meetings')
       .update({
         song_opening: meetingData.song_opening !== undefined ? Number(meetingData.song_opening) : undefined,
@@ -84,6 +86,8 @@ export async function PUT(
       })
       .eq('id', id);
 
+    if (ctx.congreId && !ctx.isSuperAdmin) mUpdate = mUpdate.eq('congregation_id', ctx.congreId);
+    const { error: mError } = await mUpdate;
     if (mError) throw mError;
 
     if (parts && Array.isArray(parts)) {
@@ -141,14 +145,17 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await getSessionContext();
     const { id } = await params;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = sb();
 
-    const { error } = await supabase
+    let query = supabase
       .from('meetings')
       .delete()
       .eq('id', id);
 
+    if (ctx.congreId && !ctx.isSuperAdmin) query = query.eq('congregation_id', ctx.congreId);
+    const { error } = await query;
     if (error) throw error;
 
     return NextResponse.json({ success: true, message: 'Meeting deleted successfully' });

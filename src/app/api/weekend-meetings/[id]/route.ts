@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+import { sb } from '@/lib/crud';
+import { getSessionContext } from '@/lib/serverContext';
 
 const ALLOWED = [
   'speaker_type', 'local_speaker_id', 'visiting_speaker_id', 'other_speaker_name',
@@ -13,8 +11,9 @@ const ALLOWED = [
 
 export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
+    const ctx = await getSessionContext();
     const { id } = await context.params;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = sb();
     const body = await request.json();
 
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -22,7 +21,6 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
       if (k in body) updates[k] = body[k];
     }
 
-    // Record outline history when outline assigned
     if (updates.outline_id) {
       const { data: wm } = await supabase
         .from('weekend_meetings')
@@ -31,7 +29,6 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         .single();
 
       if (wm && wm.outline_id !== updates.outline_id) {
-        // Get speaker name for history
         let speakerName: string | null = null;
         const speakerType = updates.speaker_type || body.speaker_type;
         if (speakerType === 'visiting' && updates.visiting_speaker_id) {
@@ -50,10 +47,13 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
       }
     }
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('weekend_meetings')
       .update(updates)
-      .eq('id', id)
+      .eq('id', id);
+    if (ctx.congreId && !ctx.isSuperAdmin) query = query.eq('congregation_id', ctx.congreId);
+
+    const { data, error } = await query
       .select(`
         *,
         outline:public_talk_outlines(*),
@@ -75,9 +75,12 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
 
 export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
+    const ctx = await getSessionContext();
     const { id } = await context.params;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    const { error } = await supabase.from('weekend_meetings').delete().eq('id', id);
+    const supabase = sb();
+    let query = supabase.from('weekend_meetings').delete().eq('id', id);
+    if (ctx.congreId && !ctx.isSuperAdmin) query = query.eq('congregation_id', ctx.congreId);
+    const { error } = await query;
     if (error) throw error;
     return NextResponse.json({ success: true });
   } catch (e: unknown) {

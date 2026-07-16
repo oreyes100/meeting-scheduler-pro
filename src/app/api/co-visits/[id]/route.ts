@@ -1,7 +1,16 @@
 import { updateRow, deleteRow } from "@/lib/crud";
+import { getSessionContext } from "@/lib/serverContext";
+
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params; return updateRow("circuit_overseer_visits", id, await request.json());
+  const ctx = await getSessionContext();
+  const cid = ctx.congreId && !ctx.isSuperAdmin ? ctx.congreId : undefined;
+  const { id } = await params;
+  return updateRow("circuit_overseer_visits", id, await request.json(), cid);
 }
+
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params; return deleteRow("circuit_overseer_visits", id);
+  const ctx = await getSessionContext();
+  const cid = ctx.congreId && !ctx.isSuperAdmin ? ctx.congreId : undefined;
+  const { id } = await params;
+  return deleteRow("circuit_overseer_visits", id, cid);
 }

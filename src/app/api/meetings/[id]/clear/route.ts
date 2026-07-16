@@ -1,18 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+import { sb } from '@/lib/crud';
+import { getSessionContext } from '@/lib/serverContext';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const ctx = await getSessionContext();
     const { id: meetingId } = await params;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = sb();
 
-    // 1. Clear meeting level assignments
+    if (ctx.congreId && !ctx.isSuperAdmin) {
+      const { data: meeting } = await supabase
+        .from('meetings')
+        .select('id')
+        .eq('id', meetingId)
+        .eq('congregation_id', ctx.congreId)
+        .maybeSingle();
+      if (!meeting) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
     const { error: mError } = await supabase
       .from('meetings')
       .update({
@@ -26,7 +34,6 @@ export async function POST(
 
     if (mError) throw mError;
 
-    // 2. Clear parts assignments
     const { error: pError } = await supabase
       .from('meeting_parts')
       .update({
@@ -37,7 +44,6 @@ export async function POST(
 
     if (pError) throw pError;
 
-    // 3. Clear part_history rows
     await supabase
       .from('part_history')
       .delete()

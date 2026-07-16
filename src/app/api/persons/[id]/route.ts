@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+import { sb } from '@/lib/crud';
+import { getSessionContext } from '@/lib/serverContext';
 
 const PERSON_FIELDS = `
   id,
@@ -24,21 +22,24 @@ const PERSON_FIELDS = `
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
+    const ctx = await getSessionContext();
     const { id } = await context.params;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = sb();
     try {
-      const { data, error } = await supabase.from('users').select(PERSON_FIELDS).eq('id', id).single();
+      let query = supabase.from('users').select(PERSON_FIELDS).eq('id', id);
+      if (ctx.congreId && !ctx.isSuperAdmin) query = query.eq('congregation_id', ctx.congreId);
+      const { data, error } = await query.single();
       if (error) throw error;
       return NextResponse.json({ person: data });
     } catch (e: unknown) {
-      // Migration not applied: fall back to legacy
       const msg = e instanceof Error ? e.message : 'unknown';
       console.warn('Person [id] full fetch failed, using legacy fallback:', msg);
-      const { data, error } = await supabase
+      let query = supabase
         .from('users')
         .select('id, name, email, available_start, available_end')
-        .eq('id', id)
-        .single();
+        .eq('id', id);
+      if (ctx.congreId && !ctx.isSuperAdmin) query = query.eq('congregation_id', ctx.congreId);
+      const { data, error } = await query.single();
       if (error) throw error;
       return NextResponse.json({ person: { ...data, migrationPending: true } });
     }
@@ -51,8 +52,9 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 
 export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
+    const ctx = await getSessionContext();
     const { id } = await context.params;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = sb();
     const body = await request.json();
 
     const first_name = (body.first_name || '').trim();
@@ -128,38 +130,36 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
       update.moved_date = new Date().toISOString().split('T')[0];
     }
 
-    // Try full update first
+    const addCongreFilter = (q: any) => {
+      if (ctx.congreId && !ctx.isSuperAdmin) return q.eq('congregation_id', ctx.congreId);
+      return q;
+    };
+
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .update(update)
-        .eq('id', id)
-        .select()
-        .single();
+      const { data, error } = await addCongreFilter(
+        supabase.from('users').update(update).eq('id', id)
+      ).select().single();
       if (error) throw error;
       return NextResponse.json({ person: data });
     } catch (e: unknown) {
       console.warn('Person full update failed, using legacy fallback. Raw error:', e);
       const msg = e instanceof Error ? e.message : 'unknown';
-      // If only the new speaker-scope columns are missing, retry without them
       if (msg.includes('speaker_local') || msg.includes('speaker_visiting')) {
         const u2 = { ...update };
         delete (u2 as Record<string, unknown>).speaker_local;
         delete (u2 as Record<string, unknown>).speaker_visiting;
-        const { data, error } = await supabase.from('users').update(u2).eq('id', id).select().single();
+        const { data, error } = await addCongreFilter(
+          supabase.from('users').update(u2).eq('id', id)
+        ).select().single();
         if (!error) return NextResponse.json({ person: data, migrationPending: true });
       }
-      // Legacy fallback: only update name/email
       const legacyUpdate = {
         name: display_name || first_name,
         email: body.email || `${first_name.toLowerCase()}.${id.slice(0, 6)}@placeholder.local`,
       };
-      const { data, error } = await supabase
-        .from('users')
-        .update(legacyUpdate)
-        .eq('id', id)
-        .select()
-        .single();
+      const { data, error } = await addCongreFilter(
+        supabase.from('users').update(legacyUpdate).eq('id', id)
+      ).select().single();
       if (error) throw error;
       return NextResponse.json({ person: data, migrationPending: true });
     }
@@ -172,10 +172,20 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
 
 export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
+    const ctx = await getSessionContext();
     const { id } = await context.params;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = sb();
 
-    // Check FK usage
+    if (ctx.congreId && !ctx.isSuperAdmin) {
+      const { data: user } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', id)
+        .eq('congregation_id', ctx.congreId)
+        .maybeSingle();
+      if (!user) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
     const [meetings, parts] = await Promise.all([
       supabase.from('meetings').select('id').or(`chairman_id.eq.${id},opening_prayer_id.eq.${id},closing_prayer_id.eq.${id},cbs_conductor_id.eq.${id},cbs_reader_id.eq.${id}`),
       supabase.from('meeting_parts').select('id').or(`assigned_user_id.eq.${id},assistant_user_id.eq.${id}`),
@@ -185,7 +195,6 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
     const partCount = parts.data?.length || 0;
 
     if (meetingCount > 0 || partCount > 0) {
-      // Soft delete: mark as removed
       try {
         const { error } = await supabase
           .from('users')
@@ -193,7 +202,6 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
           .eq('id', id);
         if (error) throw error;
       } catch (e: unknown) {
-        // Legacy fallback: just mark inactive if status column missing
         const msg = e instanceof Error ? e.message : 'unknown';
         console.warn('Soft delete full update failed, using legacy fallback:', msg);
         const { error } = await supabase

@@ -1,18 +1,20 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+import { sb } from '@/lib/crud';
+import { getSessionContext } from '@/lib/serverContext';
 
 export async function GET() {
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    const { data: users, error } = await supabase
+    const ctx = await getSessionContext();
+    let query = sb()
       .from('users')
       .select('*')
       .order('name', { ascending: true });
 
+    if (ctx.congreId && !ctx.isSuperAdmin) {
+      query = query.eq('congregation_id', ctx.congreId);
+    }
+
+    const { data: users, error } = await query;
     if (error) throw error;
 
     return NextResponse.json({ users });
@@ -27,10 +29,14 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const ctx = await getSessionContext();
     const body = await request.json();
 
-    const { data: user, error } = await supabase
+    if (ctx.congreId && !ctx.isSuperAdmin) {
+      body.congregation_id = ctx.congreId;
+    }
+
+    const { data: user, error } = await sb()
       .from('users')
       .insert([body])
       .select()

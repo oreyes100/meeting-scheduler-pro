@@ -1,21 +1,19 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+import { sb } from '@/lib/crud';
+import { getSessionContext } from '@/lib/serverContext';
 
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const ctx = await getSessionContext();
+    const supabase = sb();
     const resolvedParams = await params;
     const { id } = resolvedParams;
     const body = await request.json();
 
-    // 1. Update the meeting table
-    const { error: meetingError } = await supabase
+    let meetingUpdate = supabase
       .from('meetings')
       .update({
         song_opening: body.song_opening,
@@ -31,9 +29,10 @@ export async function PUT(
       })
       .eq('id', id);
 
+    if (ctx.congreId && !ctx.isSuperAdmin) meetingUpdate = meetingUpdate.eq('congregation_id', ctx.congreId);
+    const { error: meetingError } = await meetingUpdate;
     if (meetingError) throw meetingError;
 
-    // 2. Update meeting parts
     if (body.parts && Array.isArray(body.parts)) {
       for (const part of body.parts) {
         const { error: partError } = await supabase
@@ -47,10 +46,9 @@ export async function PUT(
             student_part_type: part.student_part_type || null,
           })
           .eq('id', part.id);
-        
+
         if (partError) {
           console.error(`Error updating part ${part.id}:`, partError);
-          // We can decide whether to throw or continue. We'll throw to ensure data integrity
           throw partError;
         }
       }

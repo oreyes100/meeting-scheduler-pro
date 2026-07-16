@@ -1,22 +1,34 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { sb } from '@/lib/crud';
 import { ZipArchive } from 'archiver';
 import { PassThrough } from 'stream';
 import { tablesForSections } from '@/lib/backupSections';
 import { toCsv } from '@/lib/csv';
+import { getSessionContext } from '@/lib/serverContext';
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const TABLES_WITH_CONGREGATION_ID = new Set([
+  'meetings', 'weekend_meetings', 'field_service_groups', 'field_service_meetings',
+  'field_service_reports', 'territories', 'public_speakers', 'outgoing_talks',
+  'pw_locations', 'congregation_tasks', 'cleaning_assignments', 'maintenance_tasks',
+  'circuit_overseer_visits', 'memorial_roles', 'congregation_events', 'congregation_roles',
+  'meeting_attendance', 'users',
+]);
 
-async function fetchAllRows(table: string) {
-  const supabase = createClient(supabaseUrl, supabaseKey);
-  const { data, error } = await supabase.from(table).select('*');
+async function fetchAllRows(table: string, congregationId?: string | null) {
+  let query = sb().from(table).select('*');
+  if (congregationId && TABLES_WITH_CONGREGATION_ID.has(table)) {
+    query = query.eq('congregation_id', congregationId);
+  }
+  const { data, error } = await query;
   if (error) throw new Error(`${table}: ${error.message}`);
   return data || [];
 }
 
 export async function GET(request: Request) {
   try {
+    const ctx = await getSessionContext();
+    const congreId = ctx.congreId && !ctx.isSuperAdmin ? ctx.congreId : null;
+
     const { searchParams } = new URL(request.url);
     const sectionsParam = searchParams.get('sections');
     const format = searchParams.get('format') === 'csv' ? 'csv' : 'json';
@@ -25,7 +37,7 @@ export async function GET(request: Request) {
     const stamp = new Date().toISOString().slice(0, 10);
 
     const dump: Record<string, unknown[]> = {};
-    for (const table of tables) dump[table] = await fetchAllRows(table);
+    for (const table of tables) dump[table] = await fetchAllRows(table, congreId);
 
     if (format === 'json') {
       return new NextResponse(JSON.stringify(dump, null, 2), {
@@ -36,7 +48,6 @@ export async function GET(request: Request) {
       });
     }
 
-    // CSV: una sola tabla -> .csv plano; varias -> .zip con un .csv por tabla
     if (tables.length === 1) {
       const csv = toCsv(dump[tables[0]] as Record<string, unknown>[]);
       return new NextResponse(csv, {

@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { sb } from '@/lib/crud';
+import { getSessionContext } from '@/lib/serverContext';
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
+// TODO: public_talk_outlines table needs congregation_id column before filtering can be applied
 export async function GET() {
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    await getSessionContext();
+    const supabase = sb();
 
     const { data: outlines, error } = await supabase
       .from('public_talk_outlines')
@@ -15,7 +15,6 @@ export async function GET() {
 
     if (error) throw error;
 
-    // Attach last_given info from public_talk_history
     const { data: history } = await supabase
       .from('public_talk_history')
       .select('outline_id, date, speaker_name')
@@ -42,7 +41,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    await getSessionContext();
     const body = await request.json();
     const { number, title } = body;
 
@@ -50,7 +49,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'number and title required' }, { status: 400 });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await sb()
       .from('public_talk_outlines')
       .insert({ number: Number(number), title: String(title).trim() })
       .select()

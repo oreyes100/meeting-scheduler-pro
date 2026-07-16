@@ -1,39 +1,45 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+import { sb } from '@/lib/crud';
+import { getSessionContext } from '@/lib/serverContext';
 
 export async function GET() {
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const ctx = await getSessionContext();
+    const supabase = sb();
+    const filter = ctx.congreId && !ctx.isSuperAdmin;
 
-    // Get all meeting parts with their meeting dates, ordered by date desc
-    const { data: parts, error: partsErr } = await supabase
-      .from('meeting_parts')
-      .select('assigned_user_id, assistant_user_id, part_type, student_part_type, title, role, meeting_id')
-      .not('assigned_user_id', 'is', null);
-
-    if (partsErr) throw partsErr;
-
-    const { data: meetings, error: meetErr } = await supabase
+    let meetingsQuery = supabase
       .from('meetings')
       .select('id, date')
       .order('date', { ascending: false });
-
+    if (filter) meetingsQuery = meetingsQuery.eq('congregation_id', ctx.congreId!);
+    const { data: meetings, error: meetErr } = await meetingsQuery;
     if (meetErr) throw meetErr;
 
+    const meetingIds = (meetings || []).map(m => m.id);
     const dateById: Record<string, string> = {};
     for (const m of meetings || []) dateById[m.id] = m.date;
 
-    // Build: { [userId]: { [role]: { date, title } } } — keep only the most recent per role
+    let partsQuery = supabase
+      .from('meeting_parts')
+      .select('assigned_user_id, assistant_user_id, part_type, student_part_type, title, role, meeting_id')
+      .not('assigned_user_id', 'is', null);
+    if (filter && meetingIds.length > 0) {
+      partsQuery = partsQuery.in('meeting_id', meetingIds);
+    } else if (filter) {
+      return NextResponse.json({ history: {} });
+    }
+    const { data: parts, error: partsErr } = await partsQuery;
+    if (partsErr) throw partsErr;
+
     const history: Record<string, Record<string, { date: string; title: string }>> = {};
 
-    // Also track chairman, prayers, cbs from meetings table
-    const { data: meetingRoles, error: mrErr } = await supabase
+    let rolesQuery = supabase
       .from('meetings')
       .select('date, chairman_id, opening_prayer_id, closing_prayer_id, cbs_conductor_id, cbs_reader_id')
       .order('date', { ascending: false });
+    if (filter) rolesQuery = rolesQuery.eq('congregation_id', ctx.congreId!);
+    const { data: meetingRoles, error: mrErr } = await rolesQuery;
 
     if (!mrErr && meetingRoles) {
       for (const m of meetingRoles) {
@@ -54,7 +60,6 @@ export async function GET() {
       }
     }
 
-    // Process parts — sorted by date desc
     const sortedParts = (parts || [])
       .map(p => ({ ...p, date: dateById[p.meeting_id] || '' }))
       .filter(p => p.date)
@@ -65,7 +70,6 @@ export async function GET() {
       if (!uid) continue;
       if (!history[uid]) history[uid] = {};
 
-      // Determine the role key
       let roleKey = p.part_type || p.role || 'unknown';
       if (p.part_type === 'student_part' && p.student_part_type) {
         roleKey = `student_${p.student_part_type}`;
@@ -75,7 +79,6 @@ export async function GET() {
         history[uid][roleKey] = { date: p.date, title: p.title || '' };
       }
 
-      // Also track assistant history
       if (p.assistant_user_id) {
         if (!history[p.assistant_user_id]) history[p.assistant_user_id] = {};
         if (!history[p.assistant_user_id]['assistant']) {

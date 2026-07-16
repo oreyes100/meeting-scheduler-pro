@@ -1,18 +1,23 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { sb } from '@/lib/crud';
+import { getSessionContext } from '@/lib/serverContext';
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
-// Restore meeting_parts from the latest snapshot (undo rebuild).
-// Finds the latest unrestored snapshot, deletes current parts,
-// re-inserts the snapshot data, and restores songs.
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
+    const ctx = await getSessionContext();
     const { id } = await context.params;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = sb();
 
-    // 1. Find the latest unrestored snapshot for this meeting
+    if (ctx.congreId && !ctx.isSuperAdmin) {
+      const { data: meeting } = await supabase
+        .from('meetings')
+        .select('id')
+        .eq('id', id)
+        .eq('congregation_id', ctx.congreId)
+        .maybeSingle();
+      if (!meeting) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
     const { data: snapshot, error: snapFetchError } = await supabase
       .from('part_snapshots')
       .select('*')
@@ -32,14 +37,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       songs?: { song_opening?: number; song_middle?: number; song_closing?: number };
     };
 
-    // 2. Delete current meeting_parts
     const { error: dError } = await supabase
       .from('meeting_parts')
       .delete()
       .eq('meeting_id', id);
     if (dError) throw dError;
 
-    // 3. Re-insert parts from snapshot (strip id so Supabase generates fresh UUIDs)
     const partsToRestore = (snapshotData.parts || []).map((p: Record<string, unknown>) => {
       const { id: _oldId, meeting_id: _mId, ...rest } = p;
       return { ...rest, meeting_id: id };
@@ -52,7 +55,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       if (iError) throw iError;
     }
 
-    // 4. Restore songs if snapshot has them
     if (snapshotData.songs) {
       await supabase
         .from('meetings')
@@ -64,7 +66,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         .eq('id', id);
     }
 
-    // 5. Mark snapshot as restored
     await supabase
       .from('part_snapshots')
       .update({ restored: true, restored_at: new Date().toISOString() })

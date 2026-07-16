@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+import { sb } from '@/lib/crud';
+import { getSessionContext } from '@/lib/serverContext';
 
 const ALLOWED = [
   'name', 'number', 'congregation_id', 'language', 'time_zone',
@@ -12,8 +10,6 @@ const ALLOWED = [
   'field_service_group_count',
 ];
 
-// Asegura que existan al menos N grupos de predicación reales (Grupo 1..N).
-// No elimina grupos existentes al bajar el número, solo agrega los que falten.
 async function syncFieldServiceGroupCount(supabase: any, count: number) {
   if (!count || count < 1) return;
   const { data: groups } = await supabase
@@ -33,10 +29,11 @@ async function syncFieldServiceGroupCount(supabase: any, count: number) {
   if (toInsert.length) await supabase.from('field_service_groups').insert(toInsert);
 }
 
+// TODO: congregation_settings table needs congregation_id column before filtering can be applied
 export async function GET() {
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    const { data, error } = await supabase
+    await getSessionContext();
+    const { data, error } = await sb()
       .from('congregation_settings')
       .select('*')
       .order('created_at', { ascending: true })
@@ -54,12 +51,12 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    await getSessionContext();
+    const supabase = sb();
     const body = await request.json();
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
     for (const k of ALLOWED) if (k in body) updates[k] = body[k];
 
-    // Find existing row
     const { data: existing } = await supabase
       .from('congregation_settings')
       .select('id')

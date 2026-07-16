@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { sb } from '@/lib/crud';
+import { getSessionContext } from '@/lib/serverContext';
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
+// TODO: public_talk_history table needs congregation_id column before filtering can be applied
 export async function GET() {
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    const { data, error } = await supabase
+    await getSessionContext();
+    const { data, error } = await sb()
       .from('public_talk_history')
       .select('*, outline:public_talk_outlines(number, title)')
       .order('date', { ascending: false });

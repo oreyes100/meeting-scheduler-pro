@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
 import { sb } from '@/lib/crud';
+import { getSessionContext } from '@/lib/serverContext';
 
-// Asigna un publicador a un grupo de predicación (o lo quita de todos si group_id null)
 export async function POST(request: Request) {
   try {
+    await getSessionContext();
     const { user_id, group_id } = await request.json();
     if (!user_id) return NextResponse.json({ error: 'user_id required' }, { status: 400 });
     const supabase = sb();
 
-    // Quitar membresías previas
     const { error: delErr } = await supabase.from('field_service_group_members').delete().eq('user_id', user_id);
     if (delErr) throw delErr;
 

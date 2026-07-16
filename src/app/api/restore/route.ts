@@ -1,14 +1,19 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { sb } from '@/lib/crud';
 import { ALL_TABLES, primaryKeyOf } from '@/lib/backupSections';
 import { parseCsv } from '@/lib/csv';
-
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+import { getSessionContext } from '@/lib/serverContext';
 
 const CHUNK_SIZE = 500;
 
-// Los CSV solo tienen strings; intenta recuperar el tipo real (número, bool, null, json)
+const TABLES_WITH_CONGREGATION_ID = new Set([
+  'meetings', 'weekend_meetings', 'field_service_groups', 'field_service_meetings',
+  'field_service_reports', 'territories', 'public_speakers', 'outgoing_talks',
+  'pw_locations', 'congregation_tasks', 'cleaning_assignments', 'maintenance_tasks',
+  'circuit_overseer_visits', 'memorial_roles', 'congregation_events', 'congregation_roles',
+  'meeting_attendance', 'users',
+]);
+
 function coerce(value: string): unknown {
   if (value === '') return null;
   if (value === 'true') return true;
@@ -26,13 +31,23 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-async function writeTable(table: string, rows: Record<string, unknown>[], mode: 'merge' | 'replace') {
+async function writeTable(table: string, rows: Record<string, unknown>[], mode: 'merge' | 'replace', congregationId?: string | null) {
   if (!ALL_TABLES.includes(table)) throw new Error(`Tabla no reconocida: ${table}`);
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  const supabase = sb();
   const pk = primaryKeyOf(table);
 
+  if (congregationId && TABLES_WITH_CONGREGATION_ID.has(table)) {
+    for (const row of rows) {
+      row.congregation_id = congregationId;
+    }
+  }
+
   if (mode === 'replace') {
-    const { error } = await supabase.from(table).delete().not(pk, 'is', null);
+    let delQuery = supabase.from(table).delete().not(pk, 'is', null);
+    if (congregationId && TABLES_WITH_CONGREGATION_ID.has(table)) {
+      delQuery = delQuery.eq('congregation_id', congregationId);
+    }
+    const { error } = await delQuery;
     if (error) throw new Error(`${table} (borrado): ${error.message}`);
   }
   if (rows.length === 0) return { table, rows: 0 };
@@ -48,6 +63,9 @@ async function writeTable(table: string, rows: Record<string, unknown>[], mode: 
 
 export async function POST(request: Request) {
   try {
+    const ctx = await getSessionContext();
+    const congreId = ctx.congreId && !ctx.isSuperAdmin ? ctx.congreId : null;
+
     const form = await request.formData();
     const file = form.get('file') as File | null;
     const mode = (form.get('mode') as string) === 'replace' ? 'replace' : 'merge';
@@ -66,14 +84,14 @@ export async function POST(request: Request) {
     if (name.endsWith('.json')) {
       const dump = JSON.parse(text) as Record<string, Record<string, unknown>[]>;
       for (const table of Object.keys(dump)) {
-        if (!ALL_TABLES.includes(table)) continue; // ignora claves desconocidas, no falla el restore completo
-        results.push(await writeTable(table, dump[table], mode));
+        if (!ALL_TABLES.includes(table)) continue;
+        results.push(await writeTable(table, dump[table], mode, congreId));
       }
     } else if (name.endsWith('.csv')) {
       if (!targetTable) return NextResponse.json({ error: 'Selecciona a qué tabla corresponde el CSV' }, { status: 400 });
       const rawRows = parseCsv(text);
       const rows = rawRows.map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, coerce(v)])));
-      results.push(await writeTable(targetTable, rows, mode));
+      results.push(await writeTable(targetTable, rows, mode, congreId));
     } else {
       return NextResponse.json({ error: 'Formato no soportado — sube un .json o .csv' }, { status: 400 });
     }

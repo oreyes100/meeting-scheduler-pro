@@ -22,9 +22,11 @@ function pick(table: string, body: any) {
   return out;
 }
 
-export async function listRows(table: string, order = 'created_at') {
+export async function listRows(table: string, order = 'created_at', congregationId?: string | null) {
   try {
-    const { data, error } = await sb().from(table).select('*').order(order, { ascending: true });
+    let query = sb().from(table).select('*').order(order, { ascending: true });
+    if (congregationId) query = query.eq('congregation_id', congregationId);
+    const { data, error } = await query;
     if (error) throw error;
     return NextResponse.json({ rows: data || [] });
   } catch (e: unknown) {
@@ -32,9 +34,11 @@ export async function listRows(table: string, order = 'created_at') {
   }
 }
 
-export async function createRow(table: string, body: any) {
+export async function createRow(table: string, body: any, congregationId?: string | null) {
   try {
-    const { data, error } = await sb().from(table).insert(pick(table, body)).select().single();
+    const row = pick(table, body);
+    if (congregationId) row.congregation_id = congregationId;
+    const { data, error } = await sb().from(table).insert(row).select().single();
     if (error) throw error;
     return NextResponse.json({ row: data });
   } catch (e: unknown) {
@@ -42,12 +46,14 @@ export async function createRow(table: string, body: any) {
   }
 }
 
-export async function updateRow(table: string, id: string, body: any) {
+export async function updateRow(table: string, id: string, body: any, congregationId?: string | null) {
   try {
     const patch = pick(table, body);
     const hasUpdatedAt = ['maintenance_tasks', 'circuit_overseer_visits'];
     if (hasUpdatedAt.includes(table)) patch.updated_at = new Date().toISOString();
-    const { error } = await sb().from(table).update(patch).eq('id', id);
+    let query = sb().from(table).update(patch).eq('id', id);
+    if (congregationId) query = query.eq('congregation_id', congregationId);
+    const { error } = await query;
     if (error) throw error;
     return NextResponse.json({ success: true });
   } catch (e: unknown) {
@@ -55,9 +61,11 @@ export async function updateRow(table: string, id: string, body: any) {
   }
 }
 
-export async function deleteRow(table: string, id: string) {
+export async function deleteRow(table: string, id: string, congregationId?: string | null) {
   try {
-    const { error } = await sb().from(table).delete().eq('id', id);
+    let query = sb().from(table).delete().eq('id', id);
+    if (congregationId) query = query.eq('congregation_id', congregationId);
+    const { error } = await query;
     if (error) throw error;
     return NextResponse.json({ success: true });
   } catch (e: unknown) {

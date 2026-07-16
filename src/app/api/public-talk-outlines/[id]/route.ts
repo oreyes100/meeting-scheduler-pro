@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { sb } from '@/lib/crud';
+import { getSessionContext } from '@/lib/serverContext';
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
+// TODO: public_talk_outlines table needs congregation_id column before filtering can be applied
 export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
+    await getSessionContext();
     const { id } = await context.params;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = sb();
     const body = await request.json();
     const updates: Record<string, unknown> = {};
     if (body.number !== undefined) updates.number = Number(body.number);
@@ -30,8 +30,9 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
 
 export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
+    await getSessionContext();
     const { id } = await context.params;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = sb();
 
     const { error } = await supabase
       .from('public_talk_outlines')
