@@ -1,7 +1,7 @@
 import {
   Home, Users, Calendar, BookOpen, Mic, MapPin, Briefcase, Eye,
   ClipboardList, Sparkles, Wrench, GlassWater, Wine, CalendarDays,
-  FileText, CalendarCheck, ShieldCheck, UsersRound, ClipboardCheck, UserCog, Archive, Banknote, Building2, type LucideIcon,
+  FileText, CalendarCheck, ShieldCheck, UsersRound, ClipboardCheck, UserCog, Archive, Banknote, Building2, BookMarked, type LucideIcon,
 } from 'lucide-react';
 
 export interface AppModule {
@@ -36,6 +36,7 @@ export const MODULES: AppModule[] = [
   { key: 'co-visit', path: '/co-visit', title: 'Visita del SC', description: 'Programa de la visita del superintendente', Icon: GlassWater },
   { key: 'memorial', path: '/memorial', title: 'Conmemoración', description: 'Asignaciones de la Conmemoración', Icon: Wine },
   { key: 'events', path: '/events', title: 'Eventos', description: 'Asambleas y eventos de la congregación', Icon: CalendarDays },
+  { key: 'my-assignments', path: '/my-assignments', title: 'Mis Asignaciones', description: 'Tus asignaciones futuras en Vida y Ministerio', Icon: BookMarked, publisherDefault: true },
   { key: 'my-report', path: '/my-report', title: 'Mi Informe', description: 'Sube tu informe de predicación', Icon: CalendarCheck, publisherDefault: true },
   { key: 'group-reports', path: '/group-reports', title: 'Informes de mi Grupo', description: 'Captura los informes pendientes de tu grupo de predicación', Icon: UsersRound },
   { key: 'permissions', path: '/permissions', title: 'Privilegios', description: 'Control de acceso por usuario', Icon: ShieldCheck, adminOnly: true },

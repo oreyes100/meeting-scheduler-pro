@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { MeetingDashboard } from '@/components/MeetingDashboard';
 import { SyncStatus } from '@/components/SyncStatus';
 import { Sidebar } from '@/components/Sidebar';
@@ -19,6 +19,8 @@ export default function MeetingsPage() {
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [midweekDay, setMidweekDay] = useState<string | null>(null);
   const [auxiliaryRooms, setAuxiliaryRooms] = useState(0);
+  const [pending, setPending] = useState(false);
+  const flushRef = useRef<(() => void) | null>(null);
 
   const fetchData = useCallback(async () => {
     if (typeof window === 'undefined') return;
@@ -105,6 +107,12 @@ export default function MeetingsPage() {
   }, [fetchData]);
 
   const activeMeeting = meetings.find(m => m.id === activeMeetingId) || null;
+
+  const forceSave = async () => { flushRef.current?.(); };
+
+  const handleSaved = (data: any) => {
+    setMeetings(ms => ms.map(m => m.id === data.id ? { ...m, ...data } : m));
+  };
 
   const handleAutoAssign = async () => {
     if (!activeMeetingId) return;
@@ -234,7 +242,7 @@ export default function MeetingsPage() {
 
   return (
     <div className="flex flex-col md:flex-row h-screen bg-gray-50 dark:bg-gray-900 font-sans pb-[52px] md:pb-0">
-      <SyncStatus />
+      <SyncStatus pending={pending} onSync={forceSave} />
       {/* Sidebar */}
       <Sidebar 
         meetings={meetings}
@@ -262,6 +270,9 @@ export default function MeetingsPage() {
             midweekMeetingDay={midweekDay}
             auxiliaryRooms={auxiliaryRooms}
             onPrint={() => setPrintModalOpen(true)}
+            onDirtyChange={setPending}
+            registerFlush={(fn) => { flushRef.current = fn; }}
+            onSaved={handleSaved}
           />
         </main>
       </div>

@@ -313,9 +313,9 @@ export async function runAutoAssignment(meetingId, customClient) {
       }
     }
 
-    // 3. Bible Reading (Male or Female, can_do_bible_reading. Usually brothers/young boys)
+    // 3. Bible Reading (brothers only — women are excluded per congregation policy)
     if (part.part_type === 'bible_reading' && !part.assigned_user_id) {
-      const candidates = users.filter(u => !assignedInThisMeeting.has(u.id) && u.can_do_bible_reading);
+      const candidates = users.filter(u => !assignedInThisMeeting.has(u.id) && u.can_do_bible_reading && u.gender === 'male');
       const sorted = getLRASortedUsers(candidates, 'bible_reading');
       if (sorted.length > 0) {
         const chosen = sorted[0];

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Profile } from '@/types';
 import { Plus, Minus, FileText, Printer } from 'lucide-react';
 import { useT } from '@/lib/i18n';
@@ -19,6 +19,9 @@ interface DashboardProps {
   midweekMeetingDay?: string | null;
   auxiliaryRooms?: number;
   onPrint?: () => void;
+  onSaved?: (data: any) => void;
+  onDirtyChange?: (dirty: boolean) => void;
+  registerFlush?: (fn: () => void) => void;
 }
 
 export function MeetingDashboard({
@@ -31,10 +34,15 @@ export function MeetingDashboard({
   autoAssigning,
   midweekMeetingDay,
   auxiliaryRooms = 0,
+  onSaved,
+  onDirtyChange,
+  registerFlush,
 }: DashboardProps) {
   const [formData, setFormData] = useState<any>(null);
   const [assignHistory, setAssignHistory] = useState<Record<string, Record<string, { date: string; title: string }>>>({});
   const { t, locale } = useT();
+  const dirtyRef = useRef<any>(null);
+  const pendingRef = useRef(false);
 
   useEffect(() => {
     fetch('/api/assignment-history')
@@ -59,12 +67,16 @@ export function MeetingDashboard({
       await fetch(`/api/meetings/${dataToSave.id}/save`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dataToSave)
+        body: JSON.stringify(dataToSave),
+        keepalive: true,
       });
+      pendingRef.current = false;
+      onDirtyChange?.(false);
+      onSaved?.(dataToSave);
     } catch (err) {
       console.error('Save error', err);
     }
-  }, []);
+  }, [onDirtyChange, onSaved]);
 
   useEffect(() => {
     if (!formData || !meeting) return;
@@ -73,6 +85,29 @@ export function MeetingDashboard({
     return () => clearTimeout(handler);
     // eslint-disable-next-line react-hooks/set-state-in-effect
   }, [formData, meeting, saveMeetingData]);
+
+  // Flush pending save when switching weeks or unmounting
+  const meetingId = meeting?.id ?? null;
+  useEffect(() => {
+    return () => {
+      if (pendingRef.current && dirtyRef.current) {
+        fetch(`/api/meetings/${dirtyRef.current.id}/save`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(dirtyRef.current),
+          keepalive: true,
+        }).then(() => { pendingRef.current = false; }).catch(() => {});
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meetingId]);
+
+  // Register flush function for parent (SyncStatus button)
+  useEffect(() => {
+    registerFlush?.(() => {
+      if (dirtyRef.current) saveMeetingData(dirtyRef.current);
+    });
+  }, [registerFlush, saveMeetingData]);
 
   const handleMeetingChange = (field: string, value: any) => {
     setFormData((prev: any) => {
@@ -84,15 +119,24 @@ export function MeetingDashboard({
       if (field === 'chairman_id') {
         next.opening_prayer_id = value;
       }
+      dirtyRef.current = next;
+      pendingRef.current = true;
+      onDirtyChange?.(true);
       return next;
     });
   };
 
   const handlePartChange = (partId: string, field: string, value: any) => {
-    setFormData((prev: any) => ({
-      ...prev,
-      parts: prev.parts.map((p: any) => p.id === partId ? { ...p, [field]: value } : p)
-    }));
+    setFormData((prev: any) => {
+      const next = {
+        ...prev,
+        parts: prev.parts.map((p: any) => p.id === partId ? { ...p, [field]: value } : p),
+      };
+      dirtyRef.current = next;
+      pendingRef.current = true;
+      onDirtyChange?.(true);
+      return next;
+    });
   };
 
   // Always call hooks first; only render JSX conditionally below
@@ -149,6 +193,21 @@ export function MeetingDashboard({
     return list.map((p: any) => (
       <option key={p.id} value={p.id}>{p.first_name} {p.last_name}{fmtLastAssign(p.id, roleKey)}</option>
     ));
+  };
+
+  const bibleReadingOptions = () => {
+    const eligible = publishers.filter((p: any) => p.can_do_bible_reading && p.gender !== 'female');
+    const grayed = publishers.filter((p: any) => p.gender === 'female');
+    return [
+      ...eligible.map((p: any) => (
+        <option key={p.id} value={p.id}>{p.first_name} {p.last_name}{fmtLastAssign(p.id, 'bible_reading')}</option>
+      )),
+      ...grayed.map((p: any) => (
+        <option key={`g-${p.id}`} value={p.id} disabled style={{ color: '#9ca3af' }}>
+          {p.first_name} {p.last_name}
+        </option>
+      )),
+    ];
   };
 
   return (
@@ -283,7 +342,7 @@ export function MeetingDashboard({
                     <label className="w-[120px] text-gray-700 dark:text-gray-300 text-right pr-2 text-xs font-semibold">{bibleReadingLabel}</label>
                     <select className="w-[180px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={bibleReading.assigned_user_id || bibleReading.student_id || ''} onChange={e => handlePartChange(bibleReading.id, 'assigned_user_id', e.target.value)}>
                        <option value=""></option>
-                       {optionsFor('can_do_bible_reading', 'bible_reading')}
+                       {bibleReadingOptions()}
                     </select>
                     <input type="text" className="w-[300px] border border-gray-300 dark:border-gray-600 p-0.5 h-6 ml-2 text-xs" value={bibleReading.title || ''} onChange={e => handlePartChange(bibleReading.id, 'title', e.target.value)} />
                     <FileText size={14} className="text-[#3b82f6] ml-1" />

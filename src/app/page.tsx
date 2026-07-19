@@ -7,6 +7,7 @@ import { useTheme } from '@/lib/theme';
 import { MODULES } from '@/lib/modules';
 import { useMe, canAccess } from '@/lib/useMe';
 import { supabase } from '@/lib/supabase';
+import { UpcomingAssignmentsModal } from '@/components/UpcomingAssignmentsModal';
 
 export default function Home() {
   const router = useRouter();
@@ -23,6 +24,7 @@ export default function Home() {
 
   return (
     <div className={`h-screen overflow-y-auto ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
+      <UpcomingAssignmentsModal ready={!loading && !!me?.authenticated} />
       {/* Hero */}
       <div className="bg-gradient-to-b from-sky-500 to-sky-400 dark:from-sky-900 dark:to-gray-900 text-white text-center pt-10 pb-8 px-4 relative">
         <div className="absolute top-3 right-3 flex gap-2">

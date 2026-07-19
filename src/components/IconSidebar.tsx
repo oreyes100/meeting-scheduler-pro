@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Sun, Moon, LayoutGrid, LogOut } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
@@ -8,12 +8,38 @@ import { MODULES, moduleByPath } from '@/lib/modules';
 import { useMe, canAccess } from '@/lib/useMe';
 import { supabase } from '@/lib/supabase';
 
+const BADGE_CACHE_KEY = 'assignment_badge_count';
+const BADGE_CACHE_TTL = 10 * 60 * 1000; // 10 min
+
 export function IconSidebar() {
   const router = useRouter();
   const pathname = usePathname();
   const { mode, setMode } = useTheme();
   const { me } = useMe();
   const isDark = mode === 'dark';
+  const [assignmentBadge, setAssignmentBadge] = useState(0);
+
+  useEffect(() => {
+    if (!me?.authenticated) return;
+    try {
+      const cached = sessionStorage.getItem(BADGE_CACHE_KEY);
+      if (cached) {
+        const { count, ts } = JSON.parse(cached);
+        if (Date.now() - ts < BADGE_CACHE_TTL) { setAssignmentBadge(count); return; }
+      }
+    } catch { /* ignore */ }
+    fetch('/api/my-assignments')
+      .then(r => r.json())
+      .then(d => {
+        const all: { date: string }[] = d.assignments || [];
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() + 14);
+        const count = all.filter(a => new Date(a.date + 'T00:00:00') <= cutoff).length;
+        setAssignmentBadge(count);
+        sessionStorage.setItem(BADGE_CACHE_KEY, JSON.stringify({ count, ts: Date.now() }));
+      })
+      .catch(() => {});
+  }, [me?.authenticated]);
 
   const visible = MODULES.filter(m => canAccess(me, m.key, m.adminOnly));
 
@@ -64,10 +90,16 @@ export function IconSidebar() {
         </button>
         {visible.map(({ key, path, Icon, title }) => {
           const active = pathname === path || pathname?.startsWith(path + '/');
+          const badge = key === 'my-assignments' && assignmentBadge > 0 ? assignmentBadge : 0;
           return (
             <button key={key} onClick={() => router.push(path)} title={title}
-              className={`p-2 rounded-md text-white transition-colors shrink-0 ${active ? 'bg-sky-600 shadow-inner' : 'hover:bg-sky-600'}`}>
+              className={`relative p-2 rounded-md text-white transition-colors shrink-0 ${active ? 'bg-sky-600 shadow-inner' : 'hover:bg-sky-600'}`}>
               <Icon size={22} />
+              {badge > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
+                  {badge}
+                </span>
+              )}
             </button>
           );
         })}

@@ -100,7 +100,16 @@ export async function POST(request: Request) {
       .from('meetings')
       .insert({ title: title || 'Life and Ministry Meeting', date, duration_minutes: duration_minutes || 105, song_opening: program.songOpening, song_middle: program.songMiddle, song_closing: program.songClosing, is_published: false, congregation_id: ctx.congreId ?? null })
       .select().single();
-    if (mError) throw mError;
+    if (mError) {
+      // Duplicate (unique constraint on date+congregation_id) — return existing meeting
+      if ((mError as any).code === '23505') {
+        let existingQuery = supabase.from('meetings').select('id, title, date, duration_minutes').eq('date', date);
+        if (ctx.congreId) existingQuery = existingQuery.eq('congregation_id', ctx.congreId);
+        const { data: existing } = await existingQuery.single();
+        if (existing) return NextResponse.json({ success: true, meeting: existing, partsCreated: 0, existed: true });
+      }
+      throw mError;
+    }
 
     const defaultParts = program.parts.map((p: ProgramPart) => ({
       meeting_id: meeting.id,
