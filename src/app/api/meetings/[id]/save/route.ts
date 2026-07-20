@@ -39,7 +39,6 @@ export async function PUT(
           .from('meeting_parts')
           .update({
             assigned_user_id: part.assigned_user_id || null,
-            student_id: part.student_id || null,
             title: part.title,
             duration_minutes: part.duration_minutes,
             assistant_user_id: part.assistant_user_id || null,

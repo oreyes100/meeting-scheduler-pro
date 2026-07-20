@@ -112,18 +112,14 @@ export function MeetingDashboard({
   const handleMeetingChange = (field: string, value: any) => {
     setFormData((prev: any) => {
       const next = { ...prev, [field]: value };
-      // Per the user spec: the opening prayer is ALWAYS the chairman.
-      // Auto-mirror the chairman onto the opening prayer so the two never
-      // drift apart. The opening prayer dropdown is left in place so an
-      // elder can still manually override in special cases.
       if (field === 'chairman_id') {
         next.opening_prayer_id = value;
       }
       dirtyRef.current = next;
       pendingRef.current = true;
-      onDirtyChange?.(true);
       return next;
     });
+    onDirtyChange?.(true);
   };
 
   const handlePartChange = (partId: string, field: string, value: any) => {
@@ -134,9 +130,9 @@ export function MeetingDashboard({
       };
       dirtyRef.current = next;
       pendingRef.current = true;
-      onDirtyChange?.(true);
       return next;
     });
+    onDirtyChange?.(true);
   };
 
   // Always call hooks first; only render JSX conditionally below
