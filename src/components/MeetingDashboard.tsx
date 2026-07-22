@@ -64,17 +64,23 @@ export function MeetingDashboard({
   const saveMeetingData = useCallback(async (dataToSave: any) => {
     if (!dataToSave || !dataToSave.id) return;
     try {
-      await fetch(`/api/meetings/${dataToSave.id}/save`, {
+      const res = await fetch(`/api/meetings/${dataToSave.id}/save`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dataToSave),
         keepalive: true,
       });
-      pendingRef.current = false;
-      onDirtyChange?.(false);
-      onSaved?.(dataToSave);
+      if (res.ok) {
+        pendingRef.current = false;
+        onDirtyChange?.(false);
+        onSaved?.(dataToSave);
+      } else {
+        console.error('Save failed', res.status);
+        onDirtyChange?.(true);
+      }
     } catch (err) {
       console.error('Save error', err);
+      onDirtyChange?.(true);
     }
   }, [onDirtyChange, onSaved]);
 
@@ -96,7 +102,7 @@ export function MeetingDashboard({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(dirtyRef.current),
           keepalive: true,
-        }).then(() => { pendingRef.current = false; }).catch(() => {});
+        }).then(res => { if (res.ok) pendingRef.current = false; }).catch(() => {});
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -355,14 +361,14 @@ export function MeetingDashboard({
            </div>
             <div className="px-1 flex flex-col gap-1.5">
               {studentParts.map((part: any) => {
-                const isTalk = part.student_part_type === 'talk';
+                const isTalk = part.student_part_type === 'talk' || part.student_part_type === 'explaining_beliefs';
                 const studentRoleKey = `student_${part.student_part_type || 'starting_conversation'}`;
                 return (
                 <div key={part.id} className="flex items-center">
                   <label className="w-[28px] text-gray-700 dark:text-gray-300 text-right pr-2 text-xs font-semibold">{part.part_number}.</label>
                   <select className="w-[170px] border border-gray-300 dark:border-gray-600 p-0.5 h-6 text-xs bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200" value={part.student_part_type || ''} onChange={e => {
                     handlePartChange(part.id, 'student_part_type', e.target.value);
-                    if (e.target.value === 'talk') handlePartChange(part.id, 'assistant_user_id', null);
+                    if (e.target.value === 'talk' || e.target.value === 'explaining_beliefs') handlePartChange(part.id, 'assistant_user_id', null);
                   }}>
                     <option value="starting_conversation">{t('meeting.startingConversation')}</option>
                     <option value="following_up">{t('meeting.followingUp')}</option>
