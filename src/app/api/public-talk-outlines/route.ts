@@ -27,7 +27,7 @@ export async function GET() {
       }
     }
 
-    const enriched = (outlines || []).map(o => ({
+    const enriched = (outlines || []).map((o: any) => ({
       ...o,
       last_given_date: lastGiven[o.id]?.date ?? null,
       last_given_speaker: lastGiven[o.id]?.speaker ?? null,

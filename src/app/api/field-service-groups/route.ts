@@ -1,14 +1,12 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { sb } from '@/lib/crud';
 import { getSessionContext } from '@/lib/serverContext';
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 export async function GET() {
   try {
     const ctx = await getSessionContext();
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = sb();
 
     let query = supabase.from('field_service_groups').select('*').order('sort_order', { ascending: true });
     if (ctx.congreId) query = query.eq('congregation_id', ctx.congreId);
@@ -47,7 +45,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const ctx = await getSessionContext();
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = sb();
     const body = await request.json();
 
     const { data, error } = await supabase

@@ -20,8 +20,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const { data: meeting, error: mError } = await mQuery.single();
     if (mError) throw mError;
     if (!meeting) return NextResponse.json({ error: 'Meeting not found' }, { status: 404 });
+    const mtg = meeting as { id: string; date: string };
 
-    const program = getProgram(meeting.date);
+    const program = getProgram(mtg.date);
 
     const existingByPartNumber: Record<number, { assigned_user_id?: string | null; assistant_user_id?: string | null }> = {};
     if (preserveAssignments) {

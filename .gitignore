@@ -73,3 +73,6 @@ capacitor-www/
 # AI assistant history
 .aider.*
 credenciales_publicadores.csv
+
+# SQLite database and exports (personal data — never commit)
+data/

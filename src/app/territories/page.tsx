@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import {
-  MapPin, Plus, Trash2, Save, X, Undo2, Check, Crosshair,
+  MapPin, Plus, Trash2, Save, X, Undo2, Check, Crosshair, SquareDashed,
 } from 'lucide-react';
 import type { LatLng } from '@/components/TerritoryMap';
 import { IconSidebar } from '@/components/IconSidebar';
@@ -39,19 +39,30 @@ export default function TerritoriesPage() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Modo dibujo
+  // Modo dibujo territorio
   const [drawing, setDrawing] = useState(false);
   const [draft, setDraft] = useState<LatLng[]>([]);
   const [form, setForm] = useState({ number: '', name: '', color: PALETTE[0], group_name: '' });
 
+  // Modo dibujo límite congregación
+  const [boundary, setBoundary] = useState<LatLng[] | null>(null);
+  const [drawingBoundary, setDrawingBoundary] = useState(false);
+  const [boundaryDraft, setBoundaryDraft] = useState<LatLng[]>([]);
+
   const fetchAll = useCallback(async () => {
     try {
-      const [tRes, uRes] = await Promise.all([fetch('/api/territories'), fetch('/api/users')]);
+      const [tRes, uRes, bRes] = await Promise.all([
+        fetch('/api/territories'),
+        fetch('/api/users'),
+        fetch('/api/congregation/boundary'),
+      ]);
       const tJson = await tRes.json();
       const uJson = await uRes.json();
+      const bJson = await bRes.json();
       if (tJson.migration_applied === false) setMigrationPending(true);
       setTerritories(tJson.territories || []);
       setUsers((uJson.users || []).map((u: any) => ({ id: u.id, name: u.name })));
+      setBoundary(bJson.boundary ?? null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error al cargar territorios');
     } finally {
@@ -73,6 +84,35 @@ export default function TerritoriesPage() {
   const cancelDraw = () => { setDrawing(false); setDraft([]); };
   const addVertex = (ll: LatLng) => setDraft(prev => [...prev, ll]);
   const undoVertex = () => setDraft(prev => prev.slice(0, -1));
+
+  // ── Límite congregación ─────────────────────────────────────────────────
+  const startBoundary = () => {
+    setSelectedId(null);
+    setDrawing(false);
+    setDraft([]);
+    setBoundaryDraft([]);
+    setDrawingBoundary(true);
+  };
+  const cancelBoundary = () => { setDrawingBoundary(false); setBoundaryDraft([]); };
+  const addBoundaryVertex = (ll: LatLng) => setBoundaryDraft(prev => [...prev, ll]);
+  const saveBoundary = async () => {
+    if (boundaryDraft.length < 3) { alert('Marca al menos 3 puntos para definir el límite.'); return; }
+    const res = await fetch('/api/congregation/boundary', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ boundary: boundaryDraft }),
+    });
+    const json = await res.json();
+    if (!res.ok) { alert(json.error || 'No se pudo guardar'); return; }
+    setBoundary(json.boundary);
+    setDrawingBoundary(false);
+    setBoundaryDraft([]);
+  };
+  const clearBoundary = async () => {
+    if (!confirm('¿Eliminar el límite del territorio de la congregación?')) return;
+    await fetch('/api/congregation/boundary', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ boundary: null }) });
+    setBoundary(null);
+  };
 
   const saveTerritory = async () => {
     if (draft.length < 3) { alert('Marca al menos 3 puntos en el mapa para cerrar el territorio.'); return; }
@@ -127,13 +167,26 @@ export default function TerritoriesPage() {
 
       {/* Panel izquierdo: lista + edición */}
       <div className="w-full md:w-80 max-h-[45vh] md:max-h-none flex-shrink-0 border-b md:border-b-0 md:border-r border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col">
-        <div className="px-4 py-3 border-b border-slate-200 dark:border-gray-700 flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-slate-200 dark:border-gray-700 flex items-center justify-between gap-2">
           <h1 className="font-bold text-slate-800 dark:text-gray-100 flex items-center gap-2"><MapPin size={18} className="text-sky-600" /> Territorios</h1>
-          {!drawing && (
-            <button onClick={startDraw} className="flex items-center gap-1 bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg">
-              <Plus size={14} /> Nuevo
-            </button>
-          )}
+          <div className="flex gap-1.5">
+            {!drawing && !drawingBoundary && (
+              <button onClick={startDraw} className="flex items-center gap-1 bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg">
+                <Plus size={14} /> Nuevo
+              </button>
+            )}
+            {!drawing && !drawingBoundary && (
+              <button onClick={startBoundary} title="Definir límite de la congregación"
+                className="flex items-center gap-1 bg-slate-500 hover:bg-slate-600 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg">
+                <SquareDashed size={14} /> Límite
+              </button>
+            )}
+            {!drawing && !drawingBoundary && boundary && (
+              <button onClick={clearBoundary} title="Eliminar límite" className="text-slate-400 hover:text-red-500 px-1">
+                <X size={14} />
+              </button>
+            )}
+          </div>
         </div>
 
         {migrationPending && (
@@ -142,6 +195,21 @@ export default function TerritoriesPage() {
           </div>
         )}
         {error && <div className="m-3 p-2 rounded bg-red-50 dark:bg-red-950/30 text-red-700 text-xs">{error}</div>}
+
+        {/* Panel dibujo límite */}
+        {drawingBoundary && (
+          <div className="m-3 p-3 rounded-lg border border-slate-300 bg-slate-50 dark:bg-gray-700 space-y-2">
+            <p className="text-xs text-slate-700 dark:text-gray-200 flex items-center gap-1.5 font-medium">
+              <SquareDashed size={13} /> Marca el límite del territorio de la congregación ({boundaryDraft.length} puntos)
+            </p>
+            <p className="text-[11px] text-slate-500">Este polígono se mostrará en gris punteado como referencia visual.</p>
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setBoundaryDraft(prev => prev.slice(0, -1))} disabled={!boundaryDraft.length} className="flex items-center gap-1 text-xs px-2 py-1.5 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-40"><Undo2 size={13} /> Deshacer</button>
+              <button onClick={saveBoundary} className="flex items-center gap-1 text-xs px-2 py-1.5 rounded bg-slate-600 hover:bg-slate-700 text-white"><Save size={13} /> Guardar</button>
+              <button onClick={cancelBoundary} className="flex items-center gap-1 text-xs px-2 py-1.5 rounded bg-slate-100 hover:bg-slate-200"><X size={13} /> Cancelar</button>
+            </div>
+          </div>
+        )}
 
         {/* Formulario de dibujo */}
         {drawing && (
@@ -241,11 +309,13 @@ export default function TerritoriesPage() {
         <TerritoryMap
           territories={territories}
           selectedId={selectedId}
-          drawing={drawing}
-          draftCoords={draft}
-          draftColor={form.color}
-          onMapClick={addVertex}
+          drawing={drawing || drawingBoundary}
+          draftCoords={drawingBoundary ? boundaryDraft : draft}
+          draftColor={drawingBoundary ? '#6b7280' : form.color}
+          onMapClick={drawingBoundary ? addBoundaryVertex : addVertex}
           onSelect={setSelectedId}
+          boundary={boundary}
+          drawingBoundary={drawingBoundary}
         />
       </div>
     </div>

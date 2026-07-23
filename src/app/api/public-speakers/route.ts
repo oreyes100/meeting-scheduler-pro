@@ -1,14 +1,12 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { sb } from '@/lib/crud';
 import { getSessionContext } from '@/lib/serverContext';
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 export async function GET() {
   try {
     const ctx = await getSessionContext();
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = sb();
     let query = supabase.from('public_speakers').select('*').order('congregation', { ascending: true }).order('name', { ascending: true });
     if (ctx.congreId) query = query.eq('congregation_id', ctx.congreId);
     const { data, error } = await query;
@@ -22,7 +20,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const ctx = await getSessionContext();
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = sb();
     const body = await request.json();
     const { name, congregation, city, phone, email, outline_numbers, notes } = body;
     if (!name || !congregation) return NextResponse.json({ error: 'name and congregation required' }, { status: 400 });

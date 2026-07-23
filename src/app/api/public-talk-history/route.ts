@@ -1,17 +1,25 @@
 import { NextResponse } from 'next/server';
-import { sb } from '@/lib/crud';
 import { getSessionContext } from '@/lib/serverContext';
+import { getDb } from '@/lib/sqlite';
 
-// TODO: public_talk_history table needs congregation_id column before filtering can be applied
 export async function GET() {
   try {
     await getSessionContext();
-    const { data, error } = await sb()
-      .from('public_talk_history')
-      .select('*, outline:public_talk_outlines(number, title)')
-      .order('date', { ascending: false });
-    if (error) throw error;
-    return NextResponse.json({ history: data || [] });
+    const db = getDb();
+    const history = db.prepare(`
+      SELECT h.*, o.number AS outline_number, o.title AS outline_title
+      FROM public_talk_history h
+      LEFT JOIN public_talk_outlines o ON o.id = h.outline_id
+      ORDER BY h.date DESC
+    `).all() as Record<string, unknown>[];
+
+    // Shape: embed outline as sub-object to match previous supabase response
+    const shaped = history.map((h) => ({
+      ...h,
+      outline: h.outline_id ? { number: h.outline_number, title: h.outline_title } : null,
+    }));
+
+    return NextResponse.json({ history: shaped });
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Error' }, { status: 500 });
   }

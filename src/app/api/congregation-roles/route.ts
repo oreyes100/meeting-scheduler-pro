@@ -1,16 +1,14 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { sb } from '@/lib/crud';
 import { getSessionContext } from '@/lib/serverContext';
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 const USER_FIELDS = 'id, first_name, last_name, display_name';
 
 export async function GET() {
   try {
     const ctx = await getSessionContext();
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = sb();
 
     let query = supabase.from('congregation_roles').select(`role_key, label, custom_label, updated_at, person:person_id(${USER_FIELDS}), assistant_1:assistant_1_id(${USER_FIELDS}), assistant_2:assistant_2_id(${USER_FIELDS})`);
     if (ctx.congreId) query = query.eq('congregation_id', ctx.congreId);
@@ -27,7 +25,7 @@ export async function GET() {
 export async function PUT(request: Request) {
   try {
     const ctx = await getSessionContext();
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = sb();
     const body = await request.json();
     const { role_key, person_id, assistant_1_id, assistant_2_id, custom_label } = body;
     if (!role_key) return NextResponse.json({ error: 'role_key is required' }, { status: 400 });

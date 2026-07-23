@@ -48,6 +48,8 @@ interface Props {
   onMapClick: (ll: LatLng) => void;
   onSelect: (id: string) => void;
   center?: [number, number];
+  boundary?: LatLng[] | null;
+  drawingBoundary?: boolean;
 }
 
 // Pátzcuaro, Michoacán por defecto (congregación La Estación).
@@ -67,11 +69,13 @@ const TILES = {
 
 export default function TerritoryMap({
   territories, selectedId, drawing, draftCoords, draftColor, onMapClick, onSelect, center,
+  boundary, drawingBoundary,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const savedLayerRef = useRef<any>(null);
   const draftLayerRef = useRef<any>(null);
+  const boundaryLayerRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
   const readyRef = useRef(false);
   const { mode } = useTheme();
@@ -98,6 +102,7 @@ export default function TerritoryMap({
         attribution: tiles.attribution,
         maxZoom: 19,
       }).addTo(map);
+      boundaryLayerRef.current = L.layerGroup().addTo(map);
       savedLayerRef.current = L.layerGroup().addTo(map);
       draftLayerRef.current = L.layerGroup().addTo(map);
       map.on('click', (e: any) => {
@@ -107,6 +112,7 @@ export default function TerritoryMap({
       readyRef.current = true;
       // Forzar redibujo inicial.
       setTimeout(() => map.invalidateSize(), 100);
+      drawBoundary();
       drawSaved();
       drawDraft();
     });
@@ -116,6 +122,37 @@ export default function TerritoryMap({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Capa no interactiva del límite de la congregación (polígono gris punteado).
+  function drawBoundary() {
+    const L = (window as any).L;
+    if (!L || !boundaryLayerRef.current) return;
+    boundaryLayerRef.current.clearLayers();
+    const coords = (boundary || []).map((c) => [c.lat, c.lng]) as [number, number][];
+    if (coords.length >= 3) {
+      L.polygon(coords, {
+        color: '#6b7280',
+        weight: 2,
+        dashArray: '8,6',
+        fillOpacity: 0.05,
+        interactive: false,
+      }).bindTooltip('Límite de la congregación', { sticky: false, permanent: false })
+        .addTo(boundaryLayerRef.current);
+    }
+    // Draw draft boundary vertices while in boundary drawing mode.
+    if (drawingBoundary && draftCoords.length) {
+      const lls = draftCoords.map((c) => [c.lat, c.lng]) as [number, number][];
+      draftCoords.forEach((c, i) => {
+        L.circleMarker([c.lat, c.lng], { radius: 4, color: '#6b7280', fillColor: '#fff', fillOpacity: 1, interactive: false })
+          .bindTooltip(String(i + 1)).addTo(boundaryLayerRef.current);
+      });
+      if (lls.length >= 3) {
+        L.polygon(lls, { color: '#6b7280', weight: 2, dashArray: '8,6', fillOpacity: 0.08, interactive: false }).addTo(boundaryLayerRef.current);
+      } else if (lls.length === 2) {
+        L.polyline(lls, { color: '#6b7280', weight: 2, dashArray: '8,6', interactive: false }).addTo(boundaryLayerRef.current);
+      }
+    }
+  }
 
   // Redibujar territorios guardados.
   function drawSaved() {
@@ -169,6 +206,7 @@ export default function TerritoryMap({
     tileLayerRef.current = L.tileLayer(tiles.url, { attribution: tiles.attribution, maxZoom: 19 }).addTo(mapRef.current);
   }, [isDark]);
 
+  useEffect(() => { if (readyRef.current) drawBoundary(); /* eslint-disable-next-line */ }, [boundary, drawingBoundary, draftCoords]);
   useEffect(() => { if (readyRef.current) drawSaved(); /* eslint-disable-next-line */ }, [territories, selectedId]);
   useEffect(() => { if (readyRef.current) drawDraft(); /* eslint-disable-next-line */ }, [draftCoords, draftColor]);
 

@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { sb } from '@/lib/crud';
 import { getSessionContext } from '@/lib/serverContext';
 import type { Person } from '@/types';
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 const PERSON_FIELDS = [
   'id',
@@ -27,7 +25,7 @@ const PERSON_FIELDS = [
 export async function GET(request: Request) {
   try {
     const ctx = await getSessionContext();
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = sb();
     const { searchParams } = new URL(request.url);
     const filter = searchParams.get('filter') || 'everyone';
     const search = (searchParams.get('q') || '').trim();
@@ -45,7 +43,7 @@ export async function GET(request: Request) {
       const { data, error } = await query;
       if (error) throw error;
 
-      const persons = (data || []).map((r) => normalize(r as unknown as Record<string, unknown>));
+      const persons = (data || []).map((r: any) => normalize(r as Record<string, unknown>));
       return NextResponse.json({ persons: search ? accentSearch(persons, search) : persons });
     } catch (e: unknown) {
       console.warn('Person full query failed, using legacy fallback. Raw error:', e);
@@ -58,7 +56,7 @@ export async function GET(request: Request) {
       const { data, error } = await legacyQuery;
       if (error) throw error;
       return NextResponse.json({
-        persons: (data || []).map((r) => normalize(r as Record<string, unknown>)),
+        persons: (data || []).map((r: any) => normalize(r as Record<string, unknown>)),
         migrationPending: true,
       });
     }
@@ -193,7 +191,7 @@ function applyFilter(query: any, filter: string): any {
 export async function POST(request: Request) {
   try {
     const ctx = await getSessionContext();
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = sb();
     const body = await request.json();
 
     const first_name = (body.first_name || '').trim();

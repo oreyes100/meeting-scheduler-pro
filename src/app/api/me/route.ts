@@ -1,68 +1,54 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createServerClient } from '@supabase/ssr';
-import { sb } from '@/lib/crud';
+import { getSessionContext } from '@/lib/serverContext';
+import { getDb } from '@/lib/sqlite';
 
 export async function GET() {
   try {
-    const cookieStore = await cookies();
-    const supaAuth = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { get: (name: string) => cookieStore.get(name)?.value } },
-    );
-    const { data: { user } } = await supaAuth.auth.getUser();
-    if (!user?.email) return NextResponse.json({ authenticated: false });
+    const ctx = await getSessionContext();
+    if (!ctx.userId) return NextResponse.json({ authenticated: false });
 
-    const email = user.email.toLowerCase();
+    const db = getDb();
+    const row = db.prepare(`
+      SELECT id, name, first_name, last_name, app_role, permissions, auth_email,
+             is_regular_pioneer, is_special_pioneer, is_auxiliary_pioneer,
+             congregation_id, is_super_admin
+      FROM users WHERE id = ? LIMIT 1
+    `).get(ctx.userId) as {
+      id: string; name: string; first_name: string | null; last_name: string | null;
+      app_role: string | null; permissions: string | null; auth_email: string | null;
+      is_regular_pioneer: number; is_special_pioneer: number; is_auxiliary_pioneer: number;
+      congregation_id: string | null; is_super_admin: number;
+    } | undefined;
 
-    // Env-var super-admin check works before AND after migration
-    const envAdmins = (process.env.SUPER_ADMIN_EMAILS || '')
-      .split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
-    const envIsSuperAdmin = envAdmins.includes(email);
+    if (!row) return NextResponse.json({ authenticated: false });
 
-    // Try post-migration query; fall back if new columns don't exist yet
-    const { data: rows, error } = await sb()
-      .from('users')
-      .select(`
-        id, name, first_name, last_name, app_role, permissions, auth_email, email1,
-        is_regular_pioneer, is_special_pioneer, is_auxiliary_pioneer,
-        congregation_id, is_super_admin,
-        congregations ( name, city, enabled_modules )
-      `)
-      .or(`auth_email.eq.${email},email1.eq.${email}`)
-      .limit(1);
-
-    let row: any = null;
-    if (error) {
-      // Columns not yet migrated — query only stable columns
-      const { data: fb } = await sb()
-        .from('users')
-        .select('id, name, first_name, last_name, app_role, permissions, auth_email, email1, is_regular_pioneer, is_special_pioneer, is_auxiliary_pioneer')
-        .or(`auth_email.eq.${email},email1.eq.${email}`)
-        .limit(1);
-      row = fb?.[0] ?? null;
-    } else {
-      row = rows?.[0] ?? null;
+    type CongreRow = { name: string; city: string | null; enabled_modules: string | null };
+    let congre: CongreRow | null = null;
+    if (row.congregation_id) {
+      congre = (db.prepare(`SELECT name, city, enabled_modules FROM congregations WHERE id = ? LIMIT 1`)
+        .get(row.congregation_id) as CongreRow | undefined) ?? null;
     }
 
-    const congre = row?.congregations ?? null;
+    let permissions: string[] = [];
+    try { permissions = JSON.parse(row.permissions ?? '[]'); } catch { permissions = []; }
+    let enabledModules: string[] | null = null;
+    try { enabledModules = congre?.enabled_modules ? JSON.parse(congre.enabled_modules) : null; } catch { enabledModules = null; }
 
     return NextResponse.json({
       authenticated: true,
-      email,
-      user_id: row?.id || null,
-      name: row?.name || [row?.first_name, row?.last_name].filter(Boolean).join(' ') || email,
-      app_role: row?.app_role || 'admin',
-      permissions: Array.isArray(row?.permissions) ? row.permissions : [],
-      is_regular_pioneer: !!row?.is_regular_pioneer,
-      is_special_pioneer: !!row?.is_special_pioneer,
-      is_auxiliary_pioneer: !!row?.is_auxiliary_pioneer,
-      congregation_id: row?.congregation_id || null,
+      email: row.auth_email?.toLowerCase() ?? ctx.email,
+      user_id: row.id,
+      name: row.name || [row.first_name, row.last_name].filter(Boolean).join(' ') || ctx.email,
+      app_role: row.app_role || 'admin',
+      permissions: Array.isArray(permissions) ? permissions : [],
+      is_regular_pioneer: !!row.is_regular_pioneer,
+      is_special_pioneer: !!row.is_special_pioneer,
+      is_auxiliary_pioneer: !!row.is_auxiliary_pioneer,
+      congregation_id: row.congregation_id || null,
       congregation_name: congre?.name || null,
       congregation_city: congre?.city || null,
-      enabled_modules: Array.isArray(congre?.enabled_modules) ? congre.enabled_modules : null,
-      is_super_admin: envIsSuperAdmin || !!row?.is_super_admin,
+      enabled_modules: enabledModules,
+      is_super_admin: ctx.isSuperAdmin,
     });
   } catch (e: unknown) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Error' }, { status: 500 });

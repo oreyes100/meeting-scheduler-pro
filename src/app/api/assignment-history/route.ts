@@ -16,7 +16,7 @@ export async function GET() {
     const { data: meetings, error: meetErr } = await meetingsQuery;
     if (meetErr) throw meetErr;
 
-    const meetingIds = (meetings || []).map(m => m.id);
+    const meetingIds = ((meetings || []) as any[]).map((m: any) => m.id);
     const dateById: Record<string, string> = {};
     for (const m of meetings || []) dateById[m.id] = m.date;
 
@@ -61,9 +61,9 @@ export async function GET() {
     }
 
     const sortedParts = (parts || [])
-      .map(p => ({ ...p, date: dateById[p.meeting_id] || '' }))
-      .filter(p => p.date)
-      .sort((a, b) => b.date.localeCompare(a.date));
+      .map((p: any) => ({ ...p, date: dateById[p.meeting_id] || '' }))
+      .filter((p: any) => p.date)
+      .sort((a: any, b: any) => b.date.localeCompare(a.date));
 
     for (const p of sortedParts) {
       const uid = p.assigned_user_id;

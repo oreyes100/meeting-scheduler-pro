@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { getSessionContext } from '@/lib/serverContext';
 import { sb } from '@/lib/crud';
 
@@ -39,27 +38,6 @@ export async function PUT(request: Request) {
     if (!user_id) return NextResponse.json({ error: 'user_id required' }, { status: 400 });
 
     const newEmail = auth_email !== undefined ? (auth_email ? String(auth_email).toLowerCase() : null) : undefined;
-
-    // If auth_email is changing, sync to Supabase Auth
-    if (newEmail !== undefined) {
-      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      if (serviceKey) {
-        // Get current auth_email from DB to find the Auth user
-        const { data: current } = await sb().from('users').select('auth_email').eq('id', user_id).single();
-        const oldEmail = current?.auth_email;
-        if (oldEmail && newEmail && oldEmail !== newEmail) {
-          const adminClient = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey, {
-            auth: { autoRefreshToken: false, persistSession: false },
-          });
-          // Find auth user by old email
-          const { data: listData } = await adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 });
-          const authUser = listData?.users?.find((u) => u.email?.toLowerCase() === oldEmail.toLowerCase());
-          if (authUser) {
-            await adminClient.auth.admin.updateUserById(authUser.id, { email: newEmail });
-          }
-        }
-      }
-    }
 
     const patch: Record<string, unknown> = {};
     if (app_role !== undefined) patch.app_role = app_role;

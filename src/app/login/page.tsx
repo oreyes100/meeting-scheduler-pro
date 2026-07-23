@@ -19,20 +19,13 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const resolveRes = await fetch('/api/resolve-login', {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: email }),
+        body: JSON.stringify({ identifier: email, password }),
       });
-      const resolveData = await resolveRes.json();
-      if (!resolveRes.ok) throw new Error(resolveData.error || 'Usuario no encontrado');
-
-      const { error } = await supabase.auth.signInWithPassword({
-        email: resolveData.email,
-        password,
-      });
-
-      if (error) throw error;
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Credenciales incorrectas');
 
       router.push('/');
       router.refresh();

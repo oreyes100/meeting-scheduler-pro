@@ -5,28 +5,20 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { LogOut, ChevronDown } from 'lucide-react';
-import type { User } from '@supabase/supabase-js';
 
 export function AuthButtons() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
+    fetch('/api/me')
+      .then(r => r.json())
+      .then(d => { setEmail(d.authenticated ? (d.email ?? 'user') : null); })
+      .catch(() => setEmail(null))
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -50,7 +42,7 @@ export function AuthButtons() {
     return <div className="w-8 h-8 rounded-full bg-surface-tertiary animate-pulse-subtle" />;
   }
 
-  if (!user) {
+  if (!email) {
     return (
       <Link
         href="/login"
@@ -61,7 +53,6 @@ export function AuthButtons() {
     );
   }
 
-  const email = user.email || 'User';
   const initials = email
     .split('@')[0]
     .split('.')

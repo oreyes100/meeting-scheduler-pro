@@ -33,10 +33,11 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         const speakerType = updates.speaker_type || body.speaker_type;
         if (speakerType === 'visiting' && updates.visiting_speaker_id) {
           const { data: sp } = await supabase.from('public_speakers').select('name').eq('id', updates.visiting_speaker_id).single();
-          speakerName = sp?.name ?? null;
+          speakerName = ((sp as any)?.name as string) ?? null;
         } else if (speakerType === 'local' && updates.local_speaker_id) {
           const { data: p } = await supabase.from('users').select('first_name, last_name, display_name, name').eq('id', updates.local_speaker_id).single();
-          speakerName = p ? (p.display_name || [p.first_name, p.last_name].filter(Boolean).join(' ') || p.name || '').trim() : null;
+          const pr = p as any;
+          speakerName = pr ? (pr.display_name || [pr.first_name, pr.last_name].filter(Boolean).join(' ') || pr.name || '').trim() : null;
         }
 
         await supabase.from('public_talk_history').insert({

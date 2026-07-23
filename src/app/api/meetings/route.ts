@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { sb } from '@/lib/crud';
 import { getProgram, type ProgramPart } from '@/lib/programs';
 import { getSessionContext } from '@/lib/serverContext';
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 const SCHEMA_ERROR_CODES = new Set(['PGRST200', '42703', 'PGRST204']);
 function isSchemaMissing(error: { code?: string; message?: string } | null): boolean {
@@ -18,7 +16,7 @@ function isSchemaMissing(error: { code?: string; message?: string } | null): boo
 export async function GET() {
   try {
     const ctx = await getSessionContext();
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = sb();
 
     let meetingsData: any[] = [];
     let migrationApplied = true;
@@ -91,7 +89,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const ctx = await getSessionContext();
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = sb();
     const body = await request.json();
     const { title, date, duration_minutes } = body;
     const program = getProgram(date);
@@ -102,7 +100,7 @@ export async function POST(request: Request) {
       .select().single();
     if (mError) {
       // Duplicate (unique constraint on date+congregation_id) — return existing meeting
-      if ((mError as any).code === '23505') {
+      if ((mError as any).code === '23505' || (mError as any).message?.includes('UNIQUE')) {
         let existingQuery = supabase.from('meetings').select('id, title, date, duration_minutes').eq('date', date);
         if (ctx.congreId) existingQuery = existingQuery.eq('congregation_id', ctx.congreId);
         const { data: existing } = await existingQuery.single();
@@ -110,9 +108,10 @@ export async function POST(request: Request) {
       }
       throw mError;
     }
+    if (!meeting) throw new Error('Insert returned no row');
 
     const defaultParts = program.parts.map((p: ProgramPart) => ({
-      meeting_id: meeting.id,
+      meeting_id: (meeting as Record<string, unknown>).id,
       class_type: 'main',
       part_type: p.type,
       part_number: p.number,
