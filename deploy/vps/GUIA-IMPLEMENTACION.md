@@ -51,11 +51,11 @@ sudo mkdir -p /opt/msp
 sudo chown $USER:$USER /opt/msp
 cd /opt/msp
 
-# Clonar rama vps-selfhosted del mirror privado
-git clone --branch vps-selfhosted https://github.com/oreyes100/meeting-scheduler-pro-vps.git .
+# Clonar el mirror privado (la rama por defecto `main` ES la versión VPS)
+git clone https://github.com/oreyes100/meeting-scheduler-pro-vps.git .
 ```
 
-> Si usas deploy por SSH en lugar de HTTPS, configura tu clave en GitHub primero.
+> El repo es privado: con HTTPS te pedirá usuario + Personal Access Token (crear en GitHub → Settings → Developer settings → Tokens, scope `repo`). Si prefieres SSH, configura una deploy key primero.
 
 ---
 
@@ -92,6 +92,16 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ## 4. Instalar dependencias y compilar
 
+Si el VPS tiene menos de 2 GB de RAM, crear swap ANTES de compilar (el build de Next.js puede superar 1 GB):
+
+```bash
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
 ```bash
 cd /opt/msp
 
@@ -103,6 +113,17 @@ npm run build
 ```
 
 La compilación genera `.next/standalone/` — el servidor de producción completo.
+
+Verificar que el tracing incluyó los archivos críticos:
+
+```bash
+# El schema SQL debe estar (la app lo lee con fs.readFileSync al arrancar)
+ls .next/standalone/src/lib/schema.sql || cp -r --parents src/lib/schema.sql .next/standalone/
+
+# El binario nativo de better-sqlite3 debe estar
+ls .next/standalone/node_modules/better-sqlite3/build/Release/better_sqlite3.node \
+  || cp -r node_modules/better-sqlite3 .next/standalone/node_modules/
+```
 
 ---
 
@@ -119,6 +140,19 @@ La base de datos SQLite (`msp.db`) se crea automáticamente al primer arranque c
 ## 6. Importar datos desde Supabase (migración inicial)
 
 Si migras desde una instalación existente con Supabase:
+
+```bash
+**Opción A (recomendada):** si ya tienes `data/msp.db` poblada en tu máquina local, transfiérela directamente:
+
+```bash
+# En tu máquina local — consolidar WAL antes de copiar (obligatorio con la app parada)
+sqlite3 data/msp.db "PRAGMA wal_checkpoint(TRUNCATE);"
+
+# Transferir al servidor
+scp data/msp.db usuario@tu-vps:/opt/msp/data/msp.db
+```
+
+**Opción B:** exportar de Supabase e importar en el servidor:
 
 ```bash
 # Exportar datos (ejecutar en tu máquina local con las credenciales de Supabase)
@@ -150,6 +184,8 @@ node scripts/create-admin.cjs \
 
 ```bash
 # Crear configuración PM2
+# IMPORTANTE: PM2 NO soporta env_file — las variables van directamente en el
+# bloque env. Edita AUTH_SECRET con tu valor real antes de arrancar.
 cat > /opt/msp/ecosystem.config.js << 'EOF'
 module.exports = {
   apps: [{
@@ -160,8 +196,9 @@ module.exports = {
       NODE_ENV: 'production',
       PORT: 3000,
       HOSTNAME: '127.0.0.1',
+      AUTH_SECRET: 'PEGA-AQUI-TU-SECRETO-DE-32-CHARS-O-MAS',
+      DB_PATH: '/opt/msp/data/msp.db',
     },
-    env_file: '/opt/msp/.env.local',
     instances: 1,
     autorestart: true,
     watch: false,
@@ -169,6 +206,12 @@ module.exports = {
   }],
 };
 EOF
+
+# Editar y pegar el AUTH_SECRET real (mismo generado en el paso 3)
+nano /opt/msp/ecosystem.config.js
+
+# Proteger el archivo (contiene el secreto)
+chmod 600 /opt/msp/ecosystem.config.js
 
 # Copiar archivos estáticos al standalone
 cp -r /opt/msp/.next/static /opt/msp/.next/standalone/.next/static
@@ -224,6 +267,11 @@ server {
 sudo ln -s /etc/nginx/sites-available/msp /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
+
+# Firewall: permitir SSH y web, bloquear el resto (el puerto 3000 queda interno)
+sudo ufw allow OpenSSH
+sudo ufw allow 'Nginx Full'
+sudo ufw --force enable
 ```
 
 ---
@@ -264,6 +312,11 @@ curl -c cookies.txt -X POST http://localhost:3000/api/auth/login \
   -d '{"identifier":"admin@tudominio.com","password":"TuPassword2024!"}'
 ```
 
+> ⚠️ **La cookie de sesión es `secure` en producción**: el navegador NO la aceptará
+> sobre `http://IP:3000`. Si intentas hacer login en el navegador antes de tener
+> HTTPS, quedarás en un bucle de login sin error visible. Verifica con `curl` en
+> localhost (como arriba) o espera a completar el paso 9 (SSL) para probar en navegador.
+
 ---
 
 ## 11. Backups de la base de datos
@@ -294,8 +347,8 @@ chmod +x /opt/msp/backup.sh
 ```bash
 cd /opt/msp
 
-# Obtener cambios
-git pull origin vps-selfhosted
+# Obtener cambios (en el VPS, origin apunta al mirror y la rama es main)
+git pull origin main
 
 # Reinstalar dependencias (si cambiaron)
 npm ci --production=false
