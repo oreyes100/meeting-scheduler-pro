@@ -361,14 +361,20 @@ export function MeetingDashboard({
            </div>
             <div className="px-1 flex flex-col gap-1.5">
               {studentParts.map((part: any) => {
-                const isTalk = part.student_part_type === 'talk' || part.student_part_type === 'explaining_beliefs';
+                // talk → solo varones, sin ayudante
+                // explaining_beliefs → ambos géneros, ayudante opcional
+                // demás → ambos géneros, ayudante requerido
+                const isTalk = part.student_part_type === 'talk';
+                const isExplainingBeliefs = part.student_part_type === 'explaining_beliefs';
+                const showAssistant = !isTalk; // explaining_beliefs SÍ muestra ayudante (opcional)
+                const maleOnly = isTalk; // explaining_beliefs permite ambos géneros
                 const studentRoleKey = `student_${part.student_part_type || 'starting_conversation'}`;
                 return (
                 <div key={part.id} className="flex items-center">
                   <label className="w-[28px] text-gray-700 dark:text-gray-300 text-right pr-2 text-xs font-semibold">{part.part_number}.</label>
                   <select className="w-[170px] border border-gray-300 dark:border-gray-600 p-0.5 h-6 text-xs bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200" value={part.student_part_type || ''} onChange={e => {
                     handlePartChange(part.id, 'student_part_type', e.target.value);
-                    if (e.target.value === 'talk' || e.target.value === 'explaining_beliefs') handlePartChange(part.id, 'assistant_user_id', null);
+                    if (e.target.value === 'talk') handlePartChange(part.id, 'assistant_user_id', null);
                   }}>
                     <option value="starting_conversation">{t('meeting.startingConversation')}</option>
                     <option value="following_up">{t('meeting.followingUp')}</option>
@@ -376,9 +382,9 @@ export function MeetingDashboard({
                     <option value="explaining_beliefs">{t('meeting.explainingBeliefs')}</option>
                     <option value="talk">{t('meeting.talk')}</option>
                   </select>
-                  <select className="w-[170px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200 ml-1" value={part.assigned_user_id || part.student_id || ''} onChange={e => handlePartChange(part.id, 'assigned_user_id', e.target.value)}>
+                  <select className="w-[170px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200 ml-1" value={part.assigned_user_id || ''} onChange={e => handlePartChange(part.id, 'assigned_user_id', e.target.value)}>
                        <option value=""></option>
-                       {optionsFor('can_do_student_parts', studentRoleKey, isTalk ? (p => p.gender === 'male') : undefined)}
+                       {optionsFor('can_do_student_parts', studentRoleKey, maleOnly ? (p => p.gender === 'male') : undefined)}
                   </select>
                   <input type="text" className="w-[260px] border border-gray-300 dark:border-gray-600 p-0.5 h-6 ml-2 text-xs" value={part.title || ''} onChange={e => handlePartChange(part.id, 'title', e.target.value)} />
                   <FileText size={14} className="text-[#3b82f6] ml-1" />
@@ -387,11 +393,11 @@ export function MeetingDashboard({
 
                   <div className="flex-1"></div>
 
-                  {!isTalk && (
+                  {showAssistant && (
                   <>
                   <label className="text-gray-700 dark:text-gray-300 text-right pr-2 text-xs">{t('meeting.assistant')}</label>
-                  <select className="w-[170px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={part.assistant_user_id || ''} onChange={e => handlePartChange(part.id, 'assistant_user_id', e.target.value)}>
-                       <option value=""></option>
+                  <select className="w-[170px] border border-gray-300 dark:border-gray-600 bg-[#b4d5eb] dark:bg-[#1e3a4a] p-0.5 h-6 text-xs dark:text-gray-200" value={part.assistant_user_id || ''} onChange={e => handlePartChange(part.id, 'assistant_user_id', e.target.value || null)}>
+                       <option value="">— sin ayudante —</option>
                        {optionsFor('can_be_assistant', 'assistant')}
                   </select>
                   </>
