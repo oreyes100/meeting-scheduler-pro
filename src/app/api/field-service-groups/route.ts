@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sb } from '@/lib/crud';
+import { getDb } from '@/lib/sqlite';
 import { getSessionContext } from '@/lib/serverContext';
 
 
@@ -15,23 +16,34 @@ export async function GET() {
     if (error) throw error;
 
     const groupIds = (groups || []).map((g: any) => g.id);
-    let members: any[] = [];
-    if (groupIds.length) {
-      const { data: mData, error: mErr } = await supabase
-        .from('field_service_group_members')
-        .select(`id, group_id, user_id, role, sort_order, user:users!field_service_group_members_user_id_fkey(id, first_name, last_name, display_name, name, gender, is_elder, is_ministerial_servant, is_regular_pioneer, is_auxiliary_pioneer, is_special_pioneer, is_publisher, is_unbaptized_publisher)`)
-        .in('group_id', groupIds)
-        .order('sort_order', { ascending: true });
-      if (mErr) throw mErr;
-      members = mData || [];
-    }
-
     const membersByGroup: Record<string, any[]> = {};
-    for (const m of members) {
-      const gid = m.group_id;
-      if (!membersByGroup[gid]) membersByGroup[gid] = [];
-      const u = Array.isArray(m.user) ? m.user[0] : m.user;
-      membersByGroup[gid].push({ ...m, user: u });
+    if (groupIds.length) {
+      const db = getDb();
+      const placeholders = groupIds.map(() => '?').join(',');
+      const rows = db.prepare(`
+        SELECT m.id, m.group_id, m.user_id, m.role, m.sort_order,
+               u.id as u_id, u.first_name, u.last_name, u.display_name, u.name as u_name,
+               u.gender, u.is_elder, u.is_ministerial_servant,
+               u.is_regular_pioneer, u.is_auxiliary_pioneer, u.is_special_pioneer,
+               u.is_publisher, u.is_unbaptized_publisher
+        FROM field_service_group_members m
+        LEFT JOIN users u ON u.id = m.user_id
+        WHERE m.group_id IN (${placeholders})
+        ORDER BY m.sort_order ASC
+      `).all(...groupIds) as Record<string, unknown>[];
+      for (const m of rows) {
+        const gid = m.group_id as string;
+        if (!membersByGroup[gid]) membersByGroup[gid] = [];
+        membersByGroup[gid].push({
+          id: m.id, group_id: m.group_id, user_id: m.user_id, role: m.role, sort_order: m.sort_order,
+          user: m.u_id ? { id: m.u_id, first_name: m.first_name, last_name: m.last_name,
+            display_name: m.display_name, name: m.u_name, gender: m.gender,
+            is_elder: !!m.is_elder, is_ministerial_servant: !!m.is_ministerial_servant,
+            is_regular_pioneer: !!m.is_regular_pioneer, is_auxiliary_pioneer: !!m.is_auxiliary_pioneer,
+            is_special_pioneer: !!m.is_special_pioneer, is_publisher: !!m.is_publisher,
+            is_unbaptized_publisher: !!m.is_unbaptized_publisher } : null,
+        });
+      }
     }
 
     const result = (groups || []).map((g: any) => ({ ...g, members: membersByGroup[g.id] || [] }));

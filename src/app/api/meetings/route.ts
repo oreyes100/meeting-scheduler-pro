@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sb } from '@/lib/crud';
+import { getDb } from '@/lib/sqlite';
 import { getProgram, type ProgramPart } from '@/lib/programs';
 import { getSessionContext } from '@/lib/serverContext';
 
@@ -50,22 +51,27 @@ export async function GET() {
       for (const u of usersData || []) usersById[u.id] = u;
     }
 
-    const { data: fullParts, error: partsError } = await supabase
-      .from('meeting_parts')
-      .select(`id, meeting_id, role, assigned_user_id, class_type, part_type, part_number, title, duration_minutes, assistant_user_id, study_point, student_part_type, users:assigned_user_id ( id, name ), assistant:assistant_user_id ( id, name )`);
-
-    let partsData: any[] = [];
-    if (partsError) {
-      if (isSchemaMissing(partsError)) {
-        const { data: baseParts, error: basePartsError } = await supabase.from('meeting_parts').select('id, meeting_id, role, assigned_user_id');
-        if (basePartsError) throw basePartsError;
-        partsData = (baseParts || []).map((p: any) => ({ ...p, users: p.assigned_user_id ? (usersById[p.assigned_user_id] ?? null) : null, assistant: null }));
-      } else {
-        throw partsError;
-      }
-    } else {
-      partsData = fullParts || [];
-    }
+    // Use direct SQLite JOIN — shim doesn't support Supabase fkey join syntax
+    const db = getDb();
+    const rawParts = db.prepare(`
+      SELECT p.id, p.meeting_id, p.role, p.assigned_user_id, p.class_type, p.part_type,
+             p.part_number, p.title, p.duration_minutes, p.assistant_user_id,
+             p.study_point, p.student_part_type,
+             u.id as u_id, u.name as u_name,
+             a.id as a_id, a.name as a_name
+      FROM meeting_parts p
+      LEFT JOIN users u ON u.id = p.assigned_user_id
+      LEFT JOIN users a ON a.id = p.assistant_user_id
+    `).all() as Record<string, unknown>[];
+    const partsData: any[] = rawParts.map(p => ({
+      id: p.id, meeting_id: p.meeting_id, role: p.role,
+      assigned_user_id: p.assigned_user_id, class_type: p.class_type,
+      part_type: p.part_type, part_number: p.part_number, title: p.title,
+      duration_minutes: p.duration_minutes, assistant_user_id: p.assistant_user_id,
+      study_point: p.study_point, student_part_type: p.student_part_type,
+      users: p.u_id ? { id: p.u_id, name: p.u_name } : null,
+      assistant: p.a_id ? { id: p.a_id, name: p.a_name } : null,
+    }));
 
     const meetings = meetingsData.map((meeting: any) => {
       const parts = partsData

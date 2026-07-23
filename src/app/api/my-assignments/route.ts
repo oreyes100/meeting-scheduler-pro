@@ -31,14 +31,14 @@ export async function GET() {
     if (meetingIds.length > 0) {
       const { data: parts, error: pErr } = await supabase
         .from('meeting_parts')
-        .select('meeting_id, part_type, student_part_type, title, assigned_user_id, assistant_user_id, student_id')
+        .select('meeting_id, part_type, student_part_type, title, assigned_user_id, assistant_user_id')
         .in('meeting_id', meetingIds);
       if (pErr) throw pErr;
 
       for (const p of parts || []) {
         const date = dateById[p.meeting_id];
         if (!date) continue;
-        if (p.assigned_user_id === ctx.userId || p.student_id === ctx.userId) {
+        if (p.assigned_user_id === ctx.userId) {
           let role = p.part_type as string;
           if (p.part_type === 'student_part' && p.student_part_type) role = `student_${p.student_part_type}`;
           assignments.push({ date, role, title: p.title ?? null });
