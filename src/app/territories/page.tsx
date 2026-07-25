@@ -50,270 +50,411 @@ function currentServiceYear() {
   return now.getMonth() >= 8 ? now.getFullYear() + 1 : now.getFullYear();
 }
 
-// ── S-13 helpers ─────────────────────────────────────────────────────────────
+// ── S-13 ─────────────────────────────────────────────────────────────────────
+// Geometry extracted from the official S-13-S 1/22 blank form (A4 portrait,
+// 595.32 x 842.04 pt). All coordinates below are in PDF points, origin
+// bottom-left, and reproduce the template 1:1.
+//
+// Layout: 10 columns.
+//   1  Núm. de terr.                 (rowSpan over both header rows + both sub-rows)
+//   2  Última fecha en que se completó*  (idem)
+//   3-4, 5-6, 7-8, 9-10  four "Asignado a" groups, each 2 columns
+//        (header row 2: "Fecha en que se asignó" | "Fecha en que se completó")
+// Each territory occupies TWO sub-rows: the upper one holds the publisher name
+// merged across the 2 columns of each group; the lower one holds the two dates.
+
+const S13 = {
+  pageW: 595.32,
+  pageH: 842.04,
+  // Column boundaries (11 values → 10 columns)
+  colX: [36.0, 71.2, 135.0, 188.4, 241.2, 295.1, 348.1, 401.9, 454.8, 508.7, 560.8],
+  // Heavy black rules: outer border + the four "Asignado a" group separators
+  thickRules: [36.0, 135.0, 241.2, 348.1, 454.8, 560.8],
+  // Light rule running the full height (Núm. / Última fecha separator)
+  thinRules: [71.2],
+  // Vertical rules present only inside the two-date sub-row (they stop at the
+  // name sub-row, which is merged across each group)
+  dateRules: [188.4, 295.1, 401.9, 508.7],
+  tableTop: 731.3,
+  h1Bot: 716.5,   // between "Asignado a" and "Fecha en que…"
+  h2Bot: 695.6,   // bottom of the header block / top of first territory row
+  rowH: 31.3,     // full height of one territory (name sub-row + date sub-row)
+  nameH: 15.2,    // upper sub-row (publisher name)
+  rowsPerPage: 20,
+  titleY: 775.1,
+  yearLabelY: 748.2,
+  yearRule: { y: 744.7, x0: 134.5, x1: 190.2 },
+  footnoteY: 55.7,
+  formIdY: 38.1,
+  thin: [64, 64, 64] as [number, number, number],    // gray 0.251 in the original
+  shade: [217, 217, 217] as [number, number, number], // gray 0.851 header fill
+};
+
+interface Slot { name: string; assigned: string; completed: string }
+
+// Blank (not "—") for empty cells: the official form leaves them empty.
+function fmtB(d: string | null | undefined) {
+  return d ? fmt(d) : '';
+}
 
 function getSlots(t: Territory, allAssignments: Assignment[]) {
   const tas = allAssignments
     .filter(a => a.territory_id === t.id)
     .sort((a, b) => (a.assigned_date ?? '').localeCompare(b.assigned_date ?? ''));
   const lastCompleted = [...tas].reverse().find(a => a.completed_date)?.completed_date ?? null;
-  // Each slot: [name, assignedDate, completedDate]
-  const slots = [0, 1, 2, 3].flatMap(i => {
+  const slots: Slot[] = [0, 1, 2, 3].map(i => {
     const a = tas[i];
-    return [a?.assigned_name ?? '', a?.assigned_date ? fmt(a.assigned_date) : '', a?.completed_date ? fmt(a.completed_date) : ''];
+    return {
+      name: a?.assigned_name ?? '',
+      assigned: fmtB(a?.assigned_date),
+      completed: fmtB(a?.completed_date),
+    };
   });
   return { lastCompleted, slots };
 }
 
-// S-13 PDF — 14 columns matching official template
-// Col layout: [Núm] [Última] [Nombre1][Asignó1][Completó1] × 4
+function chunk<T>(arr: T[], size: number): T[][] {
+  if (arr.length === 0) return [[]];
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+// S-13 PDF — drawn primitively so the output matches the official form exactly.
+// jsPDF is used in 'pt'/a4 so the constants in S13 map 1:1 onto the page.
 async function exportPdf(territories: Territory[], allAssignments: Assignment[], year: number) {
   const { default: jsPDF } = await import('jspdf');
-  const { default: autoTable } = await import('jspdf-autotable');
 
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'letter' });
-  const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+  const { colX, thickRules, thinRules, dateRules, tableTop, h1Bot, h2Bot, rowH, nameH, rowsPerPage } = S13;
+  const left = colX[0];
+  const right = colX[colX.length - 1];
+  const tableBot = h2Bot - rowsPerPage * rowH;
 
-  const sorted = [...territories].sort((a, b) => (a.number ?? 9999) - (b.number ?? 9999));
-
-  // Draw header on each page
-  const drawPageHeader = (pageNum: number) => {
-    doc.setFontSize(13);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(20, 20, 20);
-    doc.text('REGISTRO DE ASIGNACIÓN DE TERRITORIO', pageW / 2, 10, { align: 'center' });
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Año de servicio:  ${year}`, 14, 17);
-    if (pageNum > 1) doc.text(`(continuación)`, pageW - 14, 17, { align: 'right' });
+  // PDF origin is bottom-left; jsPDF draws from the top-left. Convert.
+  const Y = (pdfY: number) => S13.pageH - pdfY;
+  const hLine = (y: number, x0: number, x1: number, w: number) => {
+    doc.setLineWidth(w);
+    doc.line(x0, Y(y), x1, Y(y));
+  };
+  const vLine = (x: number, yTop: number, yBot: number, w: number) => {
+    doc.setLineWidth(w);
+    doc.line(x, Y(yTop), x, Y(yBot));
+  };
+  // Centered text on a baseline, shrinking to fit the cell if needed.
+  const cText = (text: string, x0: number, x1: number, baseline: number, size: number, bold = false) => {
+    if (!text) return;
+    doc.setFont('helvetica', bold ? 'bold' : 'normal');
+    let s = size;
+    const maxW = x1 - x0 - 4;
+    doc.setFontSize(s);
+    while (s > 4 && doc.getTextWidth(text) > maxW) {
+      s -= 0.5;
+      doc.setFontSize(s);
+    }
+    doc.text(text, (x0 + x1) / 2, Y(baseline), { align: 'center' });
+    doc.setFontSize(size);
   };
 
-  drawPageHeader(1);
+  const sorted = [...territories].sort((a, b) => (a.number ?? 9999) - (b.number ?? 9999));
+  const pages = chunk(sorted, rowsPerPage);
 
-  // Header: row 1 uses rowSpan=2 for first 2 cols; colSpan=3 for each "Asignado a"
-  const head = [
-    [
-      { content: 'Núm.\nde terr.', rowSpan: 2, styles: { valign: 'middle' as const, halign: 'center' as const } },
-      { content: 'Última\nfecha en\nque se\ncompletó*', rowSpan: 2, styles: { valign: 'middle' as const, halign: 'center' as const } },
-      { content: 'Asignado a', colSpan: 3, styles: { halign: 'center' as const } },
-      { content: 'Asignado a', colSpan: 3, styles: { halign: 'center' as const } },
-      { content: 'Asignado a', colSpan: 3, styles: { halign: 'center' as const } },
-      { content: 'Asignado a', colSpan: 3, styles: { halign: 'center' as const } },
-    ],
-    [
-      // sub-row for each slot (cols 3-14); cols 1-2 occupied by rowSpan above
-      { content: 'Nombre',                    styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
-      { content: 'Fecha en que\nse asignó',   styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
-      { content: 'Fecha en que\nse completó', styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
-      { content: 'Nombre',                    styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
-      { content: 'Fecha en que\nse asignó',   styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
-      { content: 'Fecha en que\nse completó', styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
-      { content: 'Nombre',                    styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
-      { content: 'Fecha en que\nse asignó',   styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
-      { content: 'Fecha en que\nse completó', styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
-      { content: 'Nombre',                    styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
-      { content: 'Fecha en que\nse asignó',   styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
-      { content: 'Fecha en que\nse completó', styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
-    ],
-  ];
+  pages.forEach((pageRows, pageIdx) => {
+    if (pageIdx > 0) doc.addPage();
+    doc.setTextColor(0, 0, 0);
 
-  const body = sorted.map(t => {
-    const { lastCompleted, slots } = getSlots(t, allAssignments);
-    return [
-      { content: String(t.number ?? ''), styles: { halign: 'center' as const } },
-      { content: fmt(lastCompleted), styles: { halign: 'center' as const } },
-      ...slots,
-    ];
-  });
+    // ── Title + "Año de servicio:" with its rule ────────────────────────────
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text('REGISTRO DE ASIGNACIÓN DE TERRITORIO', S13.pageW / 2, Y(S13.titleY), { align: 'center' });
 
-  let pageCount = 1;
-  autoTable(doc, {
-    head,
-    body,
-    startY: 21,
-    styles: { fontSize: 7, cellPadding: { top: 1.5, right: 1, bottom: 1.5, left: 1 }, lineWidth: 0.25, lineColor: [160, 160, 170], minCellHeight: 8 },
-    headStyles: { fillColor: [210, 220, 235], textColor: [20, 20, 50], fontStyle: 'bold', fontSize: 7 },
-    columnStyles: {
-      0: { cellWidth: 11, halign: 'center' as const },
-      1: { cellWidth: 18, halign: 'center' as const },
-      2: { cellWidth: 25 },
-      3: { cellWidth: 16, halign: 'center' as const },
-      4: { cellWidth: 16, halign: 'center' as const },
-      5: { cellWidth: 25 },
-      6: { cellWidth: 16, halign: 'center' as const },
-      7: { cellWidth: 16, halign: 'center' as const },
-      8: { cellWidth: 25 },
-      9: { cellWidth: 16, halign: 'center' as const },
-      10: { cellWidth: 16, halign: 'center' as const },
-      11: { cellWidth: 25 },
-      12: { cellWidth: 16, halign: 'center' as const },
-      13: { cellWidth: 16, halign: 'center' as const },
-    },
-    alternateRowStyles: { fillColor: [248, 249, 252] },
-    margin: { left: 8, right: 8, bottom: 14 },
-    didDrawPage: (data) => {
-      // Footer
-      doc.setFontSize(6);
-      doc.setTextColor(80, 80, 80);
-      doc.text(
-        '*Cuando comience una nueva página, anote en esta columna la última fecha en que los territorios se completaron.',
-        8, pageH - 8
-      );
-      doc.text('S-13-S  1/22', 8, pageH - 4);
-      doc.text(`Año de servicio: ${year}`, pageW - 8, pageH - 4, { align: 'right' });
-      // Re-draw title on pages after the first
-      if (data.pageNumber > pageCount) {
-        pageCount = data.pageNumber;
-        drawPageHeader(data.pageNumber);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text('Año de servicio:', left, Y(S13.yearLabelY));
+    doc.setDrawColor(0, 0, 0);
+    hLine(S13.yearRule.y, S13.yearRule.x0, S13.yearRule.x1, 0.8);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    doc.text(String(year), (S13.yearRule.x0 + S13.yearRule.x1) / 2, Y(S13.yearLabelY), { align: 'center' });
+
+    // ── Header shading (gray 0.851 across the whole header block) ───────────
+    doc.setFillColor(...S13.shade);
+    doc.rect(left, Y(tableTop), right - left, tableTop - h2Bot, 'F');
+
+    // ── Grid ────────────────────────────────────────────────────────────────
+    // Thin gray rules first, heavy black ones on top.
+    doc.setDrawColor(...S13.thin);
+    hLine(h1Bot, colX[2], right, 0.5);                       // "Asignado a" / "Fecha…"
+    for (let i = 0; i < rowsPerPage; i++) {
+      hLine(h2Bot - i * rowH - nameH, colX[2], right, 0.5);  // name / dates divider
+    }
+    for (const x of thinRules) vLine(x, tableTop, tableBot, 0.5);
+    for (const x of dateRules) {
+      vLine(x, h1Bot, h2Bot, 0.5);                           // header sub-columns
+      for (let i = 0; i < rowsPerPage; i++) {
+        const rowTop = h2Bot - i * rowH;
+        vLine(x, rowTop - nameH, rowTop - rowH, 0.5);
       }
-    },
+    }
+
+    doc.setDrawColor(0, 0, 0);
+    hLine(tableTop, left, right, 1.5);                       // top border
+    hLine(h2Bot, left, right, 1.5);                          // header block bottom
+    for (let i = 0; i < rowsPerPage; i++) {
+      hLine(h2Bot - i * rowH - rowH, left, right, 1.5);      // territory separator
+    }
+    for (const x of thickRules) vLine(x, tableTop, tableBot, 1.5);
+
+    // ── Header text ─────────────────────────────────────────────────────────
+    cText('Núm.', colX[0], colX[1], 716.1, 9);
+    cText('de terr.', colX[0], colX[1], 705.7, 9);
+    cText('Última fecha', colX[1], colX[2], 720.2, 9);
+    cText('en que se', colX[1], colX[2], 709.9, 9);
+    cText('completó*', colX[1], colX[2], 699.6, 9);
+
+    for (let g = 0; g < 4; g++) {
+      const gx0 = colX[2 + g * 2];
+      const gx1 = colX[4 + g * 2];
+      cText('Asignado a', gx0, gx1, 720.8, 9);
+      cText('Fecha en que', gx0, colX[3 + g * 2], 708.9, 8);
+      cText('se asignó', gx0, colX[3 + g * 2], 699.7, 8);
+      cText('Fecha en que', colX[3 + g * 2], gx1, 708.9, 8);
+      cText('se completó', colX[3 + g * 2], gx1, 699.7, 8);
+    }
+
+    // ── Data ────────────────────────────────────────────────────────────────
+    pageRows.forEach((t, i) => {
+      const { lastCompleted, slots } = getSlots(t, allAssignments);
+      const rowTop = h2Bot - i * rowH;
+      // Columns 1-2 are merged over the whole territory row → centre vertically.
+      const midBase = rowTop - rowH / 2 - 3;
+      cText(String(t.number ?? ''), colX[0], colX[1], midBase, 9);
+      cText(fmtB(lastCompleted), colX[1], colX[2], midBase, 8);
+
+      const nameBase = rowTop - nameH / 2 - 2.5;
+      const dateBase = rowTop - nameH - (rowH - nameH) / 2 - 2.5;
+      slots.forEach((s, g) => {
+        const gx0 = colX[2 + g * 2];
+        const gxm = colX[3 + g * 2];
+        const gx1 = colX[4 + g * 2];
+        cText(s.name, gx0, gx1, nameBase, 8);
+        cText(s.assigned, gx0, gxm, dateBase, 8);
+        cText(s.completed, gxm, gx1, dateBase, 8);
+      });
+    });
+
+    // ── Footer ──────────────────────────────────────────────────────────────
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
+    doc.text(
+      '*Cuando comience una nueva página, anote en esta columna la última fecha en que los territorios se completaron.',
+      left, Y(S13.footnoteY)
+    );
+    doc.text('S-13-S  1/22', left, Y(S13.formIdY));
   });
 
   doc.save(`S-13_${year}.pdf`);
 }
 
-// S-13 XLSX — 14 data columns with merged header rows
+// S-13 XLSX — 10 columns; each territory spans 2 rows (name row + dates row),
+// mirroring the official form.
 async function exportXlsx(territories: Territory[], allAssignments: Assignment[], year: number) {
   const XLSX = await import('xlsx');
   const wb = XLSX.utils.book_new();
 
   const sorted = [...territories].sort((a, b) => (a.number ?? 9999) - (b.number ?? 9999));
+  const rowCount = Math.max(S13.rowsPerPage, sorted.length);
 
-  // Row 1: title
-  // Row 2: año de servicio
-  // Row 3: blank
-  // Row 4: top header (Núm | Última | Asignado a (colspan 3) ×4)
-  // Row 5: sub-header (blank | blank | Nombre | Asignó | Completó ×4)
-  // Row 6+: data
-
-  const row4 = [
-    'Núm. de terr.',
-    'Última fecha\nen que se\ncompletó*',
-    'Asignado a', '', '',
-    'Asignado a', '', '',
-    'Asignado a', '', '',
-    'Asignado a', '', '',
-  ];
-  const row5 = [
-    '', '',
-    'Nombre', 'Fecha en que se asignó', 'Fecha en que se completó',
-    'Nombre', 'Fecha en que se asignó', 'Fecha en que se completó',
-    'Nombre', 'Fecha en que se asignó', 'Fecha en que se completó',
-    'Nombre', 'Fecha en que se asignó', 'Fecha en que se completó',
-  ];
-
-  const dataRows = sorted.map(t => {
-    const { lastCompleted, slots } = getSlots(t, allAssignments);
-    return [t.number ?? '', fmt(lastCompleted), ...slots];
-  });
-
-  const allRows = [
+  // r0 title · r1 "Año de servicio" · r2/r3 header · r4+ data (2 rows each)
+  const rows: (string | number)[][] = [
     ['REGISTRO DE ASIGNACIÓN DE TERRITORIO'],
     [`Año de servicio: ${year}`],
-    [],
-    row4,
-    row5,
-    ...dataRows,
-    [],
-    ['*Cuando comience una nueva página, anote en esta columna la última fecha en que los territorios se completaron.'],
-    ['S-13-S  1/22'],
+    ['Núm. de terr.', 'Última fecha en que se completó*',
+      'Asignado a', '', 'Asignado a', '', 'Asignado a', '', 'Asignado a', ''],
+    ['', '',
+      'Fecha en que se asignó', 'Fecha en que se completó',
+      'Fecha en que se asignó', 'Fecha en que se completó',
+      'Fecha en que se asignó', 'Fecha en que se completó',
+      'Fecha en que se asignó', 'Fecha en que se completó'],
   ];
 
-  const ws = XLSX.utils.aoa_to_sheet(allRows);
+  const HDR = 4; // first data row index
+  type Rng = { s: { r: number; c: number }; e: { r: number; c: number } };
+  const merges: Rng[] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 9 } },   // title
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 9 } },   // año de servicio
+    { s: { r: 2, c: 0 }, e: { r: 3, c: 0 } },   // Núm. de terr. (rowspan)
+    { s: { r: 2, c: 1 }, e: { r: 3, c: 1 } },   // Última fecha  (rowspan)
+    { s: { r: 2, c: 2 }, e: { r: 2, c: 3 } },   // Asignado a ×4 (colspan 2)
+    { s: { r: 2, c: 4 }, e: { r: 2, c: 5 } },
+    { s: { r: 2, c: 6 }, e: { r: 2, c: 7 } },
+    { s: { r: 2, c: 8 }, e: { r: 2, c: 9 } },
+  ];
 
-  // Column widths
+  for (let i = 0; i < rowCount; i++) {
+    const t = sorted[i];
+    const r = HDR + i * 2;
+    if (t) {
+      const { lastCompleted, slots } = getSlots(t, allAssignments);
+      rows.push([t.number ?? '', fmtB(lastCompleted),
+        slots[0].name, '', slots[1].name, '', slots[2].name, '', slots[3].name, '']);
+      rows.push(['', '',
+        slots[0].assigned, slots[0].completed,
+        slots[1].assigned, slots[1].completed,
+        slots[2].assigned, slots[2].completed,
+        slots[3].assigned, slots[3].completed]);
+    } else {
+      rows.push(['', '', '', '', '', '', '', '', '', '']);
+      rows.push(['', '', '', '', '', '', '', '', '', '']);
+    }
+    // Columns 1-2 merged down over both sub-rows; each name merged across its group
+    merges.push({ s: { r, c: 0 }, e: { r: r + 1, c: 0 } });
+    merges.push({ s: { r, c: 1 }, e: { r: r + 1, c: 1 } });
+    for (let g = 0; g < 4; g++) {
+      merges.push({ s: { r, c: 2 + g * 2 }, e: { r, c: 3 + g * 2 } });
+    }
+  }
+
+  const footR = HDR + rowCount * 2 + 1;
+  rows.push([]);
+  rows.push(['*Cuando comience una nueva página, anote en esta columna la última fecha en que los territorios se completaron.']);
+  rows.push(['S-13-S  1/22']);
+  merges.push({ s: { r: footR, c: 0 }, e: { r: footR, c: 9 } });
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!merges'] = merges;
+  // Widths proportional to the official column widths (pt → approx. chars)
   ws['!cols'] = [
-    { wch: 10 }, { wch: 16 },
-    { wch: 22 }, { wch: 14 }, { wch: 14 },
-    { wch: 22 }, { wch: 14 }, { wch: 14 },
-    { wch: 22 }, { wch: 14 }, { wch: 14 },
-    { wch: 22 }, { wch: 14 }, { wch: 14 },
+    { wch: 8 }, { wch: 14 },
+    { wch: 13 }, { wch: 13 },
+    { wch: 13 }, { wch: 13 },
+    { wch: 13 }, { wch: 13 },
+    { wch: 13 }, { wch: 13 },
   ];
-
-  // Merges: title A1:N1, año A2:N2, Asignado a groups
-  ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 13 } },  // title
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 13 } },  // año
-    { s: { r: 3, c: 0 }, e: { r: 4, c: 0 } },   // Núm rowspan
-    { s: { r: 3, c: 1 }, e: { r: 4, c: 1 } },   // Última rowspan
-    { s: { r: 3, c: 2 }, e: { r: 3, c: 4 } },   // Asignado a 1
-    { s: { r: 3, c: 5 }, e: { r: 3, c: 7 } },   // Asignado a 2
-    { s: { r: 3, c: 8 }, e: { r: 3, c: 10 } },  // Asignado a 3
-    { s: { r: 3, c: 11 }, e: { r: 3, c: 13 } }, // Asignado a 4
-  ];
+  ws['!rows'] = rows.map((_, i) => (i === 0 ? { hpt: 20 } : i === 2 ? { hpt: 16 } : { hpt: 14 }));
+  // NOTE: xlsx@0.18 (SheetJS community build) does not write cell styling, so
+  // fills/fonts/borders are left to Excel's defaults. Structure, merges and
+  // column widths — which is what the S-13 layout depends on — are preserved.
 
   XLSX.utils.book_append_sheet(wb, ws, `S-13 ${year}`);
   XLSX.writeFile(wb, `S-13_${year}.xlsx`);
 }
 
-// S-13 DOCX — two header rows with spanning, 14 data columns
+// S-13 DOCX — A4 portrait, 10 columns, each territory over two rows.
 async function exportDocx(territories: Territory[], allAssignments: Assignment[], year: number) {
   const {
     Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun,
-    WidthType, AlignmentType, HeadingLevel, VerticalAlign,
-    ShadingType, TableLayoutType,
+    WidthType, AlignmentType, VerticalAlign, VerticalMergeType, TableLayoutType,
+    BorderStyle, ShadingType,
   } = await import('docx');
 
   const sorted = [...territories].sort((a, b) => (a.number ?? 9999) - (b.number ?? 9999));
+  const rowCount = Math.max(S13.rowsPerPage, sorted.length);
 
-  const hdrShading = { type: ShadingType.SOLID, color: 'D5E3F0', fill: 'D5E3F0' };
-  const hdrFont = { bold: true, size: 14 };
+  // Official column widths in points → twips (DXA), then normalised to the A4
+  // text width (11906 − 720 − 690 = 10496 twips).
+  const colW = [35.2, 63.8, 53.4, 52.8, 53.9, 53.0, 53.8, 52.9, 53.9, 52.1].map(pt => Math.round(pt * 20));
 
-  const mkCell = (text: string, opts?: {
-    bold?: boolean; size?: number; colSpan?: number; rowSpan?: number;
-    shading?: boolean; center?: boolean; width?: number;
-  }) => new TableCell({
-    columnSpan: opts?.colSpan,
-    rowSpan: opts?.rowSpan,
-    shading: opts?.shading ? hdrShading : undefined,
+  const edge = { style: BorderStyle.SINGLE, size: 6, color: '404040' };
+  const cellBorders = { top: edge, bottom: edge, left: edge, right: edge };
+
+  const mkCell = (text: string, o: {
+    bold?: boolean; size?: number; colSpan?: number;
+    merge?: 'restart' | 'continue'; width?: number; shaded?: boolean;
+  } = {}) => new TableCell({
+    columnSpan: o.colSpan,
+    verticalMerge: o.merge === 'restart' ? VerticalMergeType.RESTART
+      : o.merge === 'continue' ? VerticalMergeType.CONTINUE : undefined,
     verticalAlign: VerticalAlign.CENTER,
-    width: opts?.width ? { size: opts.width, type: WidthType.DXA } : undefined,
+    borders: cellBorders,
+    // Header block carries the same light gray as the printed form (D9D9D9).
+    shading: o.shaded ? { type: ShadingType.CLEAR, color: 'auto', fill: 'D9D9D9' } : undefined,
+    width: o.width ? { size: o.width, type: WidthType.DXA } : undefined,
     children: [new Paragraph({
-      alignment: opts?.center ? AlignmentType.CENTER : undefined,
-      children: [new TextRun({ text, bold: opts?.bold ?? false, size: opts?.size ?? 14 })],
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 20, after: 20 },
+      children: [new TextRun({ text, bold: o.bold ?? false, size: o.size ?? 16, font: 'Arial' })],
     })],
   });
 
-  const header1 = new TableRow({ tableHeader: true, children: [
-    mkCell('Núm.\nde terr.', { bold: true, colSpan: 1, rowSpan: 2, shading: true, center: true, width: 700 }),
-    mkCell('Última fecha en que se completó*', { bold: true, rowSpan: 2, shading: true, center: true, width: 1100 }),
-    mkCell('Asignado a', { bold: true, colSpan: 3, shading: true, center: true }),
-    mkCell('Asignado a', { bold: true, colSpan: 3, shading: true, center: true }),
-    mkCell('Asignado a', { bold: true, colSpan: 3, shading: true, center: true }),
-    mkCell('Asignado a', { bold: true, colSpan: 3, shading: true, center: true }),
-  ]});
-
-  const subLabels = ['Nombre', 'Fecha en que\nse asignó', 'Fecha en que\nse completó'];
-  const header2 = new TableRow({ tableHeader: true, children: [
-    ...subLabels, ...subLabels, ...subLabels, ...subLabels,
-  ].map(t => mkCell(t, { shading: true, center: true }))});
-
-  const dataRows = sorted.map(t => {
-    const { lastCompleted, slots } = getSlots(t, allAssignments);
-    const cells = [String(t.number ?? ''), fmt(lastCompleted), ...slots];
-    return new TableRow({ children: cells.map((text, i) => mkCell(text, { center: i <= 1 })) });
+  // Header row 1 — "Núm." and "Última fecha" start a vertical merge; the four
+  // "Asignado a" cells each span their group's 2 columns.
+  const header1 = new TableRow({
+    tableHeader: true,
+    children: [
+      mkCell('Núm. de terr.', { size: 18, merge: 'restart', width: colW[0], shaded: true }),
+      mkCell('Última fecha en que se completó*', { size: 18, merge: 'restart', width: colW[1], shaded: true }),
+      ...[0, 1, 2, 3].map(() => mkCell('Asignado a', { size: 18, colSpan: 2, shaded: true })),
+    ],
   });
+
+  // Header row 2 — the two date labels for every group.
+  const header2 = new TableRow({
+    tableHeader: true,
+    children: [
+      mkCell('', { merge: 'continue', shaded: true }),
+      mkCell('', { merge: 'continue', shaded: true }),
+      ...[0, 1, 2, 3].flatMap(() => [
+        mkCell('Fecha en que se asignó', { size: 16, shaded: true }),
+        mkCell('Fecha en que se completó', { size: 16, shaded: true }),
+      ]),
+    ],
+  });
+
+  const dataRows: InstanceType<typeof TableRow>[] = [];
+  for (let i = 0; i < rowCount; i++) {
+    const t = sorted[i];
+    const s = t ? getSlots(t, allAssignments) : null;
+    const slots: Slot[] = s?.slots ?? [0, 1, 2, 3].map(() => ({ name: '', assigned: '', completed: '' }));
+
+    // Upper sub-row: number + última fecha (merge start) and the four names.
+    dataRows.push(new TableRow({
+      children: [
+        mkCell(t ? String(t.number ?? '') : '', { size: 18, merge: 'restart' }),
+        mkCell(s ? fmtB(s.lastCompleted) : '', { size: 16, merge: 'restart' }),
+        ...slots.map(sl => mkCell(sl.name, { size: 16, colSpan: 2 })),
+      ],
+    }));
+    // Lower sub-row: the two dates of every group.
+    dataRows.push(new TableRow({
+      children: [
+        mkCell('', { merge: 'continue' }),
+        mkCell('', { merge: 'continue' }),
+        ...slots.flatMap(sl => [mkCell(sl.assigned, { size: 16 }), mkCell(sl.completed, { size: 16 })]),
+      ],
+    }));
+  }
 
   const doc = new Document({
     sections: [{
-      properties: { page: { size: { width: 15840, height: 12240 }, margin: { top: 720, right: 720, bottom: 720, left: 720 } } },
+      properties: {
+        page: {
+          size: { width: 11906, height: 16838 },            // A4 portrait
+          margin: { top: 720, right: 690, bottom: 720, left: 720 },
+        },
+      },
       children: [
         new Paragraph({
-          text: 'REGISTRO DE ASIGNACIÓN DE TERRITORIO',
-          heading: HeadingLevel.HEADING_1,
           alignment: AlignmentType.CENTER,
+          spacing: { after: 120 },
+          children: [new TextRun({ text: 'REGISTRO DE ASIGNACIÓN DE TERRITORIO', bold: true, size: 28, font: 'Arial' })],
         }),
-        new Paragraph({ children: [new TextRun({ text: `Año de servicio:  ${year}`, size: 22 })] }),
-        new Paragraph({ text: '' }),
+        new Paragraph({
+          spacing: { after: 120 },
+          children: [new TextRun({ text: `Año de servicio:  ${year}`, size: 24, font: 'Arial' })],
+        }),
         new Table({
           layout: TableLayoutType.FIXED,
-          width: { size: 100, type: WidthType.PERCENTAGE },
+          columnWidths: colW,
+          width: { size: colW.reduce((a, b) => a + b, 0), type: WidthType.DXA },
           rows: [header1, header2, ...dataRows],
         }),
-        new Paragraph({ text: '' }),
-        new Paragraph({ children: [new TextRun({ text: '*Cuando comience una nueva página, anote en esta columna la última fecha en que los territorios se completaron.', size: 14 })] }),
-        new Paragraph({ children: [new TextRun({ text: 'S-13-S  1/22', size: 14 })] }),
+        new Paragraph({
+          spacing: { before: 160 },
+          children: [new TextRun({ text: '*Cuando comience una nueva página, anote en esta columna la última fecha en que los territorios se completaron.', size: 20, font: 'Arial' })],
+        }),
+        new Paragraph({ children: [new TextRun({ text: 'S-13-S  1/22', size: 20, font: 'Arial' })] }),
       ],
     }],
   });
