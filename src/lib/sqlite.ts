@@ -16,6 +16,9 @@ export function getDb(): Database.Database {
   _db = new Database(DB_PATH);
   _db.pragma('journal_mode = WAL');
   _db.pragma('foreign_keys = ON');
+  _db.pragma('busy_timeout = 5000');
+  _db.pragma('cache_size = -8000');  // 8 MB page cache
+  _db.pragma('synchronous = NORMAL'); // safe with WAL
 
   const schema = fs.readFileSync(SCHEMA_PATH, 'utf8');
   _db.exec(schema);

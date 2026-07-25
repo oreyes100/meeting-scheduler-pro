@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { sb } from '@/lib/crud';
 import { getDb } from '@/lib/sqlite';
-import { getSessionContext } from '@/lib/serverContext';
+import { getSessionContext, unauthenticated } from '@/lib/serverContext';
 
 function userCols(alias: string, prefix: string) {
   return `${alias}.id as ${prefix}_id, ${alias}.first_name as ${prefix}_first, ${alias}.last_name as ${prefix}_last, ${alias}.display_name as ${prefix}_display, ${alias}.name as ${prefix}_name`;
@@ -15,6 +15,7 @@ function userObj(row: Record<string, unknown>, prefix: string) {
 export async function GET() {
   try {
     const ctx = await getSessionContext();
+    if (!ctx.userId) return unauthenticated();
     const db = getDb();
 
     let sql = `
@@ -69,6 +70,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const ctx = await getSessionContext();
+    if (!ctx.userId) return unauthenticated();
     const supabase = sb();
     const body = await request.json();
     const { date } = body;

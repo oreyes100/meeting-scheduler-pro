@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { sb } from '@/lib/crud';
-import { getSessionContext } from '@/lib/serverContext';
+import { getSessionContext, unauthenticated } from '@/lib/serverContext';
 
 const EDITABLE = ['number', 'name', 'color', 'coordinates', 'group_name', 'assigned_to', 'visit_start', 'visit_end', 'note', 'status'] as const;
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await getSessionContext();
+    if (!ctx.userId) return unauthenticated();
     const { id } = await params;
     const supabase = sb();
     const body = await request.json();
@@ -32,6 +33,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await getSessionContext();
+    if (!ctx.userId) return unauthenticated();
     const { id } = await params;
     const supabase = sb();
 

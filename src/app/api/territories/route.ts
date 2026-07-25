@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sb } from '@/lib/crud';
-import { getSessionContext } from '@/lib/serverContext';
+import { getSessionContext, unauthenticated } from '@/lib/serverContext';
 
 
 const SCHEMA_ERROR_CODES = new Set(['PGRST200', '42P01', '42703', 'PGRST204']);
@@ -15,6 +15,7 @@ function isSchemaMissing(error: { code?: string; message?: string } | null): boo
 export async function GET() {
   try {
     const ctx = await getSessionContext();
+    if (!ctx.userId) return unauthenticated();
     const supabase = sb();
 
     let query = supabase.from('territories').select('*').order('number', { ascending: true });
@@ -44,6 +45,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const ctx = await getSessionContext();
+    if (!ctx.userId) return unauthenticated();
     const supabase = sb();
     const body = await request.json();
 

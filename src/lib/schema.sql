@@ -490,6 +490,19 @@ CREATE TABLE IF NOT EXISTS field_service_reports (
 CREATE INDEX IF NOT EXISTS idx_fsr_month ON field_service_reports(month);
 CREATE INDEX IF NOT EXISTS idx_fsr_user  ON field_service_reports(user_id);
 
+-- ─── congregation_id indexes (performance) ───────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_users_congre          ON users(congregation_id);
+CREATE INDEX IF NOT EXISTS idx_meetings_congre       ON meetings(congregation_id);
+CREATE INDEX IF NOT EXISTS idx_weekend_congre        ON weekend_meetings(congregation_id);
+CREATE INDEX IF NOT EXISTS idx_territories_congre    ON territories(congregation_id);
+CREATE INDEX IF NOT EXISTS idx_fsr_congre            ON field_service_reports(congregation_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_congre     ON meeting_attendance(congregation_id);
+CREATE INDEX IF NOT EXISTS idx_pspeakers_congre      ON public_speakers(congregation_id);
+CREATE INDEX IF NOT EXISTS idx_outgoing_congre       ON outgoing_talks(congregation_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_congre          ON congregation_tasks(congregation_id);
+CREATE INDEX IF NOT EXISTS idx_maintenance_congre    ON maintenance_tasks(congregation_id);
+CREATE INDEX IF NOT EXISTS idx_events_congre         ON congregation_events(congregation_id);
+
 -- ─── 28. MEETING ATTENDANCE (→ congregations) ───────────────────────────────
 CREATE TABLE IF NOT EXISTS meeting_attendance (
   id              text PRIMARY KEY,

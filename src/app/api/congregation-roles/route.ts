@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sb } from '@/lib/crud';
-import { getSessionContext } from '@/lib/serverContext';
+import { getSessionContext, unauthenticated } from '@/lib/serverContext';
 
 
 const USER_FIELDS = 'id, first_name, last_name, display_name';
@@ -8,6 +8,7 @@ const USER_FIELDS = 'id, first_name, last_name, display_name';
 export async function GET() {
   try {
     const ctx = await getSessionContext();
+    if (!ctx.userId) return unauthenticated();
     const supabase = sb();
 
     let query = supabase.from('congregation_roles').select(`role_key, label, custom_label, updated_at, person:person_id(${USER_FIELDS}), assistant_1:assistant_1_id(${USER_FIELDS}), assistant_2:assistant_2_id(${USER_FIELDS})`);
@@ -25,6 +26,7 @@ export async function GET() {
 export async function PUT(request: Request) {
   try {
     const ctx = await getSessionContext();
+    if (!ctx.userId) return unauthenticated();
     const supabase = sb();
     const body = await request.json();
     const { role_key, person_id, assistant_1_id, assistant_2_id, custom_label } = body;
