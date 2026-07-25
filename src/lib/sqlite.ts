@@ -23,5 +23,13 @@ export function getDb(): Database.Database {
   const schema = fs.readFileSync(SCHEMA_PATH, 'utf8');
   _db.exec(schema);
 
+  // Runtime migrations for columns added after initial schema deployment
+  const runMigrations = [
+    `ALTER TABLE public_talk_outlines ADD COLUMN theme text`,
+  ];
+  for (const sql of runMigrations) {
+    try { _db.exec(sql); } catch { /* column already exists */ }
+  }
+
   return _db;
 }

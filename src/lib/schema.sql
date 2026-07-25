@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS public_talk_outlines (
   id         text PRIMARY KEY,
   number     integer NOT NULL,
   title      text NOT NULL,
+  theme      text,
   created_at text DEFAULT (datetime('now')),
   updated_at text DEFAULT (datetime('now')),
   UNIQUE(number)
@@ -515,3 +516,16 @@ CREATE TABLE IF NOT EXISTS meeting_attendance (
   congregation_id text REFERENCES congregations(id),
   UNIQUE(meeting_date, meeting_type, congregation_id)
 );
+
+-- ─── 29. TERRITORY ASSIGNMENTS (history for S-13 report) ────────────────────
+CREATE TABLE IF NOT EXISTS territory_assignments (
+  id             text PRIMARY KEY,
+  territory_id   text NOT NULL REFERENCES territories(id) ON DELETE CASCADE,
+  assigned_name  text NOT NULL,
+  assigned_date  text,
+  completed_date text,
+  created_at     text DEFAULT (datetime('now')),
+  congregation_id text REFERENCES congregations(id)
+);
+CREATE INDEX IF NOT EXISTS idx_ta_territory ON territory_assignments(territory_id);
+CREATE INDEX IF NOT EXISTS idx_ta_congre    ON territory_assignments(congregation_id);
