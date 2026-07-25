@@ -214,6 +214,9 @@ class QueryBuilder {
           if (!parsed.length) return { data: null, error: { code: 'PGRST116', message: 'No rows found' } };
           return { data: parsed[0], error: null };
         }
+        if (this.s.returnMaybe) {
+          return { data: parsed[0] ?? null, error: null };
+        }
         return { data: parsed, error: null };
       }
 

@@ -36,6 +36,8 @@ export function getDb(): Database.Database {
     `ALTER TABLE territory_assignments ADD COLUMN pairs_count integer`,
     `ALTER TABLE territory_assignments ADD COLUMN completion_hours real`,
     `ALTER TABLE territory_assignments ADD COLUMN completion_houses integer`,
+    // Congregation settings multi-tenant isolation
+    `ALTER TABLE congregation_settings ADD COLUMN owning_congregation_id text`,
   ];
   for (const sql of runMigrations) {
     try { _db.exec(sql); } catch { /* column already exists */ }
