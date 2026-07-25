@@ -50,166 +50,270 @@ function currentServiceYear() {
   return now.getMonth() >= 8 ? now.getFullYear() + 1 : now.getFullYear();
 }
 
-// ── S-13 export helpers ──────────────────────────────────────────────────────
+// ── S-13 helpers ─────────────────────────────────────────────────────────────
 
+function getSlots(t: Territory, allAssignments: Assignment[]) {
+  const tas = allAssignments
+    .filter(a => a.territory_id === t.id)
+    .sort((a, b) => (a.assigned_date ?? '').localeCompare(b.assigned_date ?? ''));
+  const lastCompleted = [...tas].reverse().find(a => a.completed_date)?.completed_date ?? null;
+  // Each slot: [name, assignedDate, completedDate]
+  const slots = [0, 1, 2, 3].flatMap(i => {
+    const a = tas[i];
+    return [a?.assigned_name ?? '', a?.assigned_date ? fmt(a.assigned_date) : '', a?.completed_date ? fmt(a.completed_date) : ''];
+  });
+  return { lastCompleted, slots };
+}
+
+// S-13 PDF — 14 columns matching official template
+// Col layout: [Núm] [Última] [Nombre1][Asignó1][Completó1] × 4
 async function exportPdf(territories: Territory[], allAssignments: Assignment[], year: number) {
   const { default: jsPDF } = await import('jspdf');
   const { default: autoTable } = await import('jspdf-autotable');
 
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'letter' });
   const pageW = doc.internal.pageSize.getWidth();
-
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text('REGISTRO DE ASIGNACIÓN DE TERRITORIO', pageW / 2, 14, { align: 'center' });
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Año de servicio: ${year}`, 14, 22);
-
-  const head = [
-    [
-      { content: 'Núm.\nde terr.', rowSpan: 2 },
-      { content: 'Última fecha\nen que se\ncompletó*', rowSpan: 2 },
-      { content: 'Asignado a', colSpan: 2 },
-      { content: 'Asignado a', colSpan: 2 },
-      { content: 'Asignado a', colSpan: 2 },
-      { content: 'Asignado a', colSpan: 2 },
-    ],
-    [
-      'Fecha asignado', 'Fecha completado',
-      'Fecha asignado', 'Fecha completado',
-      'Fecha asignado', 'Fecha completado',
-      'Fecha asignado', 'Fecha completado',
-    ],
-  ];
+  const pageH = doc.internal.pageSize.getHeight();
 
   const sorted = [...territories].sort((a, b) => (a.number ?? 9999) - (b.number ?? 9999));
 
+  // Draw header on each page
+  const drawPageHeader = (pageNum: number) => {
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(20, 20, 20);
+    doc.text('REGISTRO DE ASIGNACIÓN DE TERRITORIO', pageW / 2, 10, { align: 'center' });
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Año de servicio:  ${year}`, 14, 17);
+    if (pageNum > 1) doc.text(`(continuación)`, pageW - 14, 17, { align: 'right' });
+  };
+
+  drawPageHeader(1);
+
+  // Header: row 1 uses rowSpan=2 for first 2 cols; colSpan=3 for each "Asignado a"
+  const head = [
+    [
+      { content: 'Núm.\nde terr.', rowSpan: 2, styles: { valign: 'middle' as const, halign: 'center' as const } },
+      { content: 'Última\nfecha en\nque se\ncompletó*', rowSpan: 2, styles: { valign: 'middle' as const, halign: 'center' as const } },
+      { content: 'Asignado a', colSpan: 3, styles: { halign: 'center' as const } },
+      { content: 'Asignado a', colSpan: 3, styles: { halign: 'center' as const } },
+      { content: 'Asignado a', colSpan: 3, styles: { halign: 'center' as const } },
+      { content: 'Asignado a', colSpan: 3, styles: { halign: 'center' as const } },
+    ],
+    [
+      // sub-row for each slot (cols 3-14); cols 1-2 occupied by rowSpan above
+      { content: 'Nombre',                    styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
+      { content: 'Fecha en que\nse asignó',   styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
+      { content: 'Fecha en que\nse completó', styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
+      { content: 'Nombre',                    styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
+      { content: 'Fecha en que\nse asignó',   styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
+      { content: 'Fecha en que\nse completó', styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
+      { content: 'Nombre',                    styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
+      { content: 'Fecha en que\nse asignó',   styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
+      { content: 'Fecha en que\nse completó', styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
+      { content: 'Nombre',                    styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
+      { content: 'Fecha en que\nse asignó',   styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
+      { content: 'Fecha en que\nse completó', styles: { halign: 'center' as const, fontStyle: 'italic' as const } },
+    ],
+  ];
+
   const body = sorted.map(t => {
-    const tas = allAssignments
-      .filter(a => a.territory_id === t.id)
-      .sort((a, b) => (a.assigned_date ?? '').localeCompare(b.assigned_date ?? ''));
-    const lastCompleted = [...tas].reverse().find(a => a.completed_date)?.completed_date ?? null;
-    const slots = [0, 1, 2, 3].flatMap(i => {
-      const a = tas[i];
-      return [a ? a.assigned_name + '\n' + fmt(a.assigned_date) : '', a ? fmt(a.completed_date) : ''];
-    });
-    return [t.number ?? '', fmt(lastCompleted), ...slots];
+    const { lastCompleted, slots } = getSlots(t, allAssignments);
+    return [
+      { content: String(t.number ?? ''), styles: { halign: 'center' as const } },
+      { content: fmt(lastCompleted), styles: { halign: 'center' as const } },
+      ...slots,
+    ];
   });
 
+  let pageCount = 1;
   autoTable(doc, {
     head,
     body,
-    startY: 26,
-    styles: { fontSize: 7, cellPadding: 1.5, lineWidth: 0.3, lineColor: [180, 180, 180] },
-    headStyles: { fillColor: [220, 230, 240], textColor: [30, 30, 30], fontStyle: 'bold', halign: 'center' },
+    startY: 21,
+    styles: { fontSize: 7, cellPadding: { top: 1.5, right: 1, bottom: 1.5, left: 1 }, lineWidth: 0.25, lineColor: [160, 160, 170], minCellHeight: 8 },
+    headStyles: { fillColor: [210, 220, 235], textColor: [20, 20, 50], fontStyle: 'bold', fontSize: 7 },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 12 },
-      1: { halign: 'center', cellWidth: 18 },
+      0: { cellWidth: 11, halign: 'center' as const },
+      1: { cellWidth: 18, halign: 'center' as const },
+      2: { cellWidth: 25 },
+      3: { cellWidth: 16, halign: 'center' as const },
+      4: { cellWidth: 16, halign: 'center' as const },
+      5: { cellWidth: 25 },
+      6: { cellWidth: 16, halign: 'center' as const },
+      7: { cellWidth: 16, halign: 'center' as const },
+      8: { cellWidth: 25 },
+      9: { cellWidth: 16, halign: 'center' as const },
+      10: { cellWidth: 16, halign: 'center' as const },
+      11: { cellWidth: 25 },
+      12: { cellWidth: 16, halign: 'center' as const },
+      13: { cellWidth: 16, halign: 'center' as const },
     },
-    margin: { left: 10, right: 10 },
+    alternateRowStyles: { fillColor: [248, 249, 252] },
+    margin: { left: 8, right: 8, bottom: 14 },
+    didDrawPage: (data) => {
+      // Footer
+      doc.setFontSize(6);
+      doc.setTextColor(80, 80, 80);
+      doc.text(
+        '*Cuando comience una nueva página, anote en esta columna la última fecha en que los territorios se completaron.',
+        8, pageH - 8
+      );
+      doc.text('S-13-S  1/22', 8, pageH - 4);
+      doc.text(`Año de servicio: ${year}`, pageW - 8, pageH - 4, { align: 'right' });
+      // Re-draw title on pages after the first
+      if (data.pageNumber > pageCount) {
+        pageCount = data.pageNumber;
+        drawPageHeader(data.pageNumber);
+      }
+    },
   });
-
-  doc.setFontSize(6);
-  doc.text('*Cuando comience una nueva página, anote en esta columna la última fecha en que los territorios se completaron.', 10, doc.internal.pageSize.getHeight() - 8);
-  doc.text('S-13-S 1/22', 10, doc.internal.pageSize.getHeight() - 4);
 
   doc.save(`S-13_${year}.pdf`);
 }
 
+// S-13 XLSX — 14 data columns with merged header rows
 async function exportXlsx(territories: Territory[], allAssignments: Assignment[], year: number) {
   const XLSX = await import('xlsx');
   const wb = XLSX.utils.book_new();
 
   const sorted = [...territories].sort((a, b) => (a.number ?? 9999) - (b.number ?? 9999));
 
-  const rows: (string | number)[][] = [
+  // Row 1: title
+  // Row 2: año de servicio
+  // Row 3: blank
+  // Row 4: top header (Núm | Última | Asignado a (colspan 3) ×4)
+  // Row 5: sub-header (blank | blank | Nombre | Asignó | Completó ×4)
+  // Row 6+: data
+
+  const row4 = [
+    'Núm. de terr.',
+    'Última fecha\nen que se\ncompletó*',
+    'Asignado a', '', '',
+    'Asignado a', '', '',
+    'Asignado a', '', '',
+    'Asignado a', '', '',
+  ];
+  const row5 = [
+    '', '',
+    'Nombre', 'Fecha en que se asignó', 'Fecha en que se completó',
+    'Nombre', 'Fecha en que se asignó', 'Fecha en que se completó',
+    'Nombre', 'Fecha en que se asignó', 'Fecha en que se completó',
+    'Nombre', 'Fecha en que se asignó', 'Fecha en que se completó',
+  ];
+
+  const dataRows = sorted.map(t => {
+    const { lastCompleted, slots } = getSlots(t, allAssignments);
+    return [t.number ?? '', fmt(lastCompleted), ...slots];
+  });
+
+  const allRows = [
     ['REGISTRO DE ASIGNACIÓN DE TERRITORIO'],
     [`Año de servicio: ${year}`],
     [],
-    [
-      'Núm. de terr.', 'Última fecha en que se completó*',
-      'Asignado a (1)', 'Fecha en que se asignó', 'Fecha en que se completó',
-      'Asignado a (2)', 'Fecha en que se asignó', 'Fecha en que se completó',
-      'Asignado a (3)', 'Fecha en que se asignó', 'Fecha en que se completó',
-      'Asignado a (4)', 'Fecha en que se asignó', 'Fecha en que se completó',
-    ],
-    ...sorted.map(t => {
-      const tas = allAssignments
-        .filter(a => a.territory_id === t.id)
-        .sort((a, b) => (a.assigned_date ?? '').localeCompare(b.assigned_date ?? ''));
-      const lastCompleted = [...tas].reverse().find(a => a.completed_date)?.completed_date ?? '';
-      const slots = [0, 1, 2, 3].flatMap(i => {
-        const a = tas[i];
-        return [a?.assigned_name ?? '', a?.assigned_date ?? '', a?.completed_date ?? ''];
-      });
-      return [t.number ?? '', lastCompleted, ...slots];
-    }),
+    row4,
+    row5,
+    ...dataRows,
     [],
     ['*Cuando comience una nueva página, anote en esta columna la última fecha en que los territorios se completaron.'],
-    ['S-13-S 1/22'],
+    ['S-13-S  1/22'],
   ];
 
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{ wch: 12 }, { wch: 22 }, ...Array(12).fill({ wch: 20 })];
+  const ws = XLSX.utils.aoa_to_sheet(allRows);
+
+  // Column widths
+  ws['!cols'] = [
+    { wch: 10 }, { wch: 16 },
+    { wch: 22 }, { wch: 14 }, { wch: 14 },
+    { wch: 22 }, { wch: 14 }, { wch: 14 },
+    { wch: 22 }, { wch: 14 }, { wch: 14 },
+    { wch: 22 }, { wch: 14 }, { wch: 14 },
+  ];
+
+  // Merges: title A1:N1, año A2:N2, Asignado a groups
+  ws['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 13 } },  // title
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 13 } },  // año
+    { s: { r: 3, c: 0 }, e: { r: 4, c: 0 } },   // Núm rowspan
+    { s: { r: 3, c: 1 }, e: { r: 4, c: 1 } },   // Última rowspan
+    { s: { r: 3, c: 2 }, e: { r: 3, c: 4 } },   // Asignado a 1
+    { s: { r: 3, c: 5 }, e: { r: 3, c: 7 } },   // Asignado a 2
+    { s: { r: 3, c: 8 }, e: { r: 3, c: 10 } },  // Asignado a 3
+    { s: { r: 3, c: 11 }, e: { r: 3, c: 13 } }, // Asignado a 4
+  ];
+
   XLSX.utils.book_append_sheet(wb, ws, `S-13 ${year}`);
   XLSX.writeFile(wb, `S-13_${year}.xlsx`);
 }
 
+// S-13 DOCX — two header rows with spanning, 14 data columns
 async function exportDocx(territories: Territory[], allAssignments: Assignment[], year: number) {
-  const { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, WidthType, AlignmentType, HeadingLevel } = await import('docx');
+  const {
+    Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun,
+    WidthType, AlignmentType, HeadingLevel, VerticalAlign,
+    ShadingType, TableLayoutType,
+  } = await import('docx');
 
   const sorted = [...territories].sort((a, b) => (a.number ?? 9999) - (b.number ?? 9999));
 
-  const headerRow = new TableRow({
-    children: [
-      'Núm. de terr.',
-      'Última fecha completado*',
-      'Asignado a (1)', 'Asignado', 'Completado',
-      'Asignado a (2)', 'Asignado', 'Completado',
-      'Asignado a (3)', 'Asignado', 'Completado',
-      'Asignado a (4)', 'Asignado', 'Completado',
-    ].map(text => new TableCell({
-      children: [new Paragraph({ children: [new TextRun({ text, bold: true, size: 16 })] })],
-      width: { size: 700, type: WidthType.DXA },
-    })),
+  const hdrShading = { type: ShadingType.SOLID, color: 'D5E3F0', fill: 'D5E3F0' };
+  const hdrFont = { bold: true, size: 14 };
+
+  const mkCell = (text: string, opts?: {
+    bold?: boolean; size?: number; colSpan?: number; rowSpan?: number;
+    shading?: boolean; center?: boolean; width?: number;
+  }) => new TableCell({
+    columnSpan: opts?.colSpan,
+    rowSpan: opts?.rowSpan,
+    shading: opts?.shading ? hdrShading : undefined,
+    verticalAlign: VerticalAlign.CENTER,
+    width: opts?.width ? { size: opts.width, type: WidthType.DXA } : undefined,
+    children: [new Paragraph({
+      alignment: opts?.center ? AlignmentType.CENTER : undefined,
+      children: [new TextRun({ text, bold: opts?.bold ?? false, size: opts?.size ?? 14 })],
+    })],
   });
 
+  const header1 = new TableRow({ tableHeader: true, children: [
+    mkCell('Núm.\nde terr.', { bold: true, colSpan: 1, rowSpan: 2, shading: true, center: true, width: 700 }),
+    mkCell('Última fecha en que se completó*', { bold: true, rowSpan: 2, shading: true, center: true, width: 1100 }),
+    mkCell('Asignado a', { bold: true, colSpan: 3, shading: true, center: true }),
+    mkCell('Asignado a', { bold: true, colSpan: 3, shading: true, center: true }),
+    mkCell('Asignado a', { bold: true, colSpan: 3, shading: true, center: true }),
+    mkCell('Asignado a', { bold: true, colSpan: 3, shading: true, center: true }),
+  ]});
+
+  const subLabels = ['Nombre', 'Fecha en que\nse asignó', 'Fecha en que\nse completó'];
+  const header2 = new TableRow({ tableHeader: true, children: [
+    ...subLabels, ...subLabels, ...subLabels, ...subLabels,
+  ].map(t => mkCell(t, { shading: true, center: true }))});
+
   const dataRows = sorted.map(t => {
-    const tas = allAssignments
-      .filter(a => a.territory_id === t.id)
-      .sort((a, b) => (a.assigned_date ?? '').localeCompare(b.assigned_date ?? ''));
-    const lastCompleted = [...tas].reverse().find(a => a.completed_date)?.completed_date ?? '';
-    const cells = [
-      String(t.number ?? ''),
-      fmt(lastCompleted || null),
-      ...([0, 1, 2, 3].flatMap(i => {
-        const a = tas[i];
-        return [a?.assigned_name ?? '', fmt(a?.assigned_date ?? null), fmt(a?.completed_date ?? null)];
-      })),
-    ];
-    return new TableRow({
-      children: cells.map(text => new TableCell({
-        children: [new Paragraph({ children: [new TextRun({ text, size: 16 })] })],
-        width: { size: 700, type: WidthType.DXA },
-      })),
-    });
+    const { lastCompleted, slots } = getSlots(t, allAssignments);
+    const cells = [String(t.number ?? ''), fmt(lastCompleted), ...slots];
+    return new TableRow({ children: cells.map((text, i) => mkCell(text, { center: i <= 1 })) });
   });
 
   const doc = new Document({
     sections: [{
+      properties: { page: { size: { width: 15840, height: 12240 }, margin: { top: 720, right: 720, bottom: 720, left: 720 } } },
       children: [
         new Paragraph({
           text: 'REGISTRO DE ASIGNACIÓN DE TERRITORIO',
           heading: HeadingLevel.HEADING_1,
           alignment: AlignmentType.CENTER,
         }),
-        new Paragraph({ children: [new TextRun({ text: `Año de servicio: ${year}`, size: 22 })] }),
+        new Paragraph({ children: [new TextRun({ text: `Año de servicio:  ${year}`, size: 22 })] }),
         new Paragraph({ text: '' }),
-        new Table({ rows: [headerRow, ...dataRows], width: { size: 100, type: WidthType.PERCENTAGE } }),
+        new Table({
+          layout: TableLayoutType.FIXED,
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: [header1, header2, ...dataRows],
+        }),
         new Paragraph({ text: '' }),
-        new Paragraph({ children: [new TextRun({ text: '*Cuando comience una nueva página, anote en esta columna la última fecha en que los territorios se completaron.', size: 16 })] }),
-        new Paragraph({ children: [new TextRun({ text: 'S-13-S 1/22', size: 16 })] }),
+        new Paragraph({ children: [new TextRun({ text: '*Cuando comience una nueva página, anote en esta columna la última fecha en que los territorios se completaron.', size: 14 })] }),
+        new Paragraph({ children: [new TextRun({ text: 'S-13-S  1/22', size: 14 })] }),
       ],
     }],
   });
@@ -217,9 +321,7 @@ async function exportDocx(territories: Territory[], allAssignments: Assignment[]
   const blob = await Packer.toBlob(doc);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = `S-13_${year}.docx`;
-  a.click();
+  a.href = url; a.download = `S-13_${year}.docx`; a.click();
   URL.revokeObjectURL(url);
 }
 
@@ -419,55 +521,25 @@ export default function TerritoriesPage() {
 
       {/* Panel izquierdo: lista + edición */}
       <div className="w-full md:w-80 max-h-[45vh] md:max-h-none flex-shrink-0 border-b md:border-b-0 md:border-r border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col">
-        <div className="px-4 py-3 border-b border-slate-200 dark:border-gray-700 flex items-center justify-between gap-2">
-          <h1 className="font-bold text-slate-800 dark:text-gray-100 flex items-center gap-2"><MapPin size={18} className="text-sky-600" /> Territorios</h1>
-          <div className="flex gap-1.5">
-            {!drawing && !drawingBoundary && (
-              <button onClick={startDraw} className="flex items-center gap-1 bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg">
-                <Plus size={14} /> Nuevo
-              </button>
-            )}
-            {!drawing && !drawingBoundary && (
-              <button onClick={startBoundary} title="Definir límite de la congregación"
-                className="flex items-center gap-1 bg-slate-500 hover:bg-slate-600 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg">
-                <SquareDashed size={14} /> Límite
-              </button>
-            )}
-            {!drawing && !drawingBoundary && boundary && (
-              <button onClick={clearBoundary} title="Eliminar límite" className="text-slate-400 hover:text-red-500 px-1">
-                <X size={14} />
-              </button>
-            )}
-            {/* S-13 Export dropdown */}
-            {!drawing && !drawingBoundary && (
-              <div className="relative">
-                <button
-                  onClick={() => setExportOpen(prev => !prev)}
-                  disabled={exporting || territories.length === 0}
-                  title="Exportar S-13"
-                  className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg"
-                >
-                  {exporting ? '…' : <FileDown size={14} />}
-                  <ChevronDown size={11} />
-                </button>
-                {exportOpen && (
-                  <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-600 rounded-lg shadow-lg min-w-[140px]">
-                    <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Exportar S-13</p>
-                    {[
-                      { fmt: 'pdf' as const, icon: <FileText size={13} />, label: 'PDF' },
-                      { fmt: 'xlsx' as const, icon: <FileSpreadsheet size={13} />, label: 'Excel (XLSX)' },
-                      { fmt: 'docx' as const, icon: <FileText size={13} />, label: 'Word (DOCX)' },
-                    ].map(opt => (
-                      <button key={opt.fmt} onClick={() => handleExport(opt.fmt)}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-200">
-                        {opt.icon} {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+        {/* Header — only map/boundary actions, no overflow */}
+        <div className="px-3 py-2.5 border-b border-slate-200 dark:border-gray-700 flex items-center gap-2">
+          <h1 className="font-bold text-slate-800 dark:text-gray-100 flex items-center gap-1.5 mr-auto"><MapPin size={16} className="text-sky-600" /> Territorios</h1>
+          {!drawing && !drawingBoundary && (
+            <button onClick={startDraw} className="flex items-center gap-1 bg-sky-600 hover:bg-sky-700 text-white text-xs font-medium px-2 py-1.5 rounded-lg">
+              <Plus size={13} /> Nuevo
+            </button>
+          )}
+          {!drawing && !drawingBoundary && (
+            <button onClick={startBoundary} title="Definir límite"
+              className="flex items-center gap-1 bg-slate-500 hover:bg-slate-600 text-white text-xs font-medium px-2 py-1.5 rounded-lg">
+              <SquareDashed size={13} /> Límite
+            </button>
+          )}
+          {!drawing && !drawingBoundary && boundary && (
+            <button onClick={clearBoundary} title="Eliminar límite" className="text-slate-400 hover:text-red-500 px-1">
+              <X size={13} />
+            </button>
+          )}
         </div>
 
         {migrationPending && (
@@ -540,6 +612,29 @@ export default function TerritoriesPage() {
             ))
           )}
         </div>
+
+        {/* S-13 Export — footer strip (avoids header overflow) */}
+        {!drawing && !drawingBoundary && territories.length > 0 && (
+          <div className="border-t border-slate-200 dark:border-gray-700 px-3 py-2 bg-slate-50 dark:bg-gray-800/60 relative">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 flex-1">Reporte S-13</span>
+              {[
+                { fmt: 'pdf' as const, icon: <FileText size={12} />, label: 'PDF' },
+                { fmt: 'xlsx' as const, icon: <FileSpreadsheet size={12} />, label: 'XLSX' },
+                { fmt: 'docx' as const, icon: <FileText size={12} />, label: 'DOCX' },
+              ].map(opt => (
+                <button
+                  key={opt.fmt}
+                  onClick={() => handleExport(opt.fmt)}
+                  disabled={exporting}
+                  className="flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white"
+                >
+                  {opt.icon} {exporting ? '…' : opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Detalle del seleccionado */}
         {selected && !drawing && (
