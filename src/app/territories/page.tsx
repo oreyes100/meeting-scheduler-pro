@@ -4,11 +4,12 @@ import React, { useCallback, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import {
   MapPin, Plus, Trash2, Save, X, Undo2, Check, Crosshair, SquareDashed,
-  History, FileDown, ChevronDown, FileText, FileSpreadsheet,
+  History, FileText, FileSpreadsheet, Users2, Map as MapIcon, List,
 } from 'lucide-react';
 import type { LatLng } from '@/components/TerritoryMap';
 import { IconSidebar } from '@/components/IconSidebar';
 import { SyncStatus } from '@/components/SyncStatus';
+import { useDevice } from '@/lib/useDevice';
 
 const TerritoryMap = dynamic(() => import('@/components/TerritoryMap'), { ssr: false });
 
@@ -25,6 +26,9 @@ interface Territory {
   visit_end: string | null;
   note: string | null;
   status: 'available' | 'assigned' | 'completed';
+  pairs_count: number | null;
+  completion_hours: number | null;
+  completion_houses: number | null;
 }
 
 interface Assignment {
@@ -33,7 +37,19 @@ interface Assignment {
   assigned_name: string;
   assigned_date: string | null;
   completed_date: string | null;
+  pairs_count?: number | null;
+  completion_hours?: number | null;
+  completion_houses?: number | null;
 }
+
+type StatusFilter = 'all' | 'available' | 'assigned' | 'completed';
+
+const FILTERS: { value: StatusFilter; label: string }[] = [
+  { value: 'all', label: 'Todos' },
+  { value: 'available', label: 'Disponibles' },
+  { value: 'assigned', label: 'Asignados' },
+  { value: 'completed', label: 'Completados' },
+];
 
 const PALETTE = ['#3d7d8e', '#c0392b', '#27ae60', '#8e44ad', '#d35400', '#2980b9', '#16a085', '#c9a227'];
 const STATUS_LABEL: Record<string, string> = { available: 'Disponible', assigned: 'Asignado', completed: 'Completado' };
@@ -111,6 +127,51 @@ function getSlots(t: Territory, allAssignments: Assignment[]) {
     };
   });
   return { lastCompleted, slots };
+}
+
+/**
+ * Draws the territory outline to a PNG data URI so it can travel with the
+ * assignment notification. Deliberately a plain shape rather than a map tile
+ * capture — tile providers forbid redistributing imagery, and the outline plus
+ * the territory name is what the publisher actually needs to locate it.
+ */
+function renderTerritoryImage(t: Territory): string | null {
+  if (typeof document === 'undefined' || !t.coordinates?.length) return null;
+  const W = 600, H = 400, PAD = 40;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  const lats = t.coordinates.map(c => c.lat);
+  const lngs = t.coordinates.map(c => c.lng);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+  const spanLat = maxLat - minLat || 1e-6;
+  const spanLng = maxLng - minLng || 1e-6;
+  const scale = Math.min((W - PAD * 2) / spanLng, (H - PAD * 2 - 30) / spanLat);
+  // Latitude grows upward, canvas y grows downward — flip it.
+  const px = (lng: number) => PAD + (lng - minLng) * scale + (W - PAD * 2 - spanLng * scale) / 2;
+  const py = (lat: number) => H - 30 - PAD - (lat - minLat) * scale - (H - PAD * 2 - 30 - spanLat * scale) / 2;
+
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.beginPath();
+  t.coordinates.forEach((c, i) => (i ? ctx.lineTo(px(c.lng), py(c.lat)) : ctx.moveTo(px(c.lng), py(c.lat))));
+  ctx.closePath();
+  ctx.fillStyle = t.color + '55';
+  ctx.fill();
+  ctx.strokeStyle = t.color;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 20px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`${t.number != null ? t.number + '. ' : ''}${t.name}`, W / 2, H - 10);
+
+  return canvas.toDataURL('image/png');
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -260,7 +321,9 @@ async function exportPdf(territories: Territory[], allAssignments: Assignment[],
 // S-13 XLSX — 10 columns; each territory spans 2 rows (name row + dates row),
 // mirroring the official form.
 async function exportXlsx(territories: Territory[], allAssignments: Assignment[], year: number) {
-  const XLSX = await import('xlsx');
+  // xlsx-js-style is a drop-in SheetJS fork that can actually write cell
+  // styling (the community `xlsx` build silently drops it).
+  const XLSX = (await import('xlsx-js-style')).default;
   const wb = XLSX.utils.book_new();
 
   const sorted = [...territories].sort((a, b) => (a.number ?? 9999) - (b.number ?? 9999));
@@ -332,10 +395,52 @@ async function exportXlsx(territories: Territory[], allAssignments: Assignment[]
     { wch: 13 }, { wch: 13 },
     { wch: 13 }, { wch: 13 },
   ];
-  ws['!rows'] = rows.map((_, i) => (i === 0 ? { hpt: 20 } : i === 2 ? { hpt: 16 } : { hpt: 14 }));
-  // NOTE: xlsx@0.18 (SheetJS community build) does not write cell styling, so
-  // fills/fonts/borders are left to Excel's defaults. Structure, merges and
-  // column widths — which is what the S-13 layout depends on — are preserved.
+  ws['!rows'] = rows.map((_, i) => (i === 0 ? { hpt: 22 } : i === 2 ? { hpt: 30 } : i === 3 ? { hpt: 26 } : { hpt: 15 }));
+
+  // ── Styling to match the printed form ──────────────────────────────────
+  const THIN = { style: 'thin', color: { rgb: 'FF404040' } };
+  const MED = { style: 'medium', color: { rgb: 'FF000000' } };
+  const lastRow = HDR + rowCount * 2 - 1;
+  const center = { horizontal: 'center', vertical: 'center', wrapText: true };
+
+  for (let R = 0; R <= lastRow; R++) {
+    for (let C = 0; C <= 9; C++) {
+      const addr = XLSX.utils.encode_cell({ r: R, c: C });
+      if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+
+      if (R === 0) {
+        ws[addr].s = { font: { name: 'Arial', sz: 14, bold: true }, alignment: center };
+        continue;
+      }
+      if (R === 1) {
+        ws[addr].s = { font: { name: 'Arial', sz: 12, bold: true }, alignment: { horizontal: 'left', vertical: 'center' } };
+        continue;
+      }
+
+      const isHeader = R === 2 || R === 3;
+      const isNameRow = R >= HDR && (R - HDR) % 2 === 0;
+      // Heavy rules: the outer box, the group separators, and the line closing
+      // each territory (i.e. under every date sub-row).
+      const groupStart = C === 0 || C === 2 || C === 4 || C === 6 || C === 8;
+      const groupEnd = C === 1 || C === 3 || C === 5 || C === 7 || C === 9;
+
+      ws[addr].s = {
+        font: {
+          name: 'Arial',
+          sz: isHeader ? (R === 2 ? 9 : 8) : C === 0 ? 9 : 8,
+          bold: false,
+        },
+        alignment: center,
+        fill: isHeader ? { patternType: 'solid', fgColor: { rgb: 'FFD9D9D9' } } : undefined,
+        border: {
+          top: R === 2 || (R >= HDR && isNameRow) ? MED : THIN,
+          bottom: R === 3 || (R >= HDR && !isNameRow) ? MED : THIN,
+          left: C === 0 || (groupStart && C >= 2) ? MED : THIN,
+          right: C === 9 || (groupEnd && C <= 7) ? MED : THIN,
+        },
+      };
+    }
+  }
 
   XLSX.utils.book_append_sheet(wb, ws, `S-13 ${year}`);
   XLSX.writeFile(wb, `S-13_${year}.xlsx`);
@@ -478,6 +583,19 @@ export default function TerritoriesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+
+  // Layout adapts to phone / tablet / desktop
+  const device = useDevice();
+  const isPhone = device === 'mobile';
+  // On phone and tablet the map and the list compete for space, so they are
+  // shown one at a time instead of side by side.
+  const [pane, setPane] = useState<'list' | 'map'>('list');
+  const splitView = device === 'desktop';
+
+  // "Completar" questionnaire
+  const [completeFor, setCompleteFor] = useState<Territory | null>(null);
+  const [completeForm, setCompleteForm] = useState({ hours: '', houses: '' });
 
   // Export state
   const [exportOpen, setExportOpen] = useState(false);
@@ -522,7 +640,18 @@ export default function TerritoriesPage() {
     setAssignments(json.assignments || []);
   }, []);
 
-  const selected = territories.find(t => t.id === selectedId) || null;
+  const selected = selectedId ? territories.find(t => t.id === selectedId) || null : null;
+
+  const visible = statusFilter === 'all'
+    ? territories
+    : territories.filter(t => t.status === statusFilter);
+
+  const counts = {
+    all: territories.length,
+    available: territories.filter(t => t.status === 'available').length,
+    assigned: territories.filter(t => t.status === 'assigned').length,
+    completed: territories.filter(t => t.status === 'completed').length,
+  };
 
   useEffect(() => {
     if (selectedId) fetchAssignments(selectedId);
@@ -593,9 +722,12 @@ export default function TerritoriesPage() {
   };
 
   // ── Edición / asignación ────────────────────────────────────────────────
-  const patchSelected = async (patch: Partial<Territory>) => {
+  const patchSelected = async (patch: Partial<Territory> & { image_data?: string | null }) => {
     if (!selected) return;
-    setTerritories(prev => prev.map(t => t.id === selected.id ? { ...t, ...patch } : t));
+    // image_data is transport-only (it rides along to the notification) and is
+    // not a column on the territory, so keep it out of local state.
+    const { image_data: _img, ...localPatch } = patch;
+    setTerritories(prev => prev.map(t => t.id === selected.id ? { ...t, ...localPatch } : t));
     const res = await fetch(`/api/territories/${selected.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -611,14 +743,43 @@ export default function TerritoriesPage() {
     }
   };
 
-  const completeAndRelease = async () => {
+  /**
+   * Assigning sends the publisher a platform message (and a WhatsApp message
+   * when the congregation enabled it and the profile has a phone). A snapshot
+   * of the territory outline travels with it so they can see where to go.
+   */
+  const assignTo = async (userId: string | null) => {
     if (!selected) return;
+    const patch: Partial<Territory> & { image_data?: string | null } = {
+      assigned_to: userId,
+      status: userId ? 'assigned' : 'available',
+      visit_start: userId ? (selected.visit_start || new Date().toISOString().slice(0, 10)) : null,
+    };
+    if (userId) patch.image_data = renderTerritoryImage(selected);
+    await patchSelected(patch);
+  };
+
+  /**
+   * Completing a territory asks how long it took and how many houses were
+   * visited, stores that on the assignment history row, then releases the
+   * territory so it can be handed to someone else.
+   */
+  const submitCompletion = async () => {
+    if (!completeFor) return;
     const today = new Date().toISOString().slice(0, 10);
-    await patchSelected({ visit_end: today, status: 'completed' });
-    // Small delay then release
-    setTimeout(async () => {
-      await patchSelected({ assigned_to: null, visit_start: null, visit_end: null, status: 'available' });
-    }, 300);
+    const hours = completeForm.hours ? Number(completeForm.hours) : null;
+    const houses = completeForm.houses ? Number(completeForm.houses) : null;
+
+    await patchSelected({
+      visit_end: today,
+      status: 'completed',
+      completion_hours: hours,
+      completion_houses: houses,
+    });
+    setCompleteFor(null);
+    setCompleteForm({ hours: '', houses: '' });
+    // Release afterwards so the history row keeps the publisher's name.
+    await patchSelected({ assigned_to: null, visit_start: null, visit_end: null, status: 'available' });
   };
 
   const deleteAssignment = async (aId: string) => {
@@ -656,12 +817,18 @@ export default function TerritoriesPage() {
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-slate-50 dark:bg-gray-900 dark:text-gray-100 text-sm pb-[52px] md:pb-0">
+    <div className={`flex h-screen bg-slate-50 dark:bg-gray-900 dark:text-gray-100 pb-[52px] md:pb-0
+      ${splitView ? 'flex-row text-sm' : 'flex-col'} ${isPhone ? 'text-[15px]' : 'text-sm'}`}>
       <IconSidebar />
       <SyncStatus />
 
-      {/* Panel izquierdo: lista + edición */}
-      <div className="w-full md:w-80 max-h-[45vh] md:max-h-none flex-shrink-0 border-b md:border-b-0 md:border-r border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col">
+      {/* Panel izquierdo: lista + edición.
+          Desktop → columna fija junto al mapa.
+          Tableta/celular → ocupa la pantalla y se alterna con el mapa. */}
+      <div className={`flex-shrink-0 border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col
+        ${splitView
+          ? 'w-80 xl:w-96 border-r'
+          : `w-full flex-1 min-h-0 ${pane === 'list' || drawing || drawingBoundary ? 'flex' : 'hidden'}`}`}>
         {/* Header — only map/boundary actions, no overflow */}
         <div className="px-3 py-2.5 border-b border-slate-200 dark:border-gray-700 flex items-center gap-2">
           <h1 className="font-bold text-slate-800 dark:text-gray-100 flex items-center gap-1.5 mr-auto"><MapPin size={16} className="text-sky-600" /> Territorios</h1>
@@ -733,20 +900,50 @@ export default function TerritoriesPage() {
           </div>
         )}
 
+        {/* Filtro por estado */}
+        {!drawing && !drawingBoundary && (
+          <div className="px-2 py-1.5 border-b border-slate-200 dark:border-gray-700 flex gap-1 overflow-x-auto">
+            {FILTERS.map(f => (
+              <button
+                key={f.value}
+                onClick={() => setStatusFilter(f.value)}
+                className={`shrink-0 flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-full border transition-colors
+                  ${statusFilter === f.value
+                    ? 'bg-sky-600 border-sky-600 text-white'
+                    : 'bg-white dark:bg-gray-700 border-slate-200 dark:border-gray-600 text-slate-600 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-600'}`}
+              >
+                {f.label}
+                <span className={`text-[10px] ${statusFilter === f.value ? 'text-white/80' : 'text-slate-400'}`}>
+                  {counts[f.value]}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Lista */}
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <p className="p-4 text-slate-400 text-center text-xs">Cargando…</p>
           ) : territories.length === 0 && !drawing ? (
             <p className="p-4 text-slate-400 text-center text-xs">Sin territorios. Crea el primero con "Nuevo".</p>
+          ) : visible.length === 0 ? (
+            <p className="p-4 text-slate-400 text-center text-xs">
+              No hay territorios {FILTERS.find(f => f.value === statusFilter)?.label.toLowerCase()}.
+            </p>
           ) : (
-            territories.map(t => (
-              <button key={t.id} onClick={() => setSelectedId(t.id)}
-                className={`w-full text-left px-4 py-2.5 border-b border-slate-100 dark:border-gray-700 hover:bg-slate-50 dark:hover:bg-gray-700 flex items-center gap-2.5 ${selectedId === t.id ? 'bg-sky-50 dark:bg-sky-950/30' : ''}`}>
+            visible.map(t => (
+              <button key={t.id} onClick={() => { setSelectedId(t.id); if (!splitView) setPane('map'); }}
+                className={`w-full text-left px-4 ${isPhone ? 'py-3' : 'py-2.5'} border-b border-slate-100 dark:border-gray-700 hover:bg-slate-50 dark:hover:bg-gray-700 flex items-center gap-2.5 ${selectedId === t.id ? 'bg-sky-50 dark:bg-sky-950/30' : ''}`}>
                 <span className="w-3.5 h-3.5 rounded-sm flex-shrink-0" style={{ background: t.color }} />
                 <span className="flex-1 min-w-0">
                   <span className="font-medium text-slate-800 dark:text-gray-100 truncate block">{t.number != null ? `${t.number}. ` : ''}{t.name}</span>
-                  {t.assigned_name && <span className="text-[11px] text-slate-500">{t.assigned_name}</span>}
+                  <span className="flex items-center gap-2">
+                    {t.assigned_name && <span className="text-[11px] text-slate-500">{t.assigned_name}</span>}
+                    {t.pairs_count ? (
+                      <span className="text-[10px] text-slate-400 flex items-center gap-0.5"><Users2 size={10} />{t.pairs_count}</span>
+                    ) : null}
+                  </span>
                 </span>
                 <span className={`text-[10px] px-1.5 py-0.5 rounded ${STATUS_COLOR[t.status]}`}>{STATUS_LABEL[t.status]}</span>
               </button>
@@ -779,7 +976,8 @@ export default function TerritoriesPage() {
 
         {/* Detalle del seleccionado */}
         {selected && !drawing && (
-          <div className="border-t border-slate-200 dark:border-gray-700 p-3 space-y-2 bg-slate-50 dark:bg-gray-800/50 overflow-y-auto max-h-[55vh] md:max-h-none">
+          <div className={`border-t border-slate-200 dark:border-gray-700 p-3 space-y-2 bg-slate-50 dark:bg-gray-800/50 overflow-y-auto
+            ${splitView ? 'max-h-[55vh]' : 'max-h-[50vh]'}`}>
             <div className="flex items-center justify-between">
               <span className="font-semibold text-slate-800 dark:text-gray-100">{selected.number != null ? `${selected.number}. ` : ''}{selected.name}</span>
               <div className="flex gap-1">
@@ -820,7 +1018,7 @@ export default function TerritoriesPage() {
             )}
 
             <label className="block text-[11px] text-slate-500">Asignar a
-              <select value={selected.assigned_to || ''} onChange={e => patchSelected({ assigned_to: e.target.value || null, status: e.target.value ? 'assigned' : 'available', visit_start: e.target.value ? (selected.visit_start || new Date().toISOString().slice(0, 10)) : null })}
+              <select value={selected.assigned_to || ''} onChange={e => assignTo(e.target.value || null)}
                 className="w-full mt-0.5 border border-slate-300 dark:border-gray-600 rounded px-2 py-1 text-sm bg-white dark:bg-gray-800">
                 <option value="">— sin asignar —</option>
                 {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
@@ -838,10 +1036,21 @@ export default function TerritoriesPage() {
               </label>
             </div>
 
+            <label className="block text-[11px] text-slate-500">
+              <span className="flex items-center gap-1"><Users2 size={11} /> Parejas asignadas</span>
+              <input
+                type="number" min={1} max={99} inputMode="numeric"
+                value={selected.pairs_count ?? ''}
+                onChange={e => patchSelected({ pairs_count: e.target.value ? Number(e.target.value) : null })}
+                placeholder="Número de parejas que trabajarán el territorio"
+                className="w-full mt-0.5 border border-slate-300 dark:border-gray-600 rounded px-2 py-1 text-sm bg-white dark:bg-gray-800"
+              />
+            </label>
+
             {/* Completar y liberar button */}
             {selected.assigned_to && (
               <button
-                onClick={completeAndRelease}
+                onClick={() => { setCompleteFor(selected); setCompleteForm({ hours: '', houses: '' }); }}
                 className="w-full flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
               >
                 <Check size={13} /> Completar y liberar territorio
@@ -849,7 +1058,18 @@ export default function TerritoriesPage() {
             )}
 
             <label className="block text-[11px] text-slate-500">Estado
-              <select value={selected.status} onChange={e => patchSelected({ status: e.target.value as Territory['status'] })}
+              <select
+                value={selected.status}
+                onChange={e => {
+                  const next = e.target.value as Territory['status'];
+                  // Switching to "Completado" asks for the effort figures first.
+                  if (next === 'completed') {
+                    setCompleteFor(selected);
+                    setCompleteForm({ hours: '', houses: '' });
+                  } else {
+                    patchSelected({ status: next });
+                  }
+                }}
                 className="w-full mt-0.5 border border-slate-300 dark:border-gray-600 rounded px-2 py-1 text-sm bg-white dark:bg-gray-800">
                 <option value="available">Disponible</option>
                 <option value="assigned">Asignado</option>
@@ -866,9 +1086,12 @@ export default function TerritoriesPage() {
       </div>
 
       {/* Mapa */}
-      <div className="flex-1 relative" onClick={() => exportOpen && setExportOpen(false)}>
+      <div
+        className={`flex-1 relative ${splitView || pane === 'map' || drawing || drawingBoundary ? 'block' : 'hidden'}`}
+        onClick={() => exportOpen && setExportOpen(false)}
+      >
         <TerritoryMap
-          territories={territories}
+          territories={visible}
           selectedId={selectedId}
           drawing={drawing || drawingBoundary}
           draftCoords={drawingBoundary ? boundaryDraft : draft}
@@ -879,6 +1102,71 @@ export default function TerritoriesPage() {
           drawingBoundary={drawingBoundary}
         />
       </div>
+
+      {/* Conmutador lista/mapa — sólo en celular y tableta */}
+      {!splitView && !drawing && !drawingBoundary && (
+        <div className="fixed bottom-[60px] left-1/2 -translate-x-1/2 z-[1000] flex rounded-full shadow-lg overflow-hidden border border-slate-200 dark:border-gray-600">
+          {([['list', 'Lista', <List key="l" size={14} />], ['map', 'Mapa', <MapIcon key="m" size={14} />]] as const).map(([v, label, icon]) => (
+            <button
+              key={v}
+              onClick={() => setPane(v as 'list' | 'map')}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium transition-colors
+                ${pane === v ? 'bg-sky-600 text-white' : 'bg-white dark:bg-gray-800 text-slate-600 dark:text-gray-300'}`}
+            >
+              {icon} {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Cuestionario al completar un territorio */}
+      {completeFor && (
+        <div className="fixed inset-0 z-[2000] bg-black/50 flex items-center justify-center p-4"
+          onClick={() => setCompleteFor(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm p-4 space-y-3"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-slate-800 dark:text-gray-100">
+                Completar territorio {completeFor.number != null ? `${completeFor.number}. ` : ''}{completeFor.name}
+              </h2>
+              <button onClick={() => setCompleteFor(null)} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
+            </div>
+
+            <label className="block text-xs text-slate-500 dark:text-gray-400">
+              ¿Cuánto tiempo se requirió para completarlo? (horas)
+              <input
+                type="number" min={0} step={0.5} inputMode="decimal" autoFocus
+                value={completeForm.hours}
+                onChange={e => setCompleteForm(f => ({ ...f, hours: e.target.value }))}
+                placeholder="Ej. 6.5"
+                className="w-full mt-1 border border-slate-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm bg-white dark:bg-gray-900 dark:text-gray-100"
+              />
+            </label>
+
+            <label className="block text-xs text-slate-500 dark:text-gray-400">
+              ¿Cuántas casas se visitaron?
+              <input
+                type="number" min={0} inputMode="numeric"
+                value={completeForm.houses}
+                onChange={e => setCompleteForm(f => ({ ...f, houses: e.target.value }))}
+                placeholder="Ej. 120"
+                className="w-full mt-1 border border-slate-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm bg-white dark:bg-gray-900 dark:text-gray-100"
+              />
+            </label>
+
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setCompleteFor(null)}
+                className="flex-1 text-xs px-3 py-2 rounded-lg bg-slate-100 dark:bg-gray-700 dark:text-gray-200 hover:bg-slate-200">
+                Cancelar
+              </button>
+              <button onClick={submitCompletion}
+                className="flex-1 flex items-center justify-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium">
+                <Check size={13} /> Guardar y liberar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

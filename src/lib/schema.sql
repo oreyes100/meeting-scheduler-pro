@@ -529,3 +529,45 @@ CREATE TABLE IF NOT EXISTS territory_assignments (
 );
 CREATE INDEX IF NOT EXISTS idx_ta_territory ON territory_assignments(territory_id);
 CREATE INDEX IF NOT EXISTS idx_ta_congre    ON territory_assignments(congregation_id);
+
+-- ─── 30. TERRITORY EXTRAS (pairs, completion stats) ─────────────────────────
+-- Columns are also added at runtime in sqlite.ts for existing databases.
+
+-- ─── 31. WHATSAPP / MESSAGING CONFIG (per congregation) ─────────────────────
+CREATE TABLE IF NOT EXISTS messaging_settings (
+  congregation_id  text PRIMARY KEY REFERENCES congregations(id),
+  whatsapp_enabled integer NOT NULL DEFAULT 0,
+  provider         text NOT NULL DEFAULT 'cloud',   -- 'cloud' = WhatsApp Cloud API
+  phone_number_id  text,
+  access_token     text,
+  sender_label     text,
+  notify_on_assign     integer NOT NULL DEFAULT 1,
+  notify_overdue       integer NOT NULL DEFAULT 1,
+  overdue_days         integer NOT NULL DEFAULT 7,
+  notify_weekly_status integer NOT NULL DEFAULT 1,
+  weekly_status_dow    integer NOT NULL DEFAULT 1,  -- 0=Sun … 6=Sat
+  template_assign  text,
+  template_overdue text,
+  template_weekly  text,
+  updated_at       text DEFAULT (datetime('now'))
+);
+
+-- ─── 32. OUTBOUND MESSAGES (platform inbox + whatsapp delivery log) ─────────
+CREATE TABLE IF NOT EXISTS messages (
+  id              text PRIMARY KEY,
+  user_id         text REFERENCES users(id) ON DELETE CASCADE,
+  kind            text NOT NULL,            -- territory_assigned | territory_overdue | territory_weekly
+  title           text NOT NULL,
+  body            text NOT NULL,
+  image_data      text,                     -- data: URI snapshot of the territory
+  territory_id    text REFERENCES territories(id) ON DELETE CASCADE,
+  read_at         text,
+  whatsapp_status text,                     -- sent | failed | skipped | disabled
+  whatsapp_error  text,
+  dedupe_key      text,
+  created_at      text DEFAULT (datetime('now')),
+  congregation_id text REFERENCES congregations(id)
+);
+CREATE INDEX IF NOT EXISTS idx_msg_user   ON messages(user_id, read_at);
+CREATE INDEX IF NOT EXISTS idx_msg_congre ON messages(congregation_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_dedupe ON messages(dedupe_key) WHERE dedupe_key IS NOT NULL;

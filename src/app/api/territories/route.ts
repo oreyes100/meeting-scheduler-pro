@@ -50,6 +50,7 @@ export async function POST(request: Request) {
     const body = await request.json();
 
     const insert = {
+      id: crypto.randomUUID(),
       number: body.number ?? null,
       name: body.name,
       color: body.color || '#3d7d8e',
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
       visit_end: body.visit_end ?? null,
       note: body.note ?? null,
       status: body.status || 'available',
+      pairs_count: body.pairs_count ?? null,
       congregation_id: ctx.congreId ?? null,
     };
 

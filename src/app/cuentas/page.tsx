@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ExternalLink, Sun, Moon, Monitor } from 'lucide-react';
-import { useTheme, type ThemeMode } from '@/lib/theme';
+import { ExternalLink, Sun, Moon, Monitor, Contrast } from 'lucide-react';
+import { useTheme, useIsDark, type ThemeMode } from '@/lib/theme';
 import { IconSidebar } from '@/components/IconSidebar';
 import { SyncStatus } from '@/components/SyncStatus';
 
@@ -16,7 +16,14 @@ const THEME_OPTIONS: { value: ThemeMode; icon: React.ReactNode; label: string }[
 
 export default function CuentasPage() {
   const { mode, setMode } = useTheme();
+  const isDark = useIsDark();
   const [iframeError, setIframeError] = useState(false);
+  // The embedded app is a separate origin, so its own styles cannot be reached.
+  // Inverting the frame is the only way to darken its content; allow opting out
+  // in case it ever ships a real dark theme of its own.
+  const [forceDark, setForceDark] = useState(true);
+
+  const darkFrame = isDark && forceDark;
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
@@ -25,9 +32,9 @@ export default function CuentasPage() {
 
       <div className="flex-1 flex flex-col overflow-hidden pb-[52px] md:pb-0">
         {/* Header */}
-        <div className="bg-gradient-to-r from-emerald-600 to-emerald-800 text-white px-4 py-2 shrink-0 flex items-center justify-between gap-2">
-          <h1 className="font-bold text-lg">Cuentas de la Congregación</h1>
-          <div className="flex items-center gap-2">
+        <div className="bg-gradient-to-r from-emerald-600 to-emerald-800 dark:from-emerald-800 dark:to-emerald-950 text-white px-3 sm:px-4 py-2 shrink-0 flex items-center justify-between gap-2">
+          <h1 className="font-bold text-base sm:text-lg truncate">Cuentas de la Congregación</h1>
+          <div className="flex items-center gap-1.5 sm:gap-2">
             {/* Theme toggle */}
             <div className="flex items-center bg-white/10 rounded-lg p-0.5 gap-0.5">
               {THEME_OPTIONS.map(opt => (
@@ -36,28 +43,39 @@ export default function CuentasPage() {
                   onClick={() => setMode(opt.value)}
                   title={opt.label}
                   className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors
-                    ${mode === opt.value
-                      ? 'bg-white text-emerald-700'
-                      : 'text-white/80 hover:bg-white/20'}`}
+                    ${mode === opt.value ? 'bg-white text-emerald-700' : 'text-white/80 hover:bg-white/20'}`}
                 >
                   {opt.icon}
-                  <span className="hidden sm:inline">{opt.label}</span>
+                  <span className="hidden md:inline">{opt.label}</span>
                 </button>
               ))}
             </div>
+
+            {isDark && (
+              <button
+                onClick={() => setForceDark(v => !v)}
+                title={forceDark ? 'Mostrar el módulo con sus colores originales' : 'Forzar colores oscuros en el módulo'}
+                className={`flex items-center gap-1 text-xs rounded px-2 py-1 transition-colors
+                  ${forceDark ? 'bg-white text-emerald-700' : 'bg-white/20 hover:bg-white/30 text-white'}`}
+              >
+                <Contrast size={14} />
+                <span className="hidden lg:inline">Oscurecer</span>
+              </button>
+            )}
+
             <a
               href={CUENTAS_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 text-sm bg-white/20 hover:bg-white/30 rounded px-2 py-1 transition-colors"
+              className="flex items-center gap-1 text-xs sm:text-sm bg-white/20 hover:bg-white/30 rounded px-2 py-1 transition-colors"
             >
               <ExternalLink size={14} />
-              Abrir en pestaña nueva
+              <span className="hidden sm:inline">Abrir en pestaña nueva</span>
             </a>
           </div>
         </div>
 
-        {/* Body — dark:bg applies to the wrapper around the iframe */}
+        {/* Body */}
         <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-gray-900">
           {iframeError ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
@@ -76,8 +94,13 @@ export default function CuentasPage() {
             </div>
           ) : (
             <iframe
-              src={CUENTAS_URL}
+              // `theme` is a hint the embedded app can honour natively; the
+              // filter below is what guarantees the change either way.
+              src={`${CUENTAS_URL}?theme=${isDark ? 'dark' : 'light'}`}
               className="flex-1 w-full border-0"
+              style={darkFrame
+                ? { filter: 'invert(0.93) hue-rotate(180deg)', background: '#111827' }
+                : undefined}
               title="Cuentas de la Congregación"
               onError={() => setIframeError(true)}
               allow="clipboard-write"

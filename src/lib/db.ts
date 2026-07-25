@@ -3,7 +3,33 @@
  * Returns { data, error } with the same shape supabase-js returns.
  * Replaces: sb() from crud.ts
  */
+import { randomUUID } from 'crypto';
 import { getDb } from './sqlite';
+
+/**
+ * Every table in schema.sql declares `id text PRIMARY KEY`, which in SQLite is
+ * NOT auto-generated and — unlike INTEGER PRIMARY KEY — still accepts NULL.
+ * A route that inserts without an id therefore silently produces NULL-id rows
+ * that collide with each other on lookup. Generate one whenever it is missing.
+ */
+const _hasIdCache = new Map<string, boolean>();
+function tableHasId(table: string): boolean {
+  const cached = _hasIdCache.get(table);
+  if (cached !== undefined) return cached;
+  let has = false;
+  try {
+    const cols = getDb().prepare(`PRAGMA table_info("${table}")`).all() as { name: string }[];
+    has = cols.some(c => c.name === 'id');
+  } catch { /* unknown table — leave the row untouched */ }
+  _hasIdCache.set(table, has);
+  return has;
+}
+
+function withId(table: string, row: Record<string, unknown>): Record<string, unknown> {
+  if (row.id !== undefined && row.id !== null && row.id !== '') return row;
+  if (!tableHasId(table)) return row;   // e.g. congregation_roles (composite PK)
+  return { ...row, id: randomUUID() };
+}
 
 // Columns that contain JSON (stored as text in SQLite, auto-parsed on read)
 const JSON_COLUMNS: Record<string, string[]> = {
@@ -192,7 +218,8 @@ class QueryBuilder {
       }
 
       if (verb === 'insert') {
-        const rows = Array.isArray(this.s.data) ? this.s.data : [this.s.data!];
+        const rows = (Array.isArray(this.s.data) ? this.s.data : [this.s.data!])
+          .map(r => withId(table, r as Record<string, unknown>));
         const inserted: Record<string, unknown>[] = [];
         for (const row of rows) {
           const ser = serializeRow(row as Record<string, unknown>);
@@ -228,7 +255,8 @@ class QueryBuilder {
       }
 
       if (verb === 'upsert') {
-        const rows = Array.isArray(this.s.data) ? this.s.data : [this.s.data!];
+        const rows = (Array.isArray(this.s.data) ? this.s.data : [this.s.data!])
+          .map(r => withId(table, r as Record<string, unknown>));
         const upserted: Record<string, unknown>[] = [];
         for (const row of rows) {
           const ser = serializeRow(row as Record<string, unknown>);
