@@ -1,234 +1,224 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, Plus, Pencil, Trash2,
-  ChevronLeft, ChevronRight, X, Check, AlertCircle, Banknote,
+  Banknote, Plus, Pencil, Trash2, X, Check, AlertCircle, Printer, Wallet,
+  CalendarCheck, BookOpen, BarChart3, SearchCheck, Tags, FileText, Settings2,
 } from 'lucide-react';
 import { IconSidebar } from '@/components/IconSidebar';
 import { SyncStatus } from '@/components/SyncStatus';
 import { useTheme } from '@/lib/theme';
+import { ArqueoModal } from '@/components/cuentas/ArqueoModal';
+import {
+  S26Sheet, BalanceCards, S30Report, S25cReport, IncomeExpenseChart,
+  ReconcilePanel, FormHeader,
+} from '@/components/cuentas/Reports';
+import {
+  ACCOUNTS, ACCOUNT_LABELS, TYPE_LABELS, QUARTERS, money,
+  currentYm, serviceYearOf, serviceYearMonths, monthLabel, serviceYearOptions,
+  MONTH_NAMES_ES,
+  type Account, type TxType, type CtCode, type S26, type S30, type S25c,
+  type Summary, type Reconcile, type CuentasConfig, type Transaction,
+} from '@/components/cuentas/types';
 
-/* ── Types ─────────────────────────────────────────────────────────────────── */
-type Account = 'recibido' | 'principal' | 'secundaria';
-type TxType  = 'entrada' | 'salida' | 'transferencia';
+/* ── Navegación ─────────────────────────────────────────────────────────────── */
 
-interface CtCode {
-  id: string; code: string; description: string;
-  default_account: Account; default_type: TxType; sort_order: number;
-}
+type View = 's26' | 's30' | 'forms' | 'chart' | 'reconcile' | 'codes' | 'config';
 
-interface Transaction {
-  id: string; date: string; type: TxType; account: Account;
-  destination_account: Account | null; ct_code: string | null;
-  description: string; amount: number; receipt_ref: string | null; notes: string | null;
-}
+const NAV: { key: View; label: string; sub: string; Icon: typeof BookOpen }[] = [
+  { key: 's26',       label: 'Hoja de Cuentas',   sub: 'S-26-S',            Icon: BookOpen },
+  { key: 's30',       label: 'Informe Mensual',   sub: 'S-30-S',            Icon: FileText },
+  { key: 'forms',     label: 'Formularios',       sub: 'S-26 / S-30 / S-25c', Icon: Printer },
+  { key: 'chart',     label: 'Relación I/E',      sub: 'Año de servicio',    Icon: BarChart3 },
+  { key: 'reconcile', label: 'Análisis Contables', sub: 'Verificación',      Icon: SearchCheck },
+  { key: 'codes',     label: 'Códigos CT',        sub: 'Catálogo',           Icon: Tags },
+  { key: 'config',    label: 'Encabezado',        sub: 'Congregación',       Icon: Settings2 },
+];
 
-interface Balance { recibido: number; principal: number; secundaria: number; }
-
-interface MonthTotals {
-  entradas: Balance;
-  salidas: Balance;
-}
-
-/* ── Constants ──────────────────────────────────────────────────────────────── */
-const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
-  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-
-const ACCOUNT_LABELS: Record<Account, string> = {
-  recibido:   'Recibido (Donaciones)',
-  principal:  'Cuenta Principal (Caja)',
-  secundaria: 'Cuenta Secundaria',
-};
-
-const ACCOUNT_COLORS: Record<Account, string> = {
-  recibido:   'text-emerald-600 dark:text-emerald-400',
-  principal:  'text-sky-600 dark:text-sky-400',
-  secundaria: 'text-violet-600 dark:text-violet-400',
-};
-
-const TYPE_LABELS: Record<TxType, string> = {
-  entrada:        'Entrada (Ingreso)',
-  salida:         'Salida (Gasto)',
-  transferencia:  'Transferencia',
-};
-
-function currentYearMonth() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function prevMonth(ym: string) {
-  const [y, m] = ym.split('-').map(Number);
-  const d = new Date(y, m - 2, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function nextMonth(ym: string) {
-  const [y, m] = ym.split('-').map(Number);
-  const d = new Date(y, m, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function monthLabel(ym: string) {
-  const [y, m] = ym.split('-').map(Number);
-  return `${MONTHS_ES[m - 1]} ${y}`;
-}
-
-function fmt(n: number) {
-  return n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
-}
-
-/* ── Blank form ─────────────────────────────────────────────────────────────── */
-const blank = (): Omit<Transaction,'id'|'receipt_ref'|'notes'> & { receipt_ref: string; notes: string } => ({
+const blankForm = () => ({
+  id: null as string | null,
   date: new Date().toISOString().slice(0, 10),
-  type: 'entrada',
-  account: 'recibido',
-  destination_account: null,
-  ct_code: '',
+  type: 'income' as TxType,
+  account: 'caja' as Account,
+  to_account: 'corriente' as Account,
+  code: '',
   description: '',
-  amount: 0,
+  amount: '' as string,
   receipt_ref: '',
   notes: '',
 });
 
-/* ── Tab type ───────────────────────────────────────────────────────────────── */
-type Tab = 's26' | 's30';
-
-/* ── Page ───────────────────────────────────────────────────────────────────── */
 export default function CuentasPage() {
   useTheme();
 
-  const [tab, setTab] = useState<Tab>('s26');
-  const [month, setMonth] = useState(currentYearMonth());
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [ctCodes, setCtCodes] = useState<CtCode[]>([]);
-  const [balance, setBalance] = useState<Balance | null>(null);
-  const [monthTotals, setMonthTotals] = useState<MonthTotals | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [view, setView] = useState<View>('s26');
+  const [ym, setYm] = useState(currentYm());
+  const [quarter, setQuarter] = useState(4);
+  const [formTab, setFormTab] = useState<'s26' | 's30' | 's25c'>('s26');
+
+  // El año de servicio se deriva del mes seleccionado: mantenerlo como estado
+  // aparte obligaba a sincronizarlo con un efecto, y dos fuentes para el mismo
+  // dato se desincronizan tarde o temprano.
+  const sy = serviceYearOf(ym);
+
+  const [s26, setS26] = useState<S26 | null>(null);
+  const [s30, setS30] = useState<S30 | null>(null);
+  const [s25c, setS25c] = useState<S25c | null>(null);
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [rec, setRec] = useState<Reconcile | null>(null);
+  const [codes, setCodes] = useState<CtCode[]>([]);
+  const [cfg, setCfg] = useState<CuentasConfig>({ label: '', city: '', state: '' });
+
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
-  // Modal
-  const [modal, setModal] = useState<'add' | 'edit' | null>(null);
-  const [form, setForm] = useState(blank());
-  const [editId, setEditId] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [modal, setModal] = useState<'tx' | 'opening' | 'cierre' | 'arqueo' | null>(null);
+  const [form, setForm] = useState(blankForm());
   const [formErr, setFormErr] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  /* ── Fetch ─────────────────────────────────────────────────────────────────── */
-  const loadCtCodes = useCallback(async () => {
-    const res = await fetch('/api/cuentas/ct-codes');
-    if (res.ok) { const d = await res.json(); setCtCodes(d.ct_codes || []); }
+  const [filters, setFilters] = useState<{ account: string; type: string }>({ account: '', type: '' });
+
+  const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 3000); };
+
+  /* ── Carga de datos ───────────────────────────────────────────────────────── */
+
+  const api = useCallback(async (url: string, init?: RequestInit) => {
+    const res = await fetch(url, init);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+    return data;
   }, []);
 
-  const loadData = useCallback(async (m: string) => {
-    setLoading(true); setError(null);
-    try {
-      const [txRes, balRes] = await Promise.all([
-        fetch(`/api/cuentas/transactions?month=${m}`),
-        fetch(`/api/cuentas/balance?month=${m}`),
-      ]);
-      if (!txRes.ok || !balRes.ok) throw new Error('Error cargando datos');
-      const txData = await txRes.json();
-      const balData = await balRes.json();
-      setTransactions(txData.transactions || []);
-      setBalance(balData.balance || null);
-      setMonthTotals(balData.month_totals || null);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Error');
-    } finally { setLoading(false); }
-  }, []);
+  // Los cargadores escriben estado solo dentro de `.then`/`.catch`: nunca de forma
+  // sincrónica en el cuerpo de un efecto. El indicador de carga se deriva
+  // comparando lo pedido con lo ya cargado, así no hace falta un flag aparte.
+  const loadCodes = useCallback(() => api('/api/cuentas/codes')
+    .then(d => setCodes((d.codes as CtCode[]) || []))
+    .catch(() => { /* el catálogo se autosiembra; un fallo aquí no bloquea */ }), [api]);
 
-  useEffect(() => { loadCtCodes(); }, [loadCtCodes]);
-  useEffect(() => { loadData(month); }, [month, loadData]);
+  const loadConfig = useCallback(() => api('/api/cuentas/config')
+    .then(d => setCfg(d.config as CuentasConfig))
+    .catch(() => { /* el encabezado cae a los datos de la congregación */ }), [api]);
 
-  /* ── Form helpers ───────────────────────────────────────────────────────────── */
-  function openAdd() {
-    setForm(blank()); setEditId(null); setFormErr(null); setModal('add');
-  }
+  const loadMonth = useCallback((m: string) => Promise.all([
+      api(`/api/cuentas/reports?kind=s26&ym=${m}`),
+      api(`/api/cuentas/reports?kind=s30&ym=${m}`),
+      api(`/api/cuentas/reports?kind=reconcile&ym=${m}`),
+    ])
+    .then(([a, b, c]) => {
+      setS26(a.s26 as S26); setS30(b.s30 as S30); setRec(c.reconcile as Reconcile);
+      setError(null);
+    })
+    .catch(e => setError(e instanceof Error ? e.message : 'Error')), [api]);
 
-  function openEdit(tx: Transaction) {
+  const loadSummary = useCallback((y: string) =>
+    api(`/api/cuentas/reports?kind=summary&sy=${encodeURIComponent(y)}`)
+      .then(d => setSummary(d.summary as Summary))
+      .catch(e => setError(e instanceof Error ? e.message : 'Error')), [api]);
+
+  const loadS25c = useCallback((y: string, q: number) =>
+    api(`/api/cuentas/reports?kind=s25c&sy=${encodeURIComponent(y)}&quarter=${q}`)
+      .then(d => setS25c(d.s25c as S25c))
+      .catch(e => setError(e instanceof Error ? e.message : 'Error')), [api]);
+
+  useEffect(() => { loadCodes(); loadConfig(); }, [loadCodes, loadConfig]);
+  useEffect(() => { loadMonth(ym); }, [ym, loadMonth]);
+  useEffect(() => { if (view === 'chart') loadSummary(sy); }, [view, sy, loadSummary]);
+  useEffect(() => {
+    if (view === 'forms' && formTab === 's25c') loadS25c(sy, quarter);
+  }, [view, formTab, sy, quarter, loadS25c]);
+
+  /** Lo mostrado corresponde al mes pedido. */
+  const monthReady = s26?.ym === ym && s30?.ym === ym;
+
+  /* ── Transacciones ────────────────────────────────────────────────────────── */
+
+  function openNew() { setForm(blankForm()); setFormErr(null); setModal('tx'); }
+
+  function openEdit(t: Transaction) {
     setForm({
-      date: tx.date, type: tx.type, account: tx.account,
-      destination_account: tx.destination_account,
-      ct_code: tx.ct_code || '',
-      description: tx.description,
-      amount: tx.amount,
-      receipt_ref: tx.receipt_ref || '',
-      notes: tx.notes || '',
+      id: t.id, date: t.date, type: t.type, account: t.account,
+      to_account: t.to_account ?? 'corriente', code: t.code ?? '',
+      description: t.description, amount: String(t.amount),
+      receipt_ref: t.receipt_ref ?? '', notes: t.notes ?? '',
     });
-    setEditId(tx.id); setFormErr(null); setModal('edit');
+    setFormErr(null); setModal('tx');
   }
 
-  function applyCtCode(code: string) {
-    const ct = ctCodes.find(c => c.code === code);
-    if (ct) {
-      setForm(f => ({
-        ...f,
-        ct_code: code,
-        account: ct.default_account,
-        type: ct.default_type,
-        destination_account: ct.default_type === 'transferencia' ? f.destination_account : null,
-      }));
-    } else {
-      setForm(f => ({ ...f, ct_code: code }));
-    }
+  /** Al elegir un código CT se preselecciona su tipo natural. */
+  function pickCode(code: string) {
+    const c = codes.find(x => x.code === code);
+    setForm(f => ({
+      ...f,
+      code,
+      type: c ? c.kind : f.type,
+      account: c?.kind === 'expense' ? 'corriente' : c?.kind === 'income' ? 'caja' : f.account,
+    }));
   }
 
-  async function save() {
+  async function saveTx() {
     setFormErr(null);
-    if (!form.date || !form.description || form.amount <= 0) {
-      setFormErr('Fecha, descripción y monto son requeridos'); return;
+    const amount = Number(form.amount);
+    if (!form.date) return setFormErr('La fecha es obligatoria');
+    if (!form.description.trim()) return setFormErr('La descripción es obligatoria');
+    if (!Number.isFinite(amount) || amount <= 0) return setFormErr('El monto debe ser mayor a 0');
+    if (form.type === 'transfer' && form.to_account === form.account) {
+      return setFormErr('La cuenta destino debe ser distinta del origen');
     }
-    if (form.type === 'transferencia' && !form.destination_account) {
-      setFormErr('Selecciona la cuenta destino'); return;
-    }
+
     setSaving(true);
     try {
       const body = {
-        ...form,
-        amount: Number(form.amount),
-        destination_account: form.type === 'transferencia' ? form.destination_account : null,
-        ct_code: form.ct_code || null,
-        receipt_ref: form.receipt_ref || null,
-        notes: form.notes || null,
-        ...(modal === 'edit' ? { id: editId } : {}),
+        ...(form.id ? { id: form.id } : {}),
+        date: form.date, type: form.type, account: form.account,
+        to_account: form.type === 'transfer' ? form.to_account : null,
+        code: form.code || null, description: form.description.trim(),
+        amount, receipt_ref: form.receipt_ref || null, notes: form.notes || null,
       };
-      const res = await fetch('/api/cuentas/transactions', {
-        method: modal === 'add' ? 'POST' : 'PUT',
+      await api('/api/cuentas/transactions', {
+        method: form.id ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error guardando');
       setModal(null);
-      loadData(month);
-    } catch (e: unknown) {
-      setFormErr(e instanceof Error ? e.message : 'Error');
-    } finally { setSaving(false); }
+      flash(form.id ? 'Transacción actualizada' : 'Transacción registrada');
+      await loadMonth(ym);
+    } catch (e) { setFormErr(e instanceof Error ? e.message : 'Error'); }
+    finally { setSaving(false); }
   }
 
-  async function deleteTx(id: string) {
-    if (!confirm('¿Eliminar esta transacción?')) return;
-    setDeleting(id);
+  async function deleteTx(t: Transaction) {
+    if (!confirm(`¿Eliminar «${t.description}» por ${money(t.amount)}?\n\nEsta acción no se puede deshacer.`)) return;
     try {
-      const res = await fetch(`/api/cuentas/transactions?id=${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error((await res.json()).error);
-      loadData(month);
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Error eliminando');
-    } finally { setDeleting(null); }
+      await api(`/api/cuentas/transactions?id=${t.id}`, { method: 'DELETE' });
+      flash('Transacción eliminada');
+      await loadMonth(ym);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Error'); }
   }
 
-  /* ── Render ─────────────────────────────────────────────────────────────────── */
-  const inputCls = 'w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 text-gray-900 dark:text-gray-100';
-  const lblCls = 'block text-xs text-gray-500 dark:text-gray-400 mb-1';
+  /* ── Filtrado en cliente del ledger ──────────────────────────────────────── */
 
-  // Totals for month
-  const monthIn  = transactions.filter(t => t.type === 'entrada').reduce((s, t) => s + t.amount, 0);
-  const monthOut = transactions.filter(t => t.type === 'salida').reduce((s, t) => s + t.amount, 0);
-  const monthXfr = transactions.filter(t => t.type === 'transferencia').reduce((s, t) => s + t.amount, 0);
+  const visibleRows = useMemo(() => {
+    if (!s26) return [];
+    return s26.rows.filter(r => {
+      if (filters.type && r.type !== filters.type) return false;
+      if (filters.account) {
+        const a = filters.account as Account;
+        if (r.account !== a && r.to_account !== a) return false;
+      }
+      return true;
+    });
+  }, [s26, filters]);
+
+  const filteredS26 = useMemo(
+    () => s26 ? { ...s26, rows: visibleRows } : null, [s26, visibleRows]);
+
+  /* ── Render ───────────────────────────────────────────────────────────────── */
+
+  const inputCls = 'w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500';
+  const lblCls = 'block text-xs text-gray-500 dark:text-gray-400 mb-1';
+  const months = serviceYearMonths(sy);
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
@@ -236,212 +226,265 @@ export default function CuentasPage() {
       <SyncStatus />
 
       <div className="flex-1 flex flex-col overflow-hidden pb-[52px] md:pb-0">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-emerald-600 to-emerald-800 dark:from-emerald-800 dark:to-emerald-950 text-white px-4 py-2 shrink-0 flex items-center gap-3">
+        {/* Cabecera */}
+        <div className="bg-gradient-to-r from-emerald-600 to-emerald-800 dark:from-emerald-800 dark:to-emerald-950 text-white px-4 py-2 shrink-0 flex flex-wrap items-center gap-2 print:hidden">
           <Banknote size={18} />
-          <h1 className="font-bold text-base">Cuentas de la Congregación</h1>
+          <div className="min-w-0">
+            <h1 className="font-bold text-base leading-tight">Cuentas de la Congregación</h1>
+            <p className="text-[11px] text-white/75 leading-tight">
+              {cfg.label || '—'}{cfg.city ? ` · ${cfg.city}` : ''}{cfg.state ? `, ${cfg.state}` : ''}
+            </p>
+          </div>
 
-          {/* Month nav */}
-          <div className="ml-auto flex items-center gap-1 bg-white/10 rounded-lg px-1">
-            <button onClick={() => setMonth(prevMonth(month))} className="p-1 hover:bg-white/20 rounded">
-              <ChevronLeft size={16} />
+          <div className="ml-auto flex items-center gap-2">
+            <button onClick={() => setModal('arqueo')}
+                    className="flex items-center gap-1.5 text-xs bg-white/15 hover:bg-white/25 rounded-lg px-2.5 py-1.5">
+              <Wallet size={13} /> <span className="hidden sm:inline">Arqueo de Caja</span>
             </button>
-            <span className="text-sm font-medium px-1 min-w-[140px] text-center">{monthLabel(month)}</span>
-            <button onClick={() => setMonth(nextMonth(month))} className="p-1 hover:bg-white/20 rounded">
-              <ChevronRight size={16} />
+            <button onClick={() => setModal('cierre')}
+                    className="flex items-center gap-1.5 text-xs bg-white/15 hover:bg-white/25 rounded-lg px-2.5 py-1.5">
+              <CalendarCheck size={13} /> <span className="hidden sm:inline">Cierre de Mes</span>
             </button>
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0">
-          {([['s26', '📋 Hoja S-26'], ['s30', '📊 Resumen S-30']] as [Tab, string][]).map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors
-                ${tab === key
-                  ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
-            >
-              {label}
-            </button>
-          ))}
+        {/* Año de servicio + rejilla de meses */}
+        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2 shrink-0 print:hidden">
+          <div className="flex items-center gap-3 mb-2">
+            <label className="text-xs text-gray-500 dark:text-gray-400">Año de servicio</label>
+            <select value={sy} onChange={e => setYm(serviceYearMonths(e.target.value)[0])}
+                    className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 text-sm">
+              {serviceYearOptions().map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+            <span className="text-xs text-gray-400 ml-auto hidden md:inline">
+              El año de servicio va de septiembre a agosto
+            </span>
+          </div>
+          <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-12 gap-1">
+            {months.map(m => {
+              const [yy, mm] = m.split('-');
+              const active = m === ym;
+              return (
+                <button key={m} onClick={() => setYm(m)}
+                        className={`px-1.5 py-1 rounded-lg text-[11px] leading-tight border transition-colors ${
+                          active
+                            ? 'bg-emerald-600 border-emerald-600 text-white font-semibold'
+                            : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 hover:border-emerald-400'}`}>
+                  <span className="block truncate">{MONTH_NAMES_ES[Number(mm) - 1]}</span>
+                  <span className={`block ${active ? 'text-white/75' : 'text-gray-400'}`}>{yy}-{mm}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
+        {/* Navegación de módulos */}
+        <div className="bg-gray-100 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 px-2 shrink-0 overflow-x-auto print:hidden">
+          <div className="flex gap-1">
+            {NAV.map(n => (
+              <button key={n.key} onClick={() => setView(n.key)}
+                      className={`flex items-center gap-1.5 px-3 py-2 text-xs whitespace-nowrap border-b-2 transition-colors ${
+                        view === n.key
+                          ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400 font-semibold'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>
+                <n.Icon size={13} />
+                <span>{n.label}</span>
+                <span className="hidden lg:inline text-gray-400">· {n.sub}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Contenido */}
         <div className="flex-1 overflow-auto p-4 space-y-4">
           {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm">
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/25 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm print:hidden">
               <AlertCircle size={14} /> {error}
+              <button onClick={() => setError(null)} className="ml-auto"><X size={13} /></button>
+            </div>
+          )}
+          {toast && (
+            <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/25 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-sm print:hidden">
+              ✓ {toast}
             </div>
           )}
 
-          {/* ── S-26 Tab ──────────────────────────────────────────────────── */}
-          {tab === 's26' && (
+          {/* Aviso de descuadre del saldo inicial declarado */}
+          {s26 && !s26.openingAudit.matches && (
+            <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/25 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 text-xs print:hidden">
+              <strong>El saldo inicial declarado no coincide con el arrastre real.</strong>{' '}
+              Declarado {money(s26.openingAudit.declared ? Object.values(s26.openingAudit.declared).reduce((a, b) => a + b, 0) : 0)},
+              arrastrado {money(Object.values(s26.openingAudit.carried).reduce((a, b) => a + b, 0))},
+              diferencia {money(s26.openingAudit.diffTotal)}. Mientras persista, el informe S-30 y los
+              saldos por cuenta contarán historias distintas.
+              <button onClick={() => setModal('opening')} className="ml-2 underline font-medium">Revisar</button>
+            </div>
+          )}
+
+          {!monthReady && <p className="text-sm text-gray-400 text-center py-6 print:hidden">Cargando {monthLabel(ym)}…</p>}
+
+          {/* ── Hoja S-26 ─────────────────────────────────────────────────── */}
+          {view === 's26' && s26 && filteredS26 && (
             <>
-              {/* Summary cards */}
-              <div className="grid grid-cols-3 gap-3">
-                {(Object.entries(ACCOUNT_LABELS) as [Account, string][]).map(([acc, label]) => (
-                  <div key={acc} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{label}</p>
-                    <p className={`text-lg font-bold mt-1 ${ACCOUNT_COLORS[acc]}`}>
-                      {balance ? fmt(balance[acc]) : '—'}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">Saldo acumulado</p>
-                  </div>
-                ))}
-              </div>
+              <BalanceCards s26={s26} />
 
-              {/* Month totals row */}
-              <div className="flex gap-3 text-sm">
-                <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                  <ArrowDownCircle size={14} /> Entradas: <strong>{fmt(monthIn)}</strong>
-                </span>
-                <span className="flex items-center gap-1 text-red-600 dark:text-red-400">
-                  <ArrowUpCircle size={14} /> Salidas: <strong>{fmt(monthOut)}</strong>
-                </span>
-                {monthXfr > 0 && (
-                  <span className="flex items-center gap-1 text-violet-600 dark:text-violet-400">
-                    <ArrowLeftRight size={14} /> Transferencias: <strong>{fmt(monthXfr)}</strong>
-                  </span>
+              <div className="flex flex-wrap items-center gap-2 print:hidden">
+                <select value={filters.account} onChange={e => setFilters(f => ({ ...f, account: e.target.value }))}
+                        className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 text-xs">
+                  <option value="">Todas las cuentas</option>
+                  {ACCOUNTS.map(a => <option key={a} value={a}>{ACCOUNT_LABELS[a]}</option>)}
+                </select>
+                <select value={filters.type} onChange={e => setFilters(f => ({ ...f, type: e.target.value }))}
+                        className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 text-xs">
+                  <option value="">Todos los tipos</option>
+                  {(Object.keys(TYPE_LABELS) as TxType[]).map(t => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
+                </select>
+                {(filters.account || filters.type) && (
+                  <button onClick={() => setFilters({ account: '', type: '' })}
+                          className="text-xs px-2 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+                    Limpiar filtros
+                  </button>
                 )}
-              </div>
-
-              {/* Add button */}
-              <div className="flex justify-end">
-                <button
-                  onClick={openAdd}
-                  className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-3 py-2 rounded-lg"
-                >
+                <button onClick={() => setModal('opening')}
+                        className="text-xs px-2.5 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+                  Editar saldo inicial
+                </button>
+                <button onClick={openNew}
+                        className="ml-auto flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-3 py-2 rounded-lg">
                   <Plus size={14} /> Nueva transacción
                 </button>
               </div>
 
-              {/* Transactions table */}
-              {loading ? (
-                <p className="text-sm text-gray-400 text-center py-10">Cargando…</p>
-              ) : transactions.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-10">Sin transacciones este mes.</p>
-              ) : (
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
-                        <th className="px-3 py-2 text-left">Fecha</th>
-                        <th className="px-3 py-2 text-left">CT</th>
-                        <th className="px-3 py-2 text-left">Descripción</th>
-                        <th className="px-3 py-2 text-left">Cuenta</th>
-                        <th className="px-3 py-2 text-right">Entrada</th>
-                        <th className="px-3 py-2 text-right">Salida</th>
-                        <th className="px-3 py-2 text-center">Tipo</th>
-                        <th className="px-3 py-2" />
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                      {transactions.map(tx => (
-                        <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                          <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-gray-500">{tx.date}</td>
-                          <td className="px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300">{tx.ct_code || '—'}</td>
-                          <td className="px-3 py-2 max-w-[200px] truncate">{tx.description}</td>
-                          <td className={`px-3 py-2 text-xs ${ACCOUNT_COLORS[tx.account]}`}>
-                            {ACCOUNT_LABELS[tx.account]}
-                            {tx.type === 'transferencia' && tx.destination_account && (
-                              <span className="text-gray-400"> → {ACCOUNT_LABELS[tx.destination_account]}</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-right text-emerald-600 dark:text-emerald-400 font-medium">
-                            {tx.type === 'entrada' ? fmt(tx.amount) :
-                             tx.type === 'transferencia' ? <span className="text-violet-500">{fmt(tx.amount)}</span> : ''}
-                          </td>
-                          <td className="px-3 py-2 text-right text-red-600 dark:text-red-400 font-medium">
-                            {tx.type === 'salida' ? fmt(tx.amount) : ''}
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            {tx.type === 'entrada'       && <ArrowDownCircle size={14} className="text-emerald-500 mx-auto" />}
-                            {tx.type === 'salida'        && <ArrowUpCircle   size={14} className="text-red-500 mx-auto" />}
-                            {tx.type === 'transferencia' && <ArrowLeftRight  size={14} className="text-violet-500 mx-auto" />}
-                          </td>
-                          <td className="px-3 py-2">
-                            <div className="flex items-center gap-1 justify-end">
-                              <button onClick={() => openEdit(tx)} className="p-1 hover:text-emerald-600 text-gray-400">
-                                <Pencil size={13} />
-                              </button>
-                              <button
-                                onClick={() => deleteTx(tx.id)}
-                                disabled={deleting === tx.id}
-                                className="p-1 hover:text-red-600 text-gray-400 disabled:opacity-40"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              <S26Sheet s26={filteredS26} />
+
+              {/* Acciones por fila, separadas del formulario oficial */}
+              {visibleRows.length > 0 && (
+                <div className="print:hidden">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Editar o eliminar asientos</p>
+                  <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+                    {visibleRows.map(r => (
+                      <div key={r.id} className="flex items-center gap-2 px-3 py-1.5 text-xs">
+                        <span className="font-mono text-gray-400 w-20 shrink-0">{r.date}</span>
+                        <span className="w-10 shrink-0 font-medium">{r.code}</span>
+                        <span className="flex-1 truncate">{r.description}</span>
+                        <span className="tabular-nums shrink-0">{money(r.amount)}</span>
+                        {r.receipt_ref?.startsWith('CIERRE-') && (
+                          <span className="shrink-0 px-1.5 py-0.5 rounded bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300">cierre</span>
+                        )}
+                        <button onClick={() => openEdit(r)} className="p-1 text-gray-400 hover:text-emerald-600 shrink-0">
+                          <Pencil size={12} />
+                        </button>
+                        <button onClick={() => deleteTx(r)} className="p-1 text-gray-400 hover:text-red-600 shrink-0">
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </>
           )}
 
-          {/* ── S-30 Tab ──────────────────────────────────────────────────── */}
-          {tab === 's30' && (
-            <div className="space-y-4">
-              <h2 className="font-semibold text-base">Informe Mensual S-30 — {monthLabel(month)}</h2>
-
-              {(Object.entries(ACCOUNT_LABELS) as [Account, string][]).map(([acc, label]) => {
-                const inp = monthTotals?.entradas[acc] ?? 0;
-                const out = monthTotals?.salidas[acc] ?? 0;
-                const bal = balance?.[acc] ?? 0;
-                return (
-                  <div key={acc} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div className={`px-4 py-2 text-sm font-semibold ${ACCOUNT_COLORS[acc]} bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700`}>
-                      {label}
-                    </div>
-                    <div className="grid grid-cols-3 divide-x divide-gray-100 dark:divide-gray-700 text-center">
-                      <div className="p-4">
-                        <p className="text-xs text-gray-400 mb-1">Entradas del mes</p>
-                        <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{fmt(inp)}</p>
-                      </div>
-                      <div className="p-4">
-                        <p className="text-xs text-gray-400 mb-1">Salidas del mes</p>
-                        <p className="text-lg font-bold text-red-600 dark:text-red-400">{fmt(out)}</p>
-                      </div>
-                      <div className="p-4">
-                        <p className="text-xs text-gray-400 mb-1">Saldo acumulado</p>
-                        <p className={`text-lg font-bold ${bal >= 0 ? 'text-sky-600 dark:text-sky-400' : 'text-red-600'}`}>{fmt(bal)}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Total */}
-              <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 flex items-center justify-between">
-                <span className="font-semibold text-emerald-800 dark:text-emerald-300">Total General</span>
-                <span className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
-                  {balance ? fmt(balance.recibido + balance.principal + balance.secundaria) : '—'}
-                </span>
+          {/* ── Informe S-30 ──────────────────────────────────────────────── */}
+          {view === 's30' && s30 && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+              <div className="flex items-center justify-between mb-3 print:hidden">
+                <h2 className="font-semibold text-sm">Informe Mensual de las Cuentas — {s30.monthLabel}</h2>
+                <button onClick={() => window.print()}
+                        className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+                  <Printer size={13} /> Imprimir
+                </button>
               </div>
+              <S30Report s30={s30} />
             </div>
+          )}
+
+          {/* ── Formularios oficiales ─────────────────────────────────────── */}
+          {view === 'forms' && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+              <div className="flex flex-wrap items-center gap-2 mb-4 print:hidden">
+                {([['s26','S-26-S · Hoja de Cuentas'],['s30','S-30-S · Informe Mensual'],['s25c','S-25c · Auditoría']] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => setFormTab(k)}
+                          className={`px-3 py-1.5 text-xs rounded-lg border ${
+                            formTab === k
+                              ? 'bg-sky-700 border-sky-700 text-white font-medium'
+                              : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 hover:border-sky-400'}`}>
+                    {l}
+                  </button>
+                ))}
+                {formTab === 's25c' && (
+                  <select value={quarter} onChange={e => setQuarter(Number(e.target.value))}
+                          className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 text-xs">
+                    {QUARTERS.map(q => <option key={q.n} value={q.n}>{q.label}</option>)}
+                  </select>
+                )}
+                <button onClick={() => window.print()}
+                        className="ml-auto flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white">
+                  <Printer size={13} /> Imprimir formulario
+                </button>
+              </div>
+
+              {formTab === 's26' && s26 && (
+                <>
+                  <FormHeader title="HOJA DE CUENTAS" subtitle="S-26-S" cfg={cfg} right={s26.monthLabel} />
+                  <S26Sheet s26={s26} official />
+                </>
+              )}
+              {formTab === 's30' && s30 && (
+                <>
+                  <FormHeader title="INFORME MENSUAL DE LAS CUENTAS DE LA CONGREGACIÓN"
+                              subtitle="S-30-S" cfg={cfg}
+                              right={`Mes: ${s30.monthLabel} · Año de Servicio: ${s30.serviceYear}`} />
+                  <S30Report s30={s30} />
+                </>
+              )}
+              {formTab === 's25c' && s25c && (
+                <>
+                  <FormHeader title="INFORME SOBRE LA AUDITORÍA DE LAS CUENTAS DE LA CONGREGACIÓN"
+                              subtitle="S-25c" cfg={cfg}
+                              right={`${s25c.quarterLabel} · Año de Servicio ${s25c.serviceYear}`} />
+                  <S25cReport s25c={s25c} />
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── Relación I/E ──────────────────────────────────────────────── */}
+          {view === 'chart' && summary && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+              <h2 className="font-semibold text-sm mb-3">
+                Relación de Ingresos y Egresos — Año de servicio {summary.serviceYear}
+              </h2>
+              <IncomeExpenseChart summary={summary} />
+            </div>
+          )}
+
+          {/* ── Análisis contables ────────────────────────────────────────── */}
+          {view === 'reconcile' && rec && <ReconcilePanel rec={rec} />}
+
+          {/* ── Códigos CT ────────────────────────────────────────────────── */}
+          {view === 'codes' && <CodesPanel codes={codes} api={api} reload={loadCodes} flash={flash} setError={setError} />}
+
+          {/* ── Encabezado / config ───────────────────────────────────────── */}
+          {view === 'config' && (
+            <ConfigPanel cfg={cfg} setCfg={setCfg} api={api} flash={flash} setError={setError} />
           )}
         </div>
       </div>
 
-      {/* ── Modal ─────────────────────────────────────────────────────────── */}
-      {modal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+      {/* ── Modales ────────────────────────────────────────────────────────── */}
+
+      {modal === 'tx' && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="font-semibold text-sm">
-                {modal === 'add' ? 'Nueva transacción' : 'Editar transacción'}
-              </h3>
+              <h3 className="font-semibold text-sm">{form.id ? 'Editar asiento' : 'Registrar asiento'}</h3>
               <button onClick={() => setModal(null)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
             </div>
 
             <div className="p-4 space-y-3">
               {formErr && (
-                <div className="flex items-center gap-2 p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg text-red-700 dark:text-red-300 text-xs">
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-50 dark:bg-red-900/25 border border-red-200 dark:border-red-700 text-red-700 dark:text-red-300 text-xs">
                   <AlertCircle size={13} /> {formErr}
                 </div>
               )}
@@ -449,110 +492,472 @@ export default function CuentasPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={lblCls}>Fecha *</label>
-                  <input type="date" value={form.date}
-                    onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-                    className={inputCls} />
+                  <input type="date" value={form.date} className={inputCls}
+                         onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
                 </div>
                 <div>
                   <label className={lblCls}>Monto ($) *</label>
-                  <input type="number" min="0.01" step="0.01" value={form.amount || ''}
-                    onChange={e => setForm(f => ({ ...f, amount: parseFloat(e.target.value) || 0 }))}
-                    placeholder="0.00"
-                    className={inputCls} />
+                  <input type="number" min="0.01" step="0.01" value={form.amount} placeholder="0.00" className={inputCls}
+                         onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
                 </div>
               </div>
 
               <div>
+                <label className={lblCls}>Código CT</label>
+                <select value={form.code} className={inputCls} onChange={e => pickCode(e.target.value)}>
+                  <option value="">Sin código</option>
+                  {codes.map(c => <option key={c.id} value={c.code}>{c.code} — {c.description}</option>)}
+                </select>
+              </div>
+
+              <div>
                 <label className={lblCls}>Tipo *</label>
-                <select value={form.type}
-                  onChange={e => setForm(f => ({
-                    ...f, type: e.target.value as TxType,
-                    destination_account: e.target.value === 'transferencia' ? (f.destination_account ?? 'principal') : null,
-                  }))}
-                  className={inputCls}>
-                  {(Object.entries(TYPE_LABELS) as [TxType, string][]).map(([v, l]) => (
-                    <option key={v} value={v}>{l}</option>
+                <select value={form.type} className={inputCls}
+                        onChange={e => setForm(f => ({ ...f, type: e.target.value as TxType }))}>
+                  {(Object.keys(TYPE_LABELS) as TxType[]).map(t => (
+                    <option key={t} value={t}>{TYPE_LABELS[t]}</option>
                   ))}
                 </select>
               </div>
 
-              <div className={`grid gap-3 ${form.type === 'transferencia' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              <div className={`grid gap-3 ${form.type === 'transfer' ? 'grid-cols-2' : 'grid-cols-1'}`}>
                 <div>
-                  <label className={lblCls}>{form.type === 'transferencia' ? 'Cuenta origen *' : 'Cuenta *'}</label>
-                  <select value={form.account}
-                    onChange={e => setForm(f => ({ ...f, account: e.target.value as Account }))}
-                    className={inputCls}>
-                    {(Object.entries(ACCOUNT_LABELS) as [Account, string][]).map(([v, l]) => (
-                      <option key={v} value={v}>{l}</option>
-                    ))}
+                  <label className={lblCls}>{form.type === 'transfer' ? 'Cuenta origen *' : 'Cuenta *'}</label>
+                  <select value={form.account} className={inputCls}
+                          onChange={e => setForm(f => ({ ...f, account: e.target.value as Account }))}>
+                    {ACCOUNTS.map(a => <option key={a} value={a}>{ACCOUNT_LABELS[a]}</option>)}
                   </select>
                 </div>
-                {form.type === 'transferencia' && (
+                {form.type === 'transfer' && (
                   <div>
                     <label className={lblCls}>Cuenta destino *</label>
-                    <select value={form.destination_account ?? ''}
-                      onChange={e => setForm(f => ({ ...f, destination_account: e.target.value as Account }))}
-                      className={inputCls}>
-                      <option value="">Seleccionar…</option>
-                      {(Object.entries(ACCOUNT_LABELS) as [Account, string][])
-                        .filter(([v]) => v !== form.account)
-                        .map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                    <select value={form.to_account} className={inputCls}
+                            onChange={e => setForm(f => ({ ...f, to_account: e.target.value as Account }))}>
+                      {ACCOUNTS.filter(a => a !== form.account).map(a => (
+                        <option key={a} value={a}>{ACCOUNT_LABELS[a]}</option>
+                      ))}
                     </select>
                   </div>
                 )}
               </div>
 
               <div>
-                <label className={lblCls}>Código CT</label>
-                <select value={form.ct_code ?? ''}
-                  onChange={e => applyCtCode(e.target.value)}
-                  className={inputCls}>
-                  <option value="">Sin código CT</option>
-                  {ctCodes.map(c => (
-                    <option key={c.id} value={c.code}>{c.code} — {c.description}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className={lblCls}>Descripción *</label>
-                <input value={form.description}
-                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  placeholder="Descripción de la transacción"
-                  className={inputCls} />
+                <label className={lblCls}>Descripción de la transacción *</label>
+                <input value={form.description} className={inputCls} placeholder="Ej. Donaciones (Obra mundial)"
+                       onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={lblCls}>No. de recibo / comprobante</label>
-                  <input value={form.receipt_ref}
-                    onChange={e => setForm(f => ({ ...f, receipt_ref: e.target.value }))}
-                    placeholder="Ej. 0042"
-                    className={inputCls} />
+                  <label className={lblCls}>Comprobante</label>
+                  <input value={form.receipt_ref} className={inputCls} placeholder="Folio"
+                         onChange={e => setForm(f => ({ ...f, receipt_ref: e.target.value }))} />
                 </div>
                 <div>
                   <label className={lblCls}>Notas</label>
-                  <input value={form.notes}
-                    onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                    placeholder="Observaciones"
-                    className={inputCls} />
+                  <input value={form.notes} className={inputCls} placeholder="Observaciones"
+                         onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
                 </div>
               </div>
             </div>
 
             <div className="flex justify-end gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-700">
               <button onClick={() => setModal(null)}
-                className="px-3 py-1.5 text-sm rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300">
+                      className="px-3 py-1.5 text-sm rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
                 Cancelar
               </button>
-              <button onClick={save} disabled={saving}
-                className="flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium disabled:opacity-50">
+              <button onClick={saveTx} disabled={saving}
+                      className="flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium disabled:opacity-50">
                 <Check size={13} /> {saving ? 'Guardando…' : 'Guardar'}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {modal === 'opening' && s26 && (
+        <OpeningModal ym={ym} s26={s26} api={api} onClose={() => setModal(null)}
+                      onSaved={async () => { setModal(null); flash('Saldo inicial actualizado'); await loadMonth(ym); }} />
+      )}
+
+      {modal === 'cierre' && (
+        <CierreModal ym={ym} api={api} onClose={() => setModal(null)}
+                     onDone={async (msg) => { setModal(null); flash(msg); await loadMonth(ym); }} />
+      )}
+
+      {modal === 'arqueo' && s26 && (
+        <ArqueoModal
+          systemBalance={s26.closing.corriente}
+          onClose={() => setModal(null)}
+          onRegisterDiff={async (diff, note) => {
+            try {
+              await api('/api/cuentas/transactions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  date: new Date().toISOString().slice(0, 10),
+                  type: diff > 0 ? 'income' : 'expense',
+                  account: 'corriente',
+                  code: diff > 0 ? 'OI' : 'GC',
+                  description: `Ajuste por arqueo de caja (${diff > 0 ? 'sobrante' : 'faltante'})`,
+                  amount: Math.abs(diff),
+                  notes: note,
+                }),
+              });
+              setModal(null);
+              flash('Diferencia de arqueo registrada');
+              await loadMonth(ym);
+            } catch (e) { setError(e instanceof Error ? e.message : 'Error'); }
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── Saldo inicial ──────────────────────────────────────────────────────────── */
+
+function OpeningModal({ ym, s26, api, onClose, onSaved }: {
+  ym: string; s26: S26;
+  api: (u: string, i?: RequestInit) => Promise<Record<string, unknown>>;
+  onClose: () => void; onSaved: () => void;
+}) {
+  const [v, setV] = useState<Record<Account, string>>({
+    caja: String(s26.opening.caja),
+    corriente: String(s26.opening.corriente),
+    sucursal: String(s26.opening.sucursal),
+  });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const carried = s26.openingAudit.carried;
+  const total = ACCOUNTS.reduce((s, a) => s + (Number(v[a]) || 0), 0);
+  const carriedTotal = ACCOUNTS.reduce((s, a) => s + carried[a], 0);
+
+  async function save() {
+    setBusy(true); setErr(null);
+    try {
+      await api('/api/cuentas/saldo-inicial', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ym, caja: Number(v.caja) || 0, corriente: Number(v.corriente) || 0, sucursal: Number(v.sucursal) || 0 }),
+      });
+      onSaved();
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Error'); }
+    finally { setBusy(false); }
+  }
+
+  async function useCarried() {
+    setBusy(true); setErr(null);
+    try {
+      await api(`/api/cuentas/saldo-inicial?ym=${ym}`, { method: 'DELETE' }).catch(() => null);
+      onSaved();
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Error'); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="font-semibold text-sm">Saldo inicial — {monthLabel(ym)}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+        </div>
+
+        <div className="p-4 space-y-3">
+          {err && <p className="text-xs text-red-600 dark:text-red-400">{err}</p>}
+
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            El arrastre calculado desde los meses anteriores es <strong>{money(carriedTotal)}</strong>.
+            Si declaras un saldo distinto, el S-30 y los saldos por cuenta dejarán de cuadrar.
+          </p>
+
+          {ACCOUNTS.map(a => (
+            <div key={a}>
+              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                {ACCOUNT_LABELS[a]} <span className="text-gray-400">· arrastre {money(carried[a])}</span>
+              </label>
+              <input type="number" step="0.01" value={v[a]}
+                     onChange={e => setV(s => ({ ...s, [a]: e.target.value }))}
+                     className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm" />
+            </div>
+          ))}
+
+          <div className={`p-2.5 rounded-lg text-sm border ${
+            Math.abs(total - carriedTotal) < 0.01
+              ? 'bg-emerald-50 dark:bg-emerald-900/25 border-emerald-300 dark:border-emerald-700'
+              : 'bg-amber-50 dark:bg-amber-900/25 border-amber-300 dark:border-amber-700'}`}>
+            Total declarado <strong>{money(total)}</strong> · arrastre <strong>{money(carriedTotal)}</strong>
+            {Math.abs(total - carriedTotal) >= 0.01 && (
+              <span className="block text-xs mt-0.5">Diferencia {money(total - carriedTotal)}</span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap justify-end gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+          <button onClick={useCarried} disabled={busy}
+                  className="px-3 py-1.5 text-sm rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50">
+            Usar el arrastre
+          </button>
+          <button onClick={onClose} className="px-3 py-1.5 text-sm rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+            Cancelar
+          </button>
+          <button onClick={save} disabled={busy}
+                  className="flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium disabled:opacity-50">
+            <Check size={13} /> {busy ? 'Guardando…' : 'Guardar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Cierre de mes ──────────────────────────────────────────────────────────── */
+
+interface CierrePreview {
+  monthLabel: string; omPending: number; alreadyClosed: boolean;
+  existingEntries: { id: string; amount: number }[]; availableInMain: number;
+}
+
+function CierreModal({ ym, api, onClose, onDone }: {
+  ym: string;
+  api: (u: string, i?: RequestInit) => Promise<Record<string, unknown>>;
+  onClose: () => void; onDone: (msg: string) => void;
+}) {
+  const [prev, setPrev] = useState<CierrePreview | null>(null);
+  const [publishers, setPublishers] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    api(`/api/cuentas/cierre-mes?ym=${ym}`)
+      .then(d => setPrev(d as unknown as CierrePreview))
+      .catch(e => setErr(e instanceof Error ? e.message : 'Error'));
+  }, [ym, api]);
+
+  async function run(correction: boolean) {
+    if (correction && !confirm(
+      'Corregir el cierre elimina los asientos generados por el cierre anterior de este mes y los vuelve a crear.\n\n¿Continuar?'
+    )) return;
+
+    setBusy(true); setErr(null);
+    try {
+      const d = await api('/api/cuentas/cierre-mes', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ym, publishers: publishers ? Number(publishers) : null, correction }),
+      }) as { message?: string; remitted?: number };
+      onDone(d.message || `Cierre generado: remesa de ${money(d.remitted || 0)}`);
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Error'); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="font-semibold text-sm">Cierre de fin de mes — {monthLabel(ym)}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+        </div>
+
+        <div className="p-4 space-y-3 text-sm">
+          {err && <p className="text-xs text-red-600 dark:text-red-400">{err}</p>}
+          {!prev && !err && <p className="text-gray-400 text-xs">Calculando…</p>}
+
+          {prev && (
+            <>
+              {prev.alreadyClosed && (
+                <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/25 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 text-xs">
+                  Este mes ya tiene cierre ({prev.existingEntries.length} asiento(s)). Puedes corregirlo:
+                  se eliminarán y se generarán de nuevo.
+                </div>
+              )}
+
+              <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Donaciones para la obra mundial pendientes de remesar
+                </p>
+                <p className="text-xl font-bold">{money(prev.omPending)}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Se generará un asiento de salida con código SOM desde la Cuenta Principal
+                  (disponible: {money(prev.availableInMain)}).
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                  Publicadores informados (opcional)
+                </label>
+                <input type="number" min="0" value={publishers} onChange={e => setPublishers(e.target.value)}
+                       placeholder="Ej. 78"
+                       className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm" />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Se guarda como nota del asiento, para cotejar con el informe de la sucursal.
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+          <button onClick={onClose} className="px-3 py-1.5 text-sm rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+            Cancelar
+          </button>
+          <button onClick={() => run(!!prev?.alreadyClosed)} disabled={busy || !prev}
+                  className="flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium disabled:opacity-50">
+            <Check size={13} />
+            {busy ? 'Procesando…' : prev?.alreadyClosed ? 'Corregir cierre' : 'Confirmar y ejecutar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Códigos CT ─────────────────────────────────────────────────────────────── */
+
+function CodesPanel({ codes, api, reload, flash, setError }: {
+  codes: CtCode[];
+  api: (u: string, i?: RequestInit) => Promise<Record<string, unknown>>;
+  reload: () => void; flash: (m: string) => void; setError: (m: string) => void;
+}) {
+  const [n, setN] = useState({ code: '', description: '', kind: 'income' as TxType });
+  const [busy, setBusy] = useState(false);
+
+  async function add() {
+    if (!n.code.trim() || !n.description.trim()) return;
+    setBusy(true);
+    try {
+      await api('/api/cuentas/codes', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(n),
+      });
+      setN({ code: '', description: '', kind: 'income' });
+      flash('Código agregado'); reload();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Error'); }
+    finally { setBusy(false); }
+  }
+
+  async function del(c: CtCode) {
+    if (!confirm(`¿Eliminar el código ${c.code}?`)) return;
+    try {
+      await api(`/api/cuentas/codes?id=${c.id}`, { method: 'DELETE' });
+      flash('Código eliminado'); reload();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Error'); }
+  }
+
+  const inp = 'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm';
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <h2 className="font-semibold text-sm mb-3">Agregar código de transacción</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+          <input value={n.code} onChange={e => setN(s => ({ ...s, code: e.target.value.toUpperCase() }))}
+                 placeholder="Código (ej. GC)" className={inp} maxLength={8} />
+          <input value={n.description} onChange={e => setN(s => ({ ...s, description: e.target.value }))}
+                 placeholder="Descripción" className={`${inp} sm:col-span-2`} />
+          <select value={n.kind} onChange={e => setN(s => ({ ...s, kind: e.target.value as TxType }))} className={inp}>
+            {(Object.keys(TYPE_LABELS) as TxType[]).map(t => <option key={t} value={t}>{TYPE_LABELS[t]}</option>)}
+          </select>
+        </div>
+        <button onClick={add} disabled={busy || !n.code.trim() || !n.description.trim()}
+                className="mt-3 flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium disabled:opacity-40">
+          <Plus size={13} /> Agregar
+        </button>
+      </div>
+
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 text-sm font-semibold">
+          Catálogo ({codes.length})
+        </div>
+        <table className="w-full text-sm">
+          <thead className="text-xs text-gray-500 dark:text-gray-400">
+            <tr className="border-b border-gray-100 dark:border-gray-700">
+              <th className="px-4 py-1.5 text-left font-normal">Código</th>
+              <th className="px-4 py-1.5 text-left font-normal">Descripción</th>
+              <th className="px-4 py-1.5 text-left font-normal">Tipo</th>
+              <th className="px-4 py-1.5" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+            {codes.map(c => (
+              <tr key={c.id}>
+                <td className="px-4 py-1.5 font-mono font-medium">{c.code}</td>
+                <td className="px-4 py-1.5">{c.description}</td>
+                <td className="px-4 py-1.5 text-xs text-gray-500 dark:text-gray-400">{TYPE_LABELS[c.kind]}</td>
+                <td className="px-4 py-1.5 text-right">
+                  <button onClick={() => del(c)} className="p-1 text-gray-400 hover:text-red-600">
+                    <Trash2 size={13} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {codes.length === 0 && (
+              <tr><td colSpan={4} className="px-4 py-6 text-center text-gray-400 text-sm">Sin códigos.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ── Encabezado de formularios ──────────────────────────────────────────────── */
+
+function ConfigPanel({ cfg, setCfg, api, flash, setError }: {
+  cfg: CuentasConfig; setCfg: (c: CuentasConfig) => void;
+  api: (u: string, i?: RequestInit) => Promise<Record<string, unknown>>;
+  flash: (m: string) => void; setError: (m: string) => void;
+}) {
+  // El borrador arranca nulo y cae a `cfg`: así el valor cargado del servidor se
+  // refleja sin necesitar un efecto que sincronice dos estados.
+  const [draft, setDraft] = useState<CuentasConfig | null>(null);
+  const [busy, setBusy] = useState(false);
+  const v = draft ?? cfg;
+  const edit = (patch: Partial<CuentasConfig>) => setDraft({ ...v, ...patch });
+
+  async function save() {
+    setBusy(true);
+    try {
+      await api('/api/cuentas/config', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(v),
+      });
+      setCfg(v); setDraft(null); flash('Encabezado actualizado');
+    } catch (e) { setError(e instanceof Error ? e.message : 'Error'); }
+    finally { setBusy(false); }
+  }
+
+  const inp = 'w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm';
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 max-w-lg">
+      <h2 className="font-semibold text-sm mb-1">Encabezado de los formularios</h2>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+        Aparece en el S-26, S-30 y S-25c. Por defecto se toma de los datos de la congregación.
+      </p>
+      <div className="space-y-3">
+        <div>
+          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Congregación</label>
+          <input value={v.label} onChange={e => edit({ label: e.target.value })}
+                 placeholder="ESTACION" className={inp} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Ciudad</label>
+            <input value={v.city} onChange={e => edit({ city: e.target.value })}
+                   placeholder="PATZCUARO" className={inp} />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Estado</label>
+            <input value={v.state} onChange={e => edit({ state: e.target.value })}
+                   placeholder="MICH" className={inp} />
+          </div>
+        </div>
+      </div>
+      <button onClick={save} disabled={busy}
+              className="mt-4 flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium disabled:opacity-50">
+        <Check size={13} /> {busy ? 'Guardando…' : 'Guardar'}
+      </button>
     </div>
   );
 }

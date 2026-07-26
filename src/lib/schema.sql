@@ -573,38 +573,65 @@ CREATE INDEX IF NOT EXISTS idx_msg_congre ON messages(congregation_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_dedupe ON messages(dedupe_key) WHERE dedupe_key IS NOT NULL;
 
 -- ─── 33. CUENTAS — CÓDIGOS CT (→ congregaciones) ─────────────────────────────
-CREATE TABLE IF NOT EXISTS cuentas_ct_codes (
+-- Enums replicados del programa legacy (cuentas-congregacion): no renombrar.
+--   kind/type : income | expense | transfer
+--   account   : caja (Recibido/Donaciones) | corriente (Cuenta Principal/Caja de
+--               dinero) | sucursal (Cuenta Secundaria)
+CREATE TABLE IF NOT EXISTS cuentas_codes (
   id              text PRIMARY KEY,
   code            text NOT NULL,
   description     text NOT NULL,
-  default_account text NOT NULL DEFAULT 'recibido'
-                  CHECK (default_account IN ('recibido','principal','secundaria')),
-  default_type    text NOT NULL DEFAULT 'entrada'
-                  CHECK (default_type IN ('entrada','salida','transferencia')),
+  kind            text NOT NULL DEFAULT 'income'
+                  CHECK (kind IN ('income','expense','transfer')),
   sort_order      integer DEFAULT 0,
   congregation_id text REFERENCES congregations(id),
   UNIQUE(code, congregation_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_cuentas_ct_congre ON cuentas_ct_codes(congregation_id);
+CREATE INDEX IF NOT EXISTS idx_cuentas_codes_congre ON cuentas_codes(congregation_id);
 
 -- ─── 34. CUENTAS — TRANSACCIONES S-26 (→ congregaciones) ─────────────────────
+-- Una fila 'transfer' resta en `account` y suma en `to_account`: su efecto neto
+-- sobre el total general es 0, por eso no mueve la columna Saldo del S-26.
 CREATE TABLE IF NOT EXISTS cuentas_transactions (
-  id                  text PRIMARY KEY,
-  date                text NOT NULL,               -- YYYY-MM-DD
-  type                text NOT NULL CHECK (type IN ('entrada','salida','transferencia')),
-  account             text NOT NULL CHECK (account IN ('recibido','principal','secundaria')),
-  destination_account text CHECK (destination_account IN ('recibido','principal','secundaria')),
-  ct_code             text,
-  description         text NOT NULL,
-  amount              real NOT NULL CHECK (amount > 0),
-  receipt_ref         text,
-  notes               text,
-  created_by          text REFERENCES users(id) ON DELETE SET NULL,
-  created_at          text DEFAULT (datetime('now')),
-  updated_at          text DEFAULT (datetime('now')),
-  congregation_id     text REFERENCES congregations(id)
+  id              text PRIMARY KEY,
+  date            text NOT NULL,               -- YYYY-MM-DD
+  type            text NOT NULL CHECK (type IN ('income','expense','transfer')),
+  account         text NOT NULL CHECK (account IN ('caja','corriente','sucursal')),
+  to_account      text CHECK (to_account IN ('caja','corriente','sucursal')),
+  code            text,
+  description     text NOT NULL,
+  amount          real NOT NULL CHECK (amount > 0),
+  receipt_ref     text,
+  notes           text,
+  created_by      text REFERENCES users(id) ON DELETE SET NULL,
+  created_at      text DEFAULT (datetime('now')),
+  updated_at      text DEFAULT (datetime('now')),
+  congregation_id text REFERENCES congregations(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_cuentas_tx_date   ON cuentas_transactions(date, congregation_id);
-CREATE INDEX IF NOT EXISTS idx_cuentas_tx_congre ON cuentas_transactions(congregation_id);
+CREATE INDEX IF NOT EXISTS idx_cuentas_tx_date   ON cuentas_transactions(congregation_id, date);
+CREATE INDEX IF NOT EXISTS idx_cuentas_tx_code   ON cuentas_transactions(congregation_id, code);
+
+-- ─── 35. CUENTAS — SALDO INICIAL POR MES (→ congregaciones) ───────────────────
+-- Si existe fila para un ym se usa como (a) del S-30; si no, se arrastra el
+-- cierre del mes anterior.
+CREATE TABLE IF NOT EXISTS cuentas_saldo_inicial (
+  congregation_id text NOT NULL REFERENCES congregations(id),
+  ym              text NOT NULL,               -- YYYY-MM
+  caja            real NOT NULL DEFAULT 0,
+  corriente       real NOT NULL DEFAULT 0,
+  sucursal        real NOT NULL DEFAULT 0,
+  updated_at      text DEFAULT (datetime('now')),
+  PRIMARY KEY (congregation_id, ym)
+);
+
+-- ─── 36. CUENTAS — ENCABEZADO DEL FORMULARIO (→ congregaciones) ───────────────
+-- MSP ya tiene name/city en `congregations`; el S-26/S-30 pide además el estado.
+CREATE TABLE IF NOT EXISTS cuentas_config (
+  congregation_id text PRIMARY KEY REFERENCES congregations(id),
+  label           text,
+  city            text,
+  state           text,
+  updated_at      text DEFAULT (datetime('now'))
+);

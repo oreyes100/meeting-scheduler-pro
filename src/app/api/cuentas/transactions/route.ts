@@ -1,139 +1,162 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { getDb } from '@/lib/sqlite';
-import { getSessionContext, unauthenticated, canAccessCuentas } from '@/lib/serverContext';
+import { ACCOUNTS, TYPES, type Account, type TxType } from '@/lib/cuentas';
+import { requireCuentas, badRequest, serverError } from '../_guard';
 
-export async function GET(request: Request) {
-  const ctx = await getSessionContext();
-  if (!ctx.userId) return unauthenticated();
-  if (!canAccessCuentas(ctx)) return NextResponse.json({ error: 'Sin acceso' }, { status: 403 });
+interface Body {
+  id?: string;
+  date?: string;
+  type?: string;
+  account?: string;
+  to_account?: string | null;
+  code?: string | null;
+  description?: string;
+  amount?: number | string;
+  receipt_ref?: string | null;
+  notes?: string | null;
+}
 
-  const { searchParams } = new URL(request.url);
-  const month = searchParams.get('month'); // YYYY-MM
+/** Valida y normaliza el cuerpo. Devuelve el error como string si no procede. */
+function parse(body: Body): { error: string } | {
+  date: string; type: TxType; account: Account; to_account: Account | null;
+  code: string | null; description: string; amount: number;
+  receipt_ref: string | null; notes: string | null;
+} {
+  const { date, type, account, to_account, code, description, amount } = body;
 
-  const db = getDb();
-  let rows: object[];
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'Fecha inválida (YYYY-MM-DD)' };
+  if (!type || !(TYPES as readonly string[]).includes(type)) return { error: 'Tipo inválido' };
+  if (!account || !(ACCOUNTS as readonly string[]).includes(account)) return { error: 'Cuenta inválida' };
+  if (!description || !String(description).trim()) return { error: 'La descripción es obligatoria' };
 
-  if (month) {
-    rows = db.prepare(`
-      SELECT * FROM cuentas_transactions
-      WHERE congregation_id = ? AND strftime('%Y-%m', date) = ?
-      ORDER BY date ASC, created_at ASC
-    `).all(ctx.congreId, month) as object[];
-  } else {
-    rows = db.prepare(`
-      SELECT * FROM cuentas_transactions
-      WHERE congregation_id = ?
-      ORDER BY date DESC, created_at DESC
-      LIMIT 500
-    `).all(ctx.congreId) as object[];
+  const amt = Number(amount);
+  if (!Number.isFinite(amt) || amt <= 0) return { error: 'El monto debe ser mayor a 0' };
+
+  let to: Account | null = null;
+  if (type === 'transfer') {
+    if (!to_account || !(ACCOUNTS as readonly string[]).includes(to_account)) {
+      return { error: 'La transferencia requiere cuenta destino' };
+    }
+    if (to_account === account) return { error: 'La cuenta destino debe ser distinta del origen' };
+    to = to_account as Account;
   }
 
-  return NextResponse.json({ transactions: rows });
+  return {
+    date,
+    type: type as TxType,
+    account: account as Account,
+    to_account: to,
+    code: code ? String(code).trim().toUpperCase() : null,
+    description: String(description).trim(),
+    amount: Math.round(amt * 100) / 100,
+    receipt_ref: body.receipt_ref ? String(body.receipt_ref).trim() : null,
+    notes: body.notes ? String(body.notes).trim() : null,
+  };
+}
+
+export async function GET(request: Request) {
+  const g = await requireCuentas();
+  if (!g.ok) return g.res;
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const month = searchParams.get('month');   // YYYY-MM
+    const account = searchParams.get('account');
+    const type = searchParams.get('type');
+    const code = searchParams.get('code');
+
+    const where: string[] = ['congregation_id = ?'];
+    const params: unknown[] = [g.congreId];
+
+    if (month) { where.push(`substr(date,1,7) = ?`); params.push(month); }
+    if (account && (ACCOUNTS as readonly string[]).includes(account)) {
+      // Una transferencia pertenece a ambas cuentas implicadas.
+      where.push(`(account = ? OR to_account = ?)`); params.push(account, account);
+    }
+    if (type && (TYPES as readonly string[]).includes(type)) { where.push(`type = ?`); params.push(type); }
+    if (code) { where.push(`code = ?`); params.push(code.toUpperCase()); }
+
+    const rows = getDb().prepare(`
+      SELECT id, date, type, account, to_account, code, description, amount, receipt_ref, notes, created_at
+      FROM cuentas_transactions
+      WHERE ${where.join(' AND ')}
+      ORDER BY date ASC, created_at ASC
+      LIMIT 2000
+    `).all(...params);
+
+    return NextResponse.json({ transactions: rows });
+  } catch (e) { return serverError(e); }
 }
 
 export async function POST(request: Request) {
-  const ctx = await getSessionContext();
-  if (!ctx.userId) return unauthenticated();
-  if (!canAccessCuentas(ctx)) return NextResponse.json({ error: 'Sin acceso' }, { status: 403 });
+  const g = await requireCuentas();
+  if (!g.ok) return g.res;
 
-  const body = await request.json();
-  const { date, type, account, destination_account, ct_code, description, amount, receipt_ref, notes } = body;
-
-  if (!date || !type || !account || !description || amount == null) {
-    return NextResponse.json({ error: 'date, type, account, description y amount son requeridos' }, { status: 400 });
-  }
-  if (!['entrada', 'salida', 'transferencia'].includes(type)) {
-    return NextResponse.json({ error: 'type inválido' }, { status: 400 });
-  }
-  if (!['recibido', 'principal', 'secundaria'].includes(account)) {
-    return NextResponse.json({ error: 'account inválido' }, { status: 400 });
-  }
-  if (type === 'transferencia' && !destination_account) {
-    return NextResponse.json({ error: 'destination_account requerido para transferencias' }, { status: 400 });
-  }
-  if (Number(amount) <= 0) {
-    return NextResponse.json({ error: 'amount debe ser mayor a 0' }, { status: 400 });
-  }
-
-  const db = getDb();
-  const id = randomUUID();
   try {
-    db.prepare(`
+    const parsed = parse(await request.json());
+    if ('error' in parsed) return badRequest(parsed.error);
+
+    const id = randomUUID();
+    getDb().prepare(`
       INSERT INTO cuentas_transactions
-        (id, date, type, account, destination_account, ct_code, description, amount, receipt_ref, notes, created_by, congregation_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id, date, type, account, to_account, code, description, amount,
+         receipt_ref, notes, created_by, congregation_id)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
     `).run(
-      id, date, type, account,
-      destination_account || null,
-      ct_code || null,
-      description,
-      Number(amount),
-      receipt_ref || null,
-      notes || null,
-      ctx.userId,
-      ctx.congreId,
+      id, parsed.date, parsed.type, parsed.account, parsed.to_account, parsed.code,
+      parsed.description, parsed.amount, parsed.receipt_ref, parsed.notes,
+      g.userId, g.congreId,
     );
-    const row = db.prepare(`SELECT * FROM cuentas_transactions WHERE id = ?`).get(id);
+
+    const row = getDb().prepare(`SELECT * FROM cuentas_transactions WHERE id = ?`).get(id);
     return NextResponse.json({ transaction: row });
-  } catch (e: unknown) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Error' }, { status: 500 });
-  }
+  } catch (e) { return serverError(e); }
 }
 
 export async function PUT(request: Request) {
-  const ctx = await getSessionContext();
-  if (!ctx.userId) return unauthenticated();
-  if (!canAccessCuentas(ctx)) return NextResponse.json({ error: 'Sin acceso' }, { status: 403 });
-
-  const body = await request.json();
-  const { id, date, type, account, destination_account, ct_code, description, amount, receipt_ref, notes } = body;
-  if (!id) return NextResponse.json({ error: 'id requerido' }, { status: 400 });
-
-  const db = getDb();
-  const existing = db.prepare(
-    `SELECT id FROM cuentas_transactions WHERE id = ? AND congregation_id = ?`
-  ).get(id, ctx.congreId);
-  if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
+  const g = await requireCuentas();
+  if (!g.ok) return g.res;
 
   try {
-    db.prepare(`
+    const body: Body = await request.json();
+    if (!body.id) return badRequest('id requerido');
+
+    const parsed = parse(body);
+    if ('error' in parsed) return badRequest(parsed.error);
+
+    const result = getDb().prepare(`
       UPDATE cuentas_transactions SET
-        date = ?, type = ?, account = ?, destination_account = ?,
-        ct_code = ?, description = ?, amount = ?, receipt_ref = ?, notes = ?,
+        date = ?, type = ?, account = ?, to_account = ?, code = ?,
+        description = ?, amount = ?, receipt_ref = ?, notes = ?,
         updated_at = datetime('now')
       WHERE id = ? AND congregation_id = ?
     `).run(
-      date, type, account,
-      destination_account || null,
-      ct_code || null,
-      description,
-      Number(amount),
-      receipt_ref || null,
-      notes || null,
-      id, ctx.congreId,
+      parsed.date, parsed.type, parsed.account, parsed.to_account, parsed.code,
+      parsed.description, parsed.amount, parsed.receipt_ref, parsed.notes,
+      body.id, g.congreId,
     );
-    const row = db.prepare(`SELECT * FROM cuentas_transactions WHERE id = ?`).get(id);
+
+    if (result.changes === 0) return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
+
+    const row = getDb().prepare(`SELECT * FROM cuentas_transactions WHERE id = ?`).get(body.id);
     return NextResponse.json({ transaction: row });
-  } catch (e: unknown) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Error' }, { status: 500 });
-  }
+  } catch (e) { return serverError(e); }
 }
 
 export async function DELETE(request: Request) {
-  const ctx = await getSessionContext();
-  if (!ctx.userId) return unauthenticated();
-  if (!canAccessCuentas(ctx)) return NextResponse.json({ error: 'Sin acceso' }, { status: 403 });
+  const g = await requireCuentas();
+  if (!g.ok) return g.res;
 
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get('id');
-  if (!id) return NextResponse.json({ error: 'id requerido' }, { status: 400 });
+  try {
+    const id = new URL(request.url).searchParams.get('id');
+    if (!id) return badRequest('id requerido');
 
-  const db = getDb();
-  const result = db.prepare(
-    `DELETE FROM cuentas_transactions WHERE id = ? AND congregation_id = ?`
-  ).run(id, ctx.congreId);
+    const result = getDb().prepare(
+      `DELETE FROM cuentas_transactions WHERE id = ? AND congregation_id = ?`
+    ).run(id, g.congreId);
 
-  if (result.changes === 0) return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
-  return NextResponse.json({ success: true });
+    if (result.changes === 0) return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
+    return NextResponse.json({ success: true });
+  } catch (e) { return serverError(e); }
 }
