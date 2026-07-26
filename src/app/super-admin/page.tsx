@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, Plus, Check, X, ChevronLeft, Users, ToggleLeft, ToggleRight, Trash2, UserPlus, Copy, Eye, EyeOff, Cpu, HardDrive, RefreshCw, GitBranch } from 'lucide-react';
+import { Building2, Plus, Check, X, ChevronLeft, Users, ToggleLeft, ToggleRight, Trash2, UserPlus, Copy, Eye, EyeOff, Cpu, HardDrive, RefreshCw, GitBranch, KeyRound, Banknote, ShieldAlert } from 'lucide-react';
 import { useMe } from '@/lib/useMe';
 import { MODULES } from '@/lib/modules';
 
@@ -163,6 +163,171 @@ interface ProvisionResult {
 }
 
 const ALL_MODULE_KEYS = MODULES.filter(m => !m.superAdminOnly).map(m => m.key);
+
+// ── CuentasUsers ─────────────────────────────────────────────────────────────
+interface CuentasUser { id: number; username: string; role: string; created_at: string; }
+
+function CuentasUsers() {
+  const [users, setUsers] = useState<CuentasUser[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [resetting, setResetting] = useState<string | null>(null); // username
+  const [newPw, setNewPw] = useState<Record<string, string>>({});
+  const [showPw, setShowPw] = useState<Record<string, boolean>>({});
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [newUser, setNewUser] = useState({ username: '', password: '', role: 'user' });
+  const [saving, setSaving] = useState(false);
+  const [ok, setOk] = useState<string | null>(null);
+  const [secretMissing, setSecretMissing] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true); setErr(null);
+    try {
+      const r = await fetch('/api/cuentas-admin');
+      const d = await r.json();
+      if (!r.ok) {
+        if (d.error?.includes('CUENTAS_MASTER_SECRET')) setSecretMissing(true);
+        throw new Error(d.error || 'Error');
+      }
+      setUsers(d.users || []);
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Error'); }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const flash = (msg: string) => { setOk(msg); setTimeout(() => setOk(null), 3000); };
+
+  const reset = async (username: string) => {
+    const pw = newPw[username]?.trim();
+    if (!pw || pw.length < 4) { setErr('Mínimo 4 caracteres'); return; }
+    setResetting(username); setErr(null);
+    try {
+      const r = await fetch('/api/cuentas-admin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'reset_password', username, password: pw }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      setNewPw(p => ({ ...p, [username]: '' }));
+      flash(`Contraseña de "${username}" actualizada`);
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Error'); }
+    setResetting(null);
+  };
+
+  const del = async (username: string) => {
+    if (!confirm(`¿Eliminar usuario "${username}" de Cuentas?`)) return;
+    setDeleting(username); setErr(null);
+    try {
+      const r = await fetch('/api/cuentas-admin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete_user', username }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      await load(); flash(`Usuario "${username}" eliminado`);
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Error'); }
+    setDeleting(null);
+  };
+
+  const create = async () => {
+    if (!newUser.username.trim() || !newUser.password.trim()) return;
+    setSaving(true); setErr(null);
+    try {
+      const r = await fetch('/api/cuentas-admin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create_user', ...newUser }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      setCreating(false); setNewUser({ username: '', password: '', role: 'user' });
+      await load(); flash('Usuario creado en Cuentas');
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Error'); }
+    setSaving(false);
+  };
+
+  return (
+    <section className="p-4 rounded-xl border border-gray-700 bg-gray-800/50">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-bold text-base flex items-center gap-2">
+          <Banknote size={16} className="text-violet-400" /> Cuentas — Usuarios
+        </h2>
+        <div className="flex gap-2">
+          <button onClick={() => setCreating(c => !c)} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-violet-700 hover:bg-violet-600 text-white">
+            <Plus size={12} /> Nuevo
+          </button>
+          <button onClick={load} disabled={loading} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 disabled:opacity-50">
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Recargar
+          </button>
+        </div>
+      </div>
+
+      {secretMissing && (
+        <div className="mb-3 p-3 rounded-lg bg-amber-900/40 border border-amber-700 text-amber-300 text-xs flex items-start gap-2">
+          <ShieldAlert size={14} className="shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold mb-1">Variable de entorno faltante</p>
+            <p>Agrega <code className="bg-amber-950/60 px-1 rounded">CUENTAS_MASTER_SECRET</code> en Vercel (proyecto Cuentas) y el mismo valor como <code className="bg-amber-950/60 px-1 rounded">CUENTAS_MASTER_SECRET</code> en <code className="bg-amber-950/60 px-1 rounded">ecosystem.config.cjs</code> del VPS.</p>
+          </div>
+        </div>
+      )}
+
+      {err && <p className="mb-3 text-xs text-red-400">{err}</p>}
+      {ok && <p className="mb-3 text-xs text-green-400">✓ {ok}</p>}
+
+      {creating && (
+        <div className="mb-4 p-3 rounded-lg border border-violet-600 bg-violet-900/10 space-y-2">
+          <p className="text-xs text-violet-300 font-semibold">Nuevo usuario en Cuentas</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <input value={newUser.username} onChange={e => setNewUser(u => ({ ...u, username: e.target.value }))} placeholder="Usuario" className="bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-violet-500" />
+            <input type="password" value={newUser.password} onChange={e => setNewUser(u => ({ ...u, password: e.target.value }))} placeholder="Contraseña (mín. 4)" className="bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-violet-500" />
+            <select value={newUser.role} onChange={e => setNewUser(u => ({ ...u, role: e.target.value }))} className="bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-violet-500">
+              <option value="user">user</option>
+              <option value="admin">admin</option>
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={create} disabled={saving || !newUser.username.trim() || !newUser.password.trim()} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-50"><Check size={12} /> {saving ? 'Creando…' : 'Crear'}</button>
+            <button onClick={() => setCreating(false)} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300"><X size={12} /> Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {loading && !users.length ? (
+        <p className="text-xs text-gray-500 animate-pulse py-4 text-center">Cargando usuarios de Cuentas…</p>
+      ) : (
+        <div className="space-y-2">
+          {users.map(u => (
+            <div key={u.id} className="p-3 rounded-lg bg-gray-700/60 border border-gray-600">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <span className="font-mono text-sm text-gray-100">{u.username}</span>
+                  <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${u.role === 'admin' ? 'bg-violet-900/60 text-violet-300 border border-violet-700' : 'bg-gray-600 text-gray-400'}`}>{u.role}</span>
+                </div>
+                <button onClick={() => del(u.username)} disabled={deleting === u.username}
+                  className="text-xs p-1.5 rounded-lg bg-gray-600 hover:bg-red-900/60 text-gray-400 hover:text-red-400 disabled:opacity-50">
+                  <Trash2 size={12} />
+                </button>
+              </div>
+              <div className="flex gap-2 items-center">
+                <div className="relative flex-1">
+                  <input
+                    type={showPw[u.username] ? 'text' : 'password'}
+                    value={newPw[u.username] || ''}
+                    onChange={e => setNewPw(p => ({ ...p, [u.username]: e.target.value }))}
+                    placeholder="Nueva contraseña"
+                    className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-xs text-gray-100 pr-7 focus:outline-none focus:border-violet-500"
+                  />
+                  <button type="button" onClick={() => setShowPw(p => ({ ...p, [u.username]: !p[u.username] }))}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+                    {showPw[u.username] ? <EyeOff size={11} /> : <Eye size={11} />}
+                  </button>
+                </div>
+                <button onClick={() => reset(u.username)} disabled={resetting === u.username || !newPw[u.username]?.trim()}
+                  className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-amber-700/60 hover:bg-amber-600/60 text-amber-200 disabled:opacity-40">
+                  <KeyRound size={12} /> {resetting === u.username ? '…' : 'Resetear'}
+                </button>
+              </div>
+            </div>
+          ))}
+          {!users.length && !loading && <p className="text-xs text-gray-500 py-4 text-center">Sin usuarios (o CUENTAS_MASTER_SECRET no configurada).</p>}
+        </div>
+      )}
+    </section>
+  );
+}
 
 export default function SuperAdminPage() {
   const router = useRouter();
@@ -522,6 +687,9 @@ export default function SuperAdminPage() {
             {congres.length === 0 && !fetching && <p className="text-center text-gray-500 py-8">No hay congregaciones.</p>}
           </div>
         </section>
+
+        {/* ── CUENTAS USUARIOS ── */}
+        <CuentasUsers />
       </div>
     </div>
   );

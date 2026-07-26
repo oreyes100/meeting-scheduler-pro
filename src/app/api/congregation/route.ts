@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sb } from '@/lib/crud';
-import { getSessionContext } from '@/lib/serverContext';
+import { getSessionContext, unauthenticated } from '@/lib/serverContext';
 
 const ALLOWED = [
   'name', 'number', 'congregation_id', 'language', 'time_zone',
@@ -32,6 +32,7 @@ async function syncFieldServiceGroupCount(supabase: any, count: number) {
 export async function GET() {
   try {
     const ctx = await getSessionContext();
+    if (!ctx.userId) return unauthenticated();
     const client = sb();
     let query = client.from('congregation_settings').select('*').order('created_at', { ascending: true }).limit(1);
     if (ctx.congreId) query = query.eq('owning_congregation_id', ctx.congreId);
@@ -49,6 +50,7 @@ export async function GET() {
 export async function PUT(request: Request) {
   try {
     const ctx = await getSessionContext();
+    if (!ctx.userId) return unauthenticated();
     const supabase = sb();
     const body = await request.json();
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };

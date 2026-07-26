@@ -224,7 +224,7 @@ CREATE TABLE IF NOT EXISTS weekend_meetings (
   updated_at           text DEFAULT (datetime('now')),
   cleaning_group       text,
   congregation_id      text REFERENCES congregations(id),
-  UNIQUE(date)
+  UNIQUE(date, congregation_id)
 );
 
 -- ─── 10. PUBLIC TALK HISTORY (→ public_talk_outlines) ────────────────────────

@@ -6,7 +6,7 @@ import { useTheme, useIsDark, type ThemeMode } from '@/lib/theme';
 import { IconSidebar } from '@/components/IconSidebar';
 import { SyncStatus } from '@/components/SyncStatus';
 
-const CUENTAS_URL = 'https://cuentas-congregacion-bay.vercel.app';
+const CUENTAS_URL = process.env.NEXT_PUBLIC_CUENTAS_URL || 'https://cuentas-congregacion-bay.vercel.app';
 
 const THEME_OPTIONS: { value: ThemeMode; icon: React.ReactNode; label: string }[] = [
   { value: 'light', icon: <Sun size={14} />, label: 'Día' },
