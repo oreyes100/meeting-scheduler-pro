@@ -3,12 +3,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Banknote, Plus, Pencil, Trash2, X, Check, AlertCircle, Printer, Wallet,
-  CalendarCheck, BookOpen, BarChart3, SearchCheck, Tags, FileText, Settings2,
+  CalendarCheck, BookOpen, BarChart3, SearchCheck, Tags, FileText, Settings2, Upload,
 } from 'lucide-react';
 import { IconSidebar } from '@/components/IconSidebar';
 import { SyncStatus } from '@/components/SyncStatus';
 import { useTheme } from '@/lib/theme';
 import { ArqueoModal } from '@/components/cuentas/ArqueoModal';
+import { ImportPanel } from '@/components/cuentas/ImportPanel';
 import {
   S26Sheet, BalanceCards, S30Report, S25cReport, IncomeExpenseChart,
   ReconcilePanel, FormHeader,
@@ -16,14 +17,14 @@ import {
 import {
   ACCOUNTS, ACCOUNT_LABELS, TYPE_LABELS, QUARTERS, money,
   currentYm, serviceYearOf, serviceYearMonths, monthLabel, serviceYearOptions,
-  MONTH_NAMES_ES,
+  MONTH_NAMES_ES, EMPTY_CONFIG,
   type Account, type TxType, type CtCode, type S26, type S30, type S25c,
-  type Summary, type Reconcile, type CuentasConfig, type Transaction,
+  type Summary, type Reconcile, type CuentasConfig, type Transaction, type CierreEntry,
 } from '@/components/cuentas/types';
 
 /* ── Navegación ─────────────────────────────────────────────────────────────── */
 
-type View = 's26' | 's30' | 'forms' | 'chart' | 'reconcile' | 'codes' | 'config';
+type View = 's26' | 's30' | 'forms' | 'chart' | 'reconcile' | 'codes' | 'import' | 'config';
 
 const NAV: { key: View; label: string; sub: string; Icon: typeof BookOpen }[] = [
   { key: 's26',       label: 'Hoja de Cuentas',   sub: 'S-26-S',            Icon: BookOpen },
@@ -32,7 +33,8 @@ const NAV: { key: View; label: string; sub: string; Icon: typeof BookOpen }[] = 
   { key: 'chart',     label: 'Relación I/E',      sub: 'Año de servicio',    Icon: BarChart3 },
   { key: 'reconcile', label: 'Análisis Contables', sub: 'Verificación',      Icon: SearchCheck },
   { key: 'codes',     label: 'Códigos CT',        sub: 'Catálogo',           Icon: Tags },
-  { key: 'config',    label: 'Encabezado',        sub: 'Congregación',       Icon: Settings2 },
+  { key: 'import',    label: 'Importar',          sub: 'Respaldo CSV',       Icon: Upload },
+  { key: 'config',    label: 'Configuración',     sub: 'Encabezado y cierre', Icon: Settings2 },
 ];
 
 const blankForm = () => ({
@@ -67,7 +69,7 @@ export default function CuentasPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [rec, setRec] = useState<Reconcile | null>(null);
   const [codes, setCodes] = useState<CtCode[]>([]);
-  const [cfg, setCfg] = useState<CuentasConfig>({ label: '', city: '', state: '' });
+  const [cfg, setCfg] = useState<CuentasConfig>(EMPTY_CONFIG);
 
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -465,9 +467,15 @@ export default function CuentasPage() {
           {/* ── Códigos CT ────────────────────────────────────────────────── */}
           {view === 'codes' && <CodesPanel codes={codes} api={api} reload={loadCodes} flash={flash} setError={setError} />}
 
-          {/* ── Encabezado / config ───────────────────────────────────────── */}
+          {/* ── Importar respaldo ─────────────────────────────────────────── */}
+          {view === 'import' && (
+            <ImportPanel api={api} flash={flash} setError={setError}
+                         onImported={() => { loadCodes(); loadMonth(ym); }} />
+          )}
+
+          {/* ── Configuración ─────────────────────────────────────────────── */}
           {view === 'config' && (
-            <ConfigPanel cfg={cfg} setCfg={setCfg} api={api} flash={flash} setError={setError} />
+            <ConfigPanel cfg={cfg} setCfg={setCfg} codes={codes} api={api} flash={flash} setError={setError} />
           )}
         </div>
       </div>
@@ -714,9 +722,20 @@ function OpeningModal({ ym, s26, api, onClose, onSaved }: {
 /* ── Cierre de mes ──────────────────────────────────────────────────────────── */
 
 interface CierrePreview {
-  monthLabel: string; omPending: number; alreadyClosed: boolean;
-  existingEntries: { id: string; amount: number }[]; availableInMain: number;
+  monthLabel: string;
+  entries: CierreEntry[];
+  total: number;
+  alreadyClosed: boolean;
+  existingEntries: { id: string; amount: number }[];
+  availableInMain: number;
+  config: CuentasConfig;
 }
+
+const KIND_LABEL: Record<CierreEntry['kind'], string> = {
+  remit:   'Remesa de obra mundial',
+  res_pub: 'Resolución por publicador',
+  res_pct: 'Resolución porcentual',
+};
 
 function CierreModal({ ym, api, onClose, onDone }: {
   ym: string;
@@ -728,11 +747,15 @@ function CierreModal({ ym, api, onClose, onDone }: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // La previsualización se recalcula al cambiar los publicadores: la resolución
+  // por publicador depende de ese número, así que el desglose debe reflejarlo
+  // antes de ejecutar nada.
   useEffect(() => {
-    api(`/api/cuentas/cierre-mes?ym=${ym}`)
+    const q = publishers ? `&publishers=${encodeURIComponent(publishers)}` : '';
+    api(`/api/cuentas/cierre-mes?ym=${ym}${q}`)
       .then(d => setPrev(d as unknown as CierrePreview))
       .catch(e => setErr(e instanceof Error ? e.message : 'Error'));
-  }, [ym, api]);
+  }, [ym, publishers, api]);
 
   async function run(correction: boolean) {
     if (correction && !confirm(
@@ -744,16 +767,18 @@ function CierreModal({ ym, api, onClose, onDone }: {
       const d = await api('/api/cuentas/cierre-mes', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ym, publishers: publishers ? Number(publishers) : null, correction }),
-      }) as { message?: string; remitted?: number };
-      onDone(d.message || `Cierre generado: remesa de ${money(d.remitted || 0)}`);
+      }) as { message?: string };
+      onDone(d.message || 'Cierre generado');
     } catch (e) { setErr(e instanceof Error ? e.message : 'Error'); }
     finally { setBusy(false); }
   }
 
+  const noPubRate = prev && prev.config.res_pub_amount <= 0;
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800">
           <h3 className="font-semibold text-sm">Cierre de fin de mes — {monthLabel(ym)}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
         </div>
@@ -766,42 +791,70 @@ function CierreModal({ ym, api, onClose, onDone }: {
             <>
               {prev.alreadyClosed && (
                 <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/25 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 text-xs">
-                  Este mes ya tiene cierre ({prev.existingEntries.length} asiento(s)). Puedes corregirlo:
-                  se eliminarán y se generarán de nuevo.
+                  Este mes ya tiene cierre ({prev.existingEntries.length} asiento(s)). Al corregir se
+                  eliminan y se generan de nuevo.
                 </div>
               )}
 
-              <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Donaciones para la obra mundial pendientes de remesar
-                </p>
-                <p className="text-xl font-bold">{money(prev.omPending)}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Se generará un asiento de salida con código SOM desde la Cuenta Principal
-                  (disponible: {money(prev.availableInMain)}).
-                </p>
-              </div>
-
               <div>
                 <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
-                  Publicadores informados (opcional)
+                  Publicadores informados
                 </label>
                 <input type="number" min="0" value={publishers} onChange={e => setPublishers(e.target.value)}
                        placeholder="Ej. 78"
                        className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm" />
-                <p className="text-[11px] text-gray-400 mt-1">
-                  Se guarda como nota del asiento, para cotejar con el informe de la sucursal.
+                {noPubRate && (
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
+                    El monto por publicador está en 0, así que esa resolución no se generará.
+                    Configúralo en Configuración → Cierre de mes.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1.5">
+                  Asientos que se generarán (salidas de la Cuenta Principal, disponible {money(prev.availableInMain)})
                 </p>
+
+                {prev.entries.length === 0 ? (
+                  <p className="text-xs text-gray-400 p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50">
+                    No hay nada que asentar en este mes.
+                  </p>
+                ) : (
+                  <div className="rounded-lg border border-gray-200 dark:border-gray-600 divide-y divide-gray-100 dark:divide-gray-700">
+                    {prev.entries.map(e => (
+                      <div key={e.kind} className="p-2.5">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-xs font-medium">
+                            <span className="font-mono mr-1.5">{e.code}</span>{KIND_LABEL[e.kind]}
+                          </span>
+                          <span className="font-semibold tabular-nums">{money(e.amount)}</span>
+                        </div>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{e.basis}</p>
+                      </div>
+                    ))}
+                    <div className="p-2.5 flex justify-between bg-gray-50 dark:bg-gray-700/50">
+                      <span className="text-xs font-semibold">Total</span>
+                      <span className="font-bold tabular-nums">{money(prev.total)}</span>
+                    </div>
+                  </div>
+                )}
+
+                {prev.total > prev.availableInMain && (
+                  <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1.5">
+                    El total supera el saldo disponible en la Cuenta Principal; quedará en negativo.
+                  </p>
+                )}
               </div>
             </>
           )}
         </div>
 
-        <div className="flex justify-end gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-700 sticky bottom-0 bg-white dark:bg-gray-800">
           <button onClick={onClose} className="px-3 py-1.5 text-sm rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
             Cancelar
           </button>
-          <button onClick={() => run(!!prev?.alreadyClosed)} disabled={busy || !prev}
+          <button onClick={() => run(!!prev?.alreadyClosed)} disabled={busy || !prev || prev.entries.length === 0}
                   className="flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium disabled:opacity-50">
             <Check size={13} />
             {busy ? 'Procesando…' : prev?.alreadyClosed ? 'Corregir cierre' : 'Confirmar y ejecutar'}
@@ -903,8 +956,8 @@ function CodesPanel({ codes, api, reload, flash, setError }: {
 
 /* ── Encabezado de formularios ──────────────────────────────────────────────── */
 
-function ConfigPanel({ cfg, setCfg, api, flash, setError }: {
-  cfg: CuentasConfig; setCfg: (c: CuentasConfig) => void;
+function ConfigPanel({ cfg, setCfg, codes, api, flash, setError }: {
+  cfg: CuentasConfig; setCfg: (c: CuentasConfig) => void; codes: CtCode[];
   api: (u: string, i?: RequestInit) => Promise<Record<string, unknown>>;
   flash: (m: string) => void; setError: (m: string) => void;
 }) {
@@ -928,35 +981,109 @@ function ConfigPanel({ cfg, setCfg, api, flash, setError }: {
   }
 
   const inp = 'w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm';
+  const lbl = 'block text-xs text-gray-500 dark:text-gray-400 mb-1';
+
+  /** Selector de código con el catálogo, permitiendo un valor aún no creado. */
+  const codeSelect = (value: string, onChange: (v: string) => void, kind?: TxType) => (
+    <select value={value} onChange={e => onChange(e.target.value)} className={inp}>
+      {!codes.some(c => c.code === value) && <option value={value}>{value}</option>}
+      {codes.filter(c => !kind || c.kind === kind).map(c => (
+        <option key={c.id} value={c.code}>{c.code} — {c.description}</option>
+      ))}
+    </select>
+  );
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 max-w-lg">
-      <h2 className="font-semibold text-sm mb-1">Encabezado de los formularios</h2>
-      <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-        Aparece en el S-26, S-30 y S-25c. Por defecto se toma de los datos de la congregación.
-      </p>
-      <div className="space-y-3">
-        <div>
-          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Congregación</label>
-          <input value={v.label} onChange={e => edit({ label: e.target.value })}
-                 placeholder="ESTACION" className={inp} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
+    <div className="space-y-4 max-w-2xl">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <h2 className="font-semibold text-sm mb-1">Encabezado de los formularios</h2>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+          Aparece en el S-26, S-30 y S-25c. Por defecto se toma de los datos de la congregación.
+        </p>
+        <div className="space-y-3">
           <div>
-            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Ciudad</label>
-            <input value={v.city} onChange={e => edit({ city: e.target.value })}
-                   placeholder="PATZCUARO" className={inp} />
+            <label className={lbl}>Congregación</label>
+            <input value={v.label} onChange={e => edit({ label: e.target.value })}
+                   placeholder="ESTACION" className={inp} />
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Estado</label>
-            <input value={v.state} onChange={e => edit({ state: e.target.value })}
-                   placeholder="MICH" className={inp} />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={lbl}>Ciudad</label>
+              <input value={v.city} onChange={e => edit({ city: e.target.value })}
+                     placeholder="PATZCUARO" className={inp} />
+            </div>
+            <div>
+              <label className={lbl}>Estado</label>
+              <input value={v.state} onChange={e => edit({ state: e.target.value })}
+                     placeholder="MICH" className={inp} />
+            </div>
           </div>
         </div>
       </div>
+
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <h2 className="font-semibold text-sm mb-1">Cierre de mes</h2>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+          El cierre genera hasta tres salidas de la Cuenta Principal: la remesa de las donaciones
+          para la obra mundial y las dos resoluciones mensuales.
+        </p>
+
+        <div className="space-y-4">
+          <div>
+            <label className={lbl}>Código de la remesa de obra mundial</label>
+            {codeSelect(v.remit_code, c => edit({ remit_code: c }), 'expense')}
+            <p className="text-[11px] text-gray-400 mt-1">
+              Se asienta por las donaciones recibidas con código OM o DO que aún no se han remesado.
+            </p>
+          </div>
+
+          <div className="pt-3 border-t border-gray-100 dark:border-gray-700">
+            <p className="text-xs font-semibold mb-2">Resolución 1 — por publicador</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={lbl}>Monto por publicador ($)</label>
+                <input type="number" min="0" step="0.01" value={v.res_pub_amount}
+                       onChange={e => edit({ res_pub_amount: Number(e.target.value) || 0 })}
+                       className={inp} />
+              </div>
+              <div>
+                <label className={lbl}>Código</label>
+                {codeSelect(v.res_pub_code, c => edit({ res_pub_code: c }), 'expense')}
+              </div>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1">
+              Monto × publicadores informados en el cierre. En 0 no se genera el asiento.
+            </p>
+          </div>
+
+          <div className="pt-3 border-t border-gray-100 dark:border-gray-700">
+            <p className="text-xs font-semibold mb-2">Resolución 2 — porcentaje de donaciones</p>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className={lbl}>Porcentaje (%)</label>
+                <input type="number" min="0" max="100" step="0.1" value={v.res_pct_percent}
+                       onChange={e => edit({ res_pct_percent: Number(e.target.value) || 0 })}
+                       className={inp} />
+              </div>
+              <div>
+                <label className={lbl}>Sobre el código</label>
+                {codeSelect(v.res_pct_source, c => edit({ res_pct_source: c }), 'income')}
+              </div>
+              <div>
+                <label className={lbl}>Código del asiento</label>
+                {codeSelect(v.res_pct_code, c => edit({ res_pct_code: c }), 'expense')}
+              </div>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1">
+              Por omisión, 10% de las donaciones para la congregación (código C) del mes.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <button onClick={save} disabled={busy}
-              className="mt-4 flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium disabled:opacity-50">
-        <Check size={13} /> {busy ? 'Guardando…' : 'Guardar'}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium disabled:opacity-50">
+        <Check size={13} /> {busy ? 'Guardando…' : 'Guardar configuración'}
       </button>
     </div>
   );

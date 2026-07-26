@@ -54,9 +54,10 @@ export const DEFAULT_CODES: { code: string; description: string; kind: TxType; s
   { code: 'D',   description: 'Depósito a caja de efectivo',                    kind: 'transfer', sort_order: 6 },
   { code: 'OV',  description: 'Orador visitante / discursante',                 kind: 'expense',  sort_order: 7 },
   { code: 'GC',  description: 'Gastos de funcionamiento del Salón del Reino',   kind: 'expense',  sort_order: 8 },
-  { code: 'SOM', description: 'Remesa de obra mundial a la sucursal',           kind: 'expense',  sort_order: 9 },
-  { code: 'RE',  description: 'Remesa',                                         kind: 'expense',  sort_order: 10 },
-  { code: 'ROM', description: 'Remesa de obra mundial',                          kind: 'expense',  sort_order: 11 },
+  { code: 'RM',  description: 'Resolución mensual para la obra mundial',        kind: 'expense',  sort_order: 9 },
+  { code: 'SOM', description: 'Remesa de obra mundial a la sucursal',           kind: 'expense',  sort_order: 10 },
+  { code: 'RE',  description: 'Remesa',                                         kind: 'expense',  sort_order: 11 },
+  { code: 'ROM', description: 'Remesa de obra mundial',                          kind: 'expense',  sort_order: 12 },
 ];
 
 export interface Transaction {
@@ -593,6 +594,122 @@ export function buildReconcile(congreId: string, ym: string): { ym: string; mont
   });
 
   return { ym, monthLabel: monthLabel(ym), checks, allOk: checks.every(c => c.ok) };
+}
+
+/* ── Cierre de mes ──────────────────────────────────────────────────────────── */
+
+export interface CierreConfig {
+  remit_code: string;
+  res_pub_code: string;
+  res_pub_amount: number;
+  res_pct_code: string;
+  res_pct_percent: number;
+  res_pct_source: string;
+}
+
+export const DEFAULT_CIERRE: CierreConfig = {
+  remit_code: 'SOM',
+  res_pub_code: 'RM',
+  res_pub_amount: 0,
+  res_pct_code: 'RM',
+  res_pct_percent: 10,
+  res_pct_source: 'C',
+};
+
+export function cierreConfig(congreId: string): CierreConfig {
+  try {
+    const row = getDb().prepare(`
+      SELECT remit_code, res_pub_code, res_pub_amount, res_pct_code, res_pct_percent, res_pct_source
+      FROM cuentas_config WHERE congregation_id = ?
+    `).get(congreId) as CierreConfig | undefined;
+    return row ? { ...DEFAULT_CIERRE, ...row } : { ...DEFAULT_CIERRE };
+  } catch {
+    return { ...DEFAULT_CIERRE };
+  }
+}
+
+/** Marca con la que se identifican los asientos generados por el cierre de un mes. */
+export const cierreTag = (ym: string) => `CIERRE-${ym}`;
+
+export interface CierreEntry {
+  kind: 'remit' | 'res_pub' | 'res_pct';
+  code: string;
+  description: string;
+  amount: number;
+  basis: string;
+}
+
+/**
+ * Asientos que generaría el cierre del mes, sin escribir nada.
+ *
+ * Son tres conceptos, todos como salida de la Cuenta Principal:
+ *  1. Remesa de las donaciones para la obra mundial recibidas y no remesadas.
+ *  2. Resolución mensual calculada por publicador (monto × publicadores).
+ *  3. Resolución mensual porcentual sobre las donaciones para la congregación.
+ *
+ * Los asientos ya existentes del cierre se excluyen del cálculo para que
+ * recalcular una corrección no acumule sobre sí misma.
+ */
+export function cierrePreview(
+  congreId: string, ym: string, publishers: number | null,
+): { config: CierreConfig; entries: CierreEntry[]; total: number } {
+  const cfg = cierreConfig(congreId);
+  const ref = cierreTag(ym);
+  const txs = txOfMonth(congreId, ym).filter(t => t.receipt_ref !== ref);
+
+  const incomes = txs.filter(t => t.type === 'income');
+  const expenses = txs.filter(t => t.type === 'expense');
+
+  const entries: CierreEntry[] = [];
+
+  // 1 · Remesa de obra mundial pendiente
+  const omReceived = round2(
+    incomes.filter(t => t.code && (OM_INCOME_CODES as readonly string[]).includes(t.code))
+           .reduce((s, t) => s + t.amount, 0));
+  const omRemitted = round2(
+    expenses.filter(t => t.code && (OM_REMIT_CODES as readonly string[]).includes(t.code))
+            .reduce((s, t) => s + t.amount, 0));
+  const pending = round2(omReceived - omRemitted);
+
+  if (pending > 0) {
+    entries.push({
+      kind: 'remit',
+      code: cfg.remit_code,
+      description: 'Remesa de donaciones para la obra mundial — cierre de mes',
+      amount: pending,
+      basis: `Recibido ${omReceived.toFixed(2)} − ya remesado ${omRemitted.toFixed(2)}`,
+    });
+  }
+
+  // 2 · Resolución mensual por publicador
+  if (publishers && publishers > 0 && cfg.res_pub_amount > 0) {
+    const amount = round2(publishers * cfg.res_pub_amount);
+    entries.push({
+      kind: 'res_pub',
+      code: cfg.res_pub_code,
+      description: 'Resolución mensual para la obra mundial (por publicador)',
+      amount,
+      basis: `${publishers} publicadores × ${cfg.res_pub_amount.toFixed(2)}`,
+    });
+  }
+
+  // 3 · Resolución mensual porcentual sobre las donaciones a la congregación
+  if (cfg.res_pct_percent > 0) {
+    const base = round2(
+      incomes.filter(t => t.code === cfg.res_pct_source).reduce((s, t) => s + t.amount, 0));
+    const amount = round2(base * cfg.res_pct_percent / 100);
+    if (amount > 0) {
+      entries.push({
+        kind: 'res_pct',
+        code: cfg.res_pct_code,
+        description: `Resolución mensual para la obra mundial (${cfg.res_pct_percent}% de donaciones ${cfg.res_pct_source})`,
+        amount,
+        basis: `${cfg.res_pct_percent}% de ${base.toFixed(2)} (código ${cfg.res_pct_source})`,
+      });
+    }
+  }
+
+  return { config: cfg, entries, total: round2(entries.reduce((s, e) => s + e.amount, 0)) };
 }
 
 /** Donaciones OM recibidas en el mes menos remesas enviadas en el mes. */

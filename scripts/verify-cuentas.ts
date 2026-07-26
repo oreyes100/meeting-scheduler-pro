@@ -14,7 +14,9 @@ import { randomUUID } from 'crypto';
 
 import {
   buildS26, buildS30, buildS25c, buildSummary, buildReconcile, DEFAULT_CODES, totalOf,
+  cierrePreview, cierreTag,
 } from '../src/lib/cuentas';
+import { parseCsv, autoMap, buildPlan } from '../src/lib/csvImport';
 import { getDb as db } from '../src/lib/sqlite';
 
 const CONGRE_A = 'congre-estacion';
@@ -182,6 +184,91 @@ check('Meses en el año de servicio', sum.months.length, 12);
 checkBool('Empieza en septiembre', sum.months[0].ym === '2025-09');
 checkBool('Termina en agosto',     sum.months[11].ym === '2026-08');
 check('Ingresos del año',          sum.totals.income, 5420);
+
+console.log('\n── Cierre de mes · las dos resoluciones ──');
+// Julio 2026 tiene 3310 en donaciones código C y 2110 en obra mundial (OM), sin
+// remesas. Con 5.00 por publicador, 78 publicadores y 10% sobre C:
+d.prepare(`INSERT INTO cuentas_config
+  (congregation_id, label, city, state, remit_code, res_pub_code, res_pub_amount,
+   res_pct_code, res_pct_percent, res_pct_source)
+  VALUES (?,?,?,?,?,?,?,?,?,?)`)
+ .run(CONGRE_A, 'ESTACION', 'PATZCUARO', 'MICH', 'SOM', 'RM', 5, 'RM', 10, 'C');
+
+const cierre = cierrePreview(CONGRE_A, '2026-07', 78);
+const entry = (k: string) => cierre.entries.find(e => e.kind === k);
+const entry2 = (p: { entries: { kind: string; amount: number }[] }, k: string) =>
+  p.entries.find(e => e.kind === k)?.amount ?? 0;
+check('Remesa obra mundial (OM+DO − remesado)', entry('remit')?.amount ?? 0, 2110);
+check('Resolución por publicador (78 × 5)',     entry('res_pub')?.amount ?? 0,  390);
+check('Resolución 10% sobre código C (3310)',   entry('res_pct')?.amount ?? 0,  331);
+check('Total del cierre',                       cierre.total,                  2831);
+checkBool('Genera los tres asientos',           cierre.entries.length === 3);
+
+// Sin publicadores no debe generarse la resolución por publicador.
+const sinPubs = cierrePreview(CONGRE_A, '2026-07', null);
+checkBool('Sin publicadores no hay resolución por publicador', !sinPubs.entries.some(e => e.kind === 'res_pub'));
+check('Total sin publicadores', sinPubs.total, 2441);   // 2110 + 331
+
+// Caso A — asientos del cierre anterior: se IGNORAN en el cálculo. El route
+// los borra antes de reinsertar, así que una corrección debe recalcular el
+// importe completo. Si no se ignoraran, corregir dos veces daría remesa 0.
+d.prepare(`INSERT INTO cuentas_transactions
+  (id,date,type,account,to_account,code,description,amount,receipt_ref,congregation_id)
+  VALUES (?,?,?,?,?,?,?,?,?,?)`)
+ .run(randomUUID(), '2026-07-31', 'expense', 'corriente', null, 'SOM',
+      'Remesa cierre', 2110, cierreTag('2026-07'), CONGRE_A);
+
+const recalc = cierrePreview(CONGRE_A, '2026-07', 78);
+check('Corrección: la remesa se recalcula íntegra', entry2(recalc, 'remit'), 2110);
+check('Corrección: total idéntico al original',     recalc.total,             2831);
+
+d.exec(`DELETE FROM cuentas_transactions WHERE receipt_ref = '${cierreTag('2026-07')}'`);
+
+// Caso B — remesa capturada a mano (sin marca de cierre): SÍ descuenta, para
+// no remesar dos veces lo mismo.
+const manualId = randomUUID();
+d.prepare(`INSERT INTO cuentas_transactions
+  (id,date,type,account,to_account,code,description,amount,receipt_ref,congregation_id)
+  VALUES (?,?,?,?,?,?,?,?,?,?)`)
+ .run(manualId, '2026-07-28', 'expense', 'corriente', null, 'SOM',
+      'Remesa capturada a mano', 2110, null, CONGRE_A);
+
+const conManual = cierrePreview(CONGRE_A, '2026-07', 78);
+checkBool('Remesa manual descuenta lo pendiente', !conManual.entries.some(e => e.kind === 'remit'));
+check('Total con remesa manual (solo resoluciones)', conManual.total, 721);  // 390 + 331
+
+d.exec(`DELETE FROM cuentas_transactions WHERE id = '${manualId}'`);
+
+console.log('\n── Importador CSV ──');
+const CSV = [
+  'Fecha,Descripción,CT,Tipo,Cuenta,Cuenta destino,Monto',
+  '01/07/2026,"Donaciones (Obra mundial)",OM,Entrada,Recibido,,"$550.00"',
+  '04/07/2026,Deposito a caja,D,Transferencia,Recibido,Cuenta Principal,"1,260.00"',
+  '05/07/2026,Orador visitante,OV,Salida,Cuenta Principal,,300',
+  '2026-07-31,Fila sin monto,C,Entrada,Recibido,,',
+].join('\n');
+
+const parsed = parseCsv(CSV);
+check('Filas leídas (con encabezado)', parsed.length, 5);
+const map = autoMap(parsed[0]);
+checkBool('Detecta la columna Fecha',   map[0] === 'date');
+checkBool('Detecta la columna Monto',   map[6] === 'amount');
+checkBool('Detecta Cuenta destino',     map[5] === 'to_account');
+
+const plan = buildPlan(parsed, map, true, new Set(DEFAULT_CODES.map(c => c.code)));
+check('Filas válidas',            plan.rows.length,   3);
+check('Filas con error',          plan.issues.length, 1);
+check('Total ingresos',           plan.totals.income,   550);
+check('Total egresos',            plan.totals.expense,  300);
+check('Total transferencias',     plan.totals.transfer, 1260);
+checkBool('Fecha DD/MM/YYYY normalizada', plan.rows[0].date === '2026-07-01');
+checkBool('Monto con $ y coma de miles',  plan.rows[1].amount === 1260);
+checkBool('Transferencia con destino',    plan.rows[1].to_account === 'corriente');
+checkBool('Error señala la línea 5',      plan.issues[0].line === 5);
+
+// Un código ausente del catálogo debe reportarse para darlo de alta.
+const planNuevo = buildPlan(parsed, map, true, new Set(['OM', 'D']));
+checkBool('Reporta códigos nuevos', planNuevo.newCodes.some(c => c.code === 'OV'));
 
 console.log('\n── Análisis contables ──');
 const rec = buildReconcile(CONGRE_A, '2026-07');

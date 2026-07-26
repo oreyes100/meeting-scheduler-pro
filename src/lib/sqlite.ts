@@ -46,6 +46,13 @@ export function getDb(): Database.Database {
     `ALTER TABLE messaging_settings ADD COLUMN telegram_notify_overdue integer NOT NULL DEFAULT 1`,
     `ALTER TABLE messaging_settings ADD COLUMN telegram_notify_weekly_status integer NOT NULL DEFAULT 1`,
     `ALTER TABLE messaging_settings ADD COLUMN telegram_weekly_dow integer NOT NULL DEFAULT 1`,
+    // Parámetros del cierre de mes de Cuentas (añadidos tras el despliegue inicial)
+    `ALTER TABLE cuentas_config ADD COLUMN remit_code text NOT NULL DEFAULT 'SOM'`,
+    `ALTER TABLE cuentas_config ADD COLUMN res_pub_code text NOT NULL DEFAULT 'RM'`,
+    `ALTER TABLE cuentas_config ADD COLUMN res_pub_amount real NOT NULL DEFAULT 0`,
+    `ALTER TABLE cuentas_config ADD COLUMN res_pct_code text NOT NULL DEFAULT 'RM'`,
+    `ALTER TABLE cuentas_config ADD COLUMN res_pct_percent real NOT NULL DEFAULT 10`,
+    `ALTER TABLE cuentas_config ADD COLUMN res_pct_source text NOT NULL DEFAULT 'C'`,
   ];
   for (const sql of runMigrations) {
     try { _db.exec(sql); } catch { /* column already exists */ }

@@ -121,7 +121,30 @@ export interface Reconcile {
   allOk: boolean;
 }
 
-export interface CuentasConfig { label: string; city: string; state: string }
+export interface CuentasConfig {
+  label: string; city: string; state: string;
+  /** Parámetros del cierre de mes. */
+  remit_code: string;
+  res_pub_code: string;
+  res_pub_amount: number;
+  res_pct_code: string;
+  res_pct_percent: number;
+  res_pct_source: string;
+}
+
+export const EMPTY_CONFIG: CuentasConfig = {
+  label: '', city: '', state: '',
+  remit_code: 'SOM', res_pub_code: 'RM', res_pub_amount: 0,
+  res_pct_code: 'RM', res_pct_percent: 10, res_pct_source: 'C',
+};
+
+export interface CierreEntry {
+  kind: 'remit' | 'res_pub' | 'res_pct';
+  code: string;
+  description: string;
+  amount: number;
+  basis: string;
+}
 
 /* ── Utilidades de formato y fechas ─────────────────────────────────────────── */
 

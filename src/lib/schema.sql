@@ -628,10 +628,20 @@ CREATE TABLE IF NOT EXISTS cuentas_saldo_inicial (
 
 -- ─── 36. CUENTAS — ENCABEZADO DEL FORMULARIO (→ congregaciones) ───────────────
 -- MSP ya tiene name/city en `congregations`; el S-26/S-30 pide además el estado.
+-- Incluye los parámetros del cierre de mes. Los códigos son configurables
+-- porque cada congregación conserva los suyos; las descripciones pueden variar
+-- pero el código es lo que gobierna el desglose de los reportes.
 CREATE TABLE IF NOT EXISTS cuentas_config (
-  congregation_id text PRIMARY KEY REFERENCES congregations(id),
-  label           text,
-  city            text,
-  state           text,
-  updated_at      text DEFAULT (datetime('now'))
+  congregation_id  text PRIMARY KEY REFERENCES congregations(id),
+  label            text,
+  city             text,
+  state            text,
+  -- Cierre de mes
+  remit_code       text    NOT NULL DEFAULT 'SOM',  -- remesa de obra mundial
+  res_pub_code     text    NOT NULL DEFAULT 'RM',   -- resolución por publicador
+  res_pub_amount   real    NOT NULL DEFAULT 0,      -- monto por publicador
+  res_pct_code     text    NOT NULL DEFAULT 'RM',   -- resolución porcentual
+  res_pct_percent  real    NOT NULL DEFAULT 10,     -- % sobre donaciones código C
+  res_pct_source   text    NOT NULL DEFAULT 'C',    -- código base del porcentaje
+  updated_at       text DEFAULT (datetime('now'))
 );

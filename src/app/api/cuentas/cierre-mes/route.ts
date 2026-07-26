@@ -1,34 +1,38 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { getDb } from '@/lib/sqlite';
-import { buildS26, s25cOmPending, monthLabel, OM_REMIT_CODES } from '@/lib/cuentas';
+import { buildS26, cierrePreview, cierreTag, monthLabel } from '@/lib/cuentas';
 import { requireCuentas, badRequest, serverError } from '../_guard';
 
 const YM = /^\d{4}-\d{2}$/;
-/** Marca que identifica los asientos generados por el cierre de un mes. */
-const tag = (ym: string) => `CIERRE-${ym}`;
 
-/** GET: previsualización — qué haría el cierre, sin escribir nada. */
+/** GET: previsualización — qué asientos generaría el cierre, sin escribir nada. */
 export async function GET(request: Request) {
   const g = await requireCuentas();
   if (!g.ok) return g.res;
 
   try {
-    const ym = new URL(request.url).searchParams.get('ym');
+    const p = new URL(request.url).searchParams;
+    const ym = p.get('ym');
     if (!ym || !YM.test(ym)) return badRequest('ym requerido (YYYY-MM)');
+
+    const publishers = p.get('publishers') ? Number(p.get('publishers')) : null;
 
     const existing = getDb().prepare(`
       SELECT id, date, code, description, amount FROM cuentas_transactions
       WHERE congregation_id = ? AND receipt_ref = ?
-    `).all(g.congreId, tag(ym)) as { id: string; amount: number }[];
+      ORDER BY code
+    `).all(g.congreId, cierreTag(ym)) as { id: string; amount: number }[];
 
+    const preview = cierrePreview(g.congreId, ym, publishers);
     const s26 = buildS26(g.congreId, ym);
 
     return NextResponse.json({
       ym,
       monthLabel: monthLabel(ym),
-      /** Donaciones de obra mundial recibidas y aún no remesadas. */
-      omPending: s25cOmPending(g.congreId, ym),
+      config: preview.config,
+      entries: preview.entries,
+      total: preview.total,
       alreadyClosed: existing.length > 0,
       existingEntries: existing,
       availableInMain: s26.closing.corriente,
@@ -40,12 +44,13 @@ export async function GET(request: Request) {
 /**
  * POST: ejecuta el cierre del mes.
  *
- * Genera la remesa de obra mundial (código SOM) desde la Cuenta Principal por el
- * importe de donaciones OM recibidas y no remesadas en el mes.
+ * Genera hasta tres asientos de salida desde la Cuenta Principal: la remesa de
+ * obra mundial pendiente, la resolución mensual por publicador y la resolución
+ * porcentual sobre las donaciones a la congregación.
  *
- * Es idempotente: los asientos se marcan con `receipt_ref = 'CIERRE-<ym>'`. Si ya
- * existe un cierre, exige `correction: true`, y en ese caso reemplaza los
- * asientos previos en lugar de duplicarlos.
+ * Es idempotente: los asientos llevan `receipt_ref = 'CIERRE-<ym>'`. Si ya hay
+ * cierre, exige `correction: true` y entonces reemplaza los asientos previos en
+ * vez de duplicarlos.
  */
 export async function POST(request: Request) {
   const g = await requireCuentas();
@@ -55,8 +60,13 @@ export async function POST(request: Request) {
     const { ym, publishers, correction } = await request.json();
     if (!ym || !YM.test(ym)) return badRequest('ym requerido (YYYY-MM)');
 
+    const pubs = publishers != null && publishers !== '' ? Number(publishers) : null;
+    if (pubs != null && (!Number.isFinite(pubs) || pubs < 0)) {
+      return badRequest('El número de publicadores debe ser un entero no negativo');
+    }
+
     const db = getDb();
-    const ref = tag(ym);
+    const ref = cierreTag(ym);
 
     const existing = db.prepare(
       `SELECT id FROM cuentas_transactions WHERE congregation_id = ? AND receipt_ref = ?`
@@ -69,57 +79,49 @@ export async function POST(request: Request) {
       }, { status: 409 });
     }
 
-    const pending = s25cOmPending(g.congreId, ym);
-
-    // Al corregir, primero se retiran los asientos del cierre anterior para que
-    // `pending` se recalcule sobre el estado real del mes.
+    // Al corregir se retiran primero los asientos anteriores, para que el
+    // recálculo parta del estado real del mes y no se acumule sobre sí mismo.
     const removed = existing.length;
-    if (existing.length > 0) {
+    if (removed > 0) {
       db.prepare(
         `DELETE FROM cuentas_transactions WHERE congregation_id = ? AND receipt_ref = ?`
       ).run(g.congreId, ref);
     }
 
-    const recomputed = s25cOmPending(g.congreId, ym);
+    const { entries, total, config } = cierrePreview(g.congreId, ym, pubs);
 
-    if (recomputed <= 0) {
+    if (entries.length === 0) {
       return NextResponse.json({
-        success: true,
-        removed,
-        created: [],
-        message: `Sin donaciones de obra mundial pendientes de remesar en ${monthLabel(ym)}.`,
-        publishers: publishers ?? null,
+        success: true, removed, created: [], total: 0, config,
+        message: `Sin movimientos de cierre para ${monthLabel(ym)}.`,
       });
     }
 
-    // Último día del mes: la remesa se asienta con fecha de cierre.
+    // Los asientos se fechan el último día del mes.
     const [y, m] = ym.split('-').map(Number);
-    const lastDay = new Date(y, m, 0).getDate();
-    const date = `${ym}-${String(lastDay).padStart(2, '0')}`;
+    const date = `${ym}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
 
-    const id = randomUUID();
-    db.prepare(`
+    const insert = db.prepare(`
       INSERT INTO cuentas_transactions
         (id, date, type, account, to_account, code, description, amount,
          receipt_ref, notes, created_by, congregation_id)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-    `).run(
-      id, date, 'expense', 'corriente', null, OM_REMIT_CODES[0],
-      'Remesa de donaciones para la obra mundial — cierre de mes',
-      recomputed, ref,
-      publishers != null ? `Publicadores informados: ${publishers}` : null,
-      g.userId, g.congreId,
-    );
+    `);
 
-    const created = db.prepare(`SELECT * FROM cuentas_transactions WHERE id = ?`).get(id);
+    const created: unknown[] = [];
+    for (const e of entries) {
+      const id = randomUUID();
+      insert.run(
+        id, date, 'expense', 'corriente', null, e.code, e.description, e.amount,
+        ref, `${e.basis}${pubs != null ? ` · Publicadores: ${pubs}` : ''}`,
+        g.userId, g.congreId,
+      );
+      created.push(db.prepare(`SELECT * FROM cuentas_transactions WHERE id = ?`).get(id));
+    }
 
     return NextResponse.json({
-      success: true,
-      removed,
-      created: [created],
-      pendingBefore: pending,
-      remitted: recomputed,
-      publishers: publishers ?? null,
+      success: true, removed, created, total, config, publishers: pubs,
+      message: `Cierre de ${monthLabel(ym)}: ${entries.length} asiento(s) por ${total.toFixed(2)}`,
     });
   } catch (e) { return serverError(e); }
 }
@@ -135,7 +137,7 @@ export async function DELETE(request: Request) {
 
     const r = getDb().prepare(
       `DELETE FROM cuentas_transactions WHERE congregation_id = ? AND receipt_ref = ?`
-    ).run(g.congreId, tag(ym));
+    ).run(g.congreId, cierreTag(ym));
 
     if (r.changes === 0) return NextResponse.json({ error: 'No había cierre para ese mes' }, { status: 404 });
     return NextResponse.json({ success: true, removed: r.changes });
