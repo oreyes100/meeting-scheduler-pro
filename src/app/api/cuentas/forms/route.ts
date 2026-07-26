@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     const kind = p.get('kind') || 's30';
     const calibrate = p.get('calibrate') === '1';
 
-    if (kind !== 's30' && kind !== 's25c') return badRequest(`kind desconocido: ${kind}`);
+    if (!['s26', 's30', 's25c'].includes(kind)) return badRequest(`kind desconocido: ${kind}`);
 
     let pdfForms: typeof import('@/lib/pdfForms');
     try {
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
       }, { status: 501 });
     }
 
-    if (!pdfForms.templateExists(kind)) {
+    if (!pdfForms.templateExists(kind as 's26' | 's30' | 's25c')) {
       return NextResponse.json({
         error: `Falta la plantilla oficial de ${kind.toUpperCase()} en src/lib/pdf-templates/`,
       }, { status: 501 });
@@ -62,7 +62,13 @@ export async function GET(request: Request) {
     let bytes: Uint8Array;
     let filename: string;
 
-    if (kind === 's30') {
+    if (kind === 's26') {
+      const ym = p.get('ym');
+      if (!ym || !YM.test(ym)) return badRequest('ym requerido (YYYY-MM)');
+      const { buildS26 } = await import('@/lib/cuentas');
+      bytes = await pdfForms.fillS26(buildS26(g.congreId, ym), header, { calibrate });
+      filename = `S-26-S ${ym}${calibrate ? ' (calibracion)' : ''}.pdf`;
+    } else if (kind === 's30') {
       const ym = p.get('ym');
       if (!ym || !YM.test(ym)) return badRequest('ym requerido (YYYY-MM)');
       bytes = await pdfForms.fillS30(buildS30(g.congreId, ym), header, { calibrate });

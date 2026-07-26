@@ -15,7 +15,7 @@
  */
 import fs from 'fs';
 import path from 'path';
-import type { S30, S25c } from './cuentas';
+import type { S26, S30, S25c } from './cuentas';
 
 /**
  * Tipos mínimos de pdf-lib. Se declaran aquí y el paquete se carga de forma
@@ -37,13 +37,14 @@ async function loadPdfLib(): Promise<{ PDFDocument: { load(b: Buffer): Promise<P
   const mod = 'pdf-lib';
   return import(/* webpackIgnore: false */ mod) as unknown as Promise<{ PDFDocument: { load(b: Buffer): Promise<PDFDoc> } }>;
 }
-import { monthLabel } from './cuentasDomain';
+import { monthLabel, ACCOUNTS, type Account } from './cuentasDomain';
 
 const TEMPLATES = path.join(process.cwd(), 'src', 'lib', 'pdf-templates');
 
-export type FormKind = 's30' | 's25c';
+export type FormKind = 's26' | 's30' | 's25c';
 
 const TEMPLATE_FILE: Record<FormKind, string> = {
+  s26:  'S-26-S.pdf',
   s30:  'S-30-S.pdf',
   s25c: 'S-25c-S.pdf',
 };
@@ -147,6 +148,55 @@ function mapS25c(s25c: S25c, header: { label: string; city: string; state: strin
     '900_24_Text_C': amt(s25c.closingFunds),
   } as Record<string, string>;
 }
+
+/* ── Mapa S-26-S ────────────────────────────────────────────────────────────
+ * La hoja de cuentas tiene 533 campos en cuatro bloques (900_ a 904_): la
+ * rejilla de asientos ocupa la mayoría y la página 2 lleva la conciliación.
+ * Aquí van el encabezado y los totales, que son los que se pueden fijar sin
+ * ambigüedad. La correspondencia fila→campo de la rejilla se establece con el
+ * modo calibración: imprime el PDF con cada casilla rotulada, y con esa
+ * referencia se completa ROW_FIELDS de abajo.
+ */
+const S26_ROW_FIELDS: { date: string; desc: string; code: string;
+  cols: Record<Account, { in: string; out: string }>; saldo: string }[] = [
+  // Pendiente de calibración: ver la nota de arriba.
+];
+
+function mapS26(s26: S26, header: { label: string; city: string; state: string }) {
+  const out: Record<string, string> = {
+    '900_1_Text_C': header.label,
+    '900_2_Text_C': header.city,
+    '900_3_Text_C': header.state,
+    '900_4_Text_C': s26.monthLabel,
+  };
+
+  // Rejilla de asientos: solo se rellena cuando el mapa esté calibrado.
+  s26.rows.forEach((r, i) => {
+    const f = S26_ROW_FIELDS[i];
+    if (!f) return;
+    out[f.date] = String(Number(r.date.slice(8, 10)));
+    out[f.desc] = r.description;
+    out[f.code] = r.code ?? '';
+    for (const a of ACCOUNTS) {
+      out[f.cols[a].in]  = amt(r.cols[a].in);
+      out[f.cols[a].out] = amt(r.cols[a].out);
+    }
+    out[f.saldo] = r.saldo.toFixed(2);
+  });
+
+  return out;
+}
+
+export async function fillS26(
+  s26: S26,
+  header: { label: string; city: string; state: string },
+  opts: FillOptions = {},
+): Promise<Uint8Array> {
+  return fill('s26', mapS26(s26, header), opts);
+}
+
+/** ¿Está calibrada la rejilla del S-26? La interfaz lo advierte si no. */
+export const s26GridCalibrated = () => S26_ROW_FIELDS.length > 0;
 
 /* ── Relleno ────────────────────────────────────────────────────────────────── */
 

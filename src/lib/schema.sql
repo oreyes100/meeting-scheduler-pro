@@ -645,3 +645,22 @@ CREATE TABLE IF NOT EXISTS cuentas_config (
   res_pct_source   text    NOT NULL DEFAULT 'C',    -- código base del porcentaje
   updated_at       text DEFAULT (datetime('now'))
 );
+
+-- ─── 37. CUENTAS — RECIBOS PENDIENTES DE APROBACIÓN POR TELEGRAM ─────────────
+-- Un recibo llega al chat, se lee con IA y queda aquí como propuesta hasta que
+-- alguien la aprueba desde el propio Telegram. Nada se asienta sin aprobación.
+CREATE TABLE IF NOT EXISTS cuentas_telegram_pending (
+  id               text PRIMARY KEY,
+  congregation_id  text NOT NULL REFERENCES congregations(id),
+  chat_id          text NOT NULL,
+  message_id       text,
+  file_id          text,
+  proposal         text NOT NULL,          -- JSON: transacciones propuestas
+  status           text NOT NULL DEFAULT 'pending'
+                   CHECK (status IN ('pending','approved','rejected','error')),
+  resolved_by      text,                   -- usuario de Telegram que resolvió
+  resolved_at      text,
+  created_at       text DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_tg_pending_congre ON cuentas_telegram_pending(congregation_id, status);
