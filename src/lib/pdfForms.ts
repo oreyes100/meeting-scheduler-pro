@@ -1,0 +1,218 @@
+/**
+ * Relleno de los formularios oficiales S-30-S y S-25c. SOLO SERVIDOR.
+ *
+ * Los PDF que publica la organización son AcroForm con campos nombrados
+ * (`900_1_Text`, `901_6_S30_Total`…). Rellenarlos da un documento idéntico al
+ * que espera la sucursal; recrear el diseño en HTML nunca lo consigue.
+ *
+ * ── Sobre el mapa de campos ─────────────────────────────────────────────────
+ * Los nombres son correlativos y no describen su contenido, y las plantillas
+ * llegaron en blanco, así que la correspondencia campo→dato no puede deducirse
+ * del archivo. En vez de adivinar en silencio, el mapa de abajo es explícito y
+ * editable, y existe un MODO CALIBRACIÓN (`calibrate: true`) que rellena cada
+ * casilla con su propio nombre: se imprime una vez, se ve qué casilla es cuál y
+ * se corrigen aquí las que no coincidan. Cinco minutos, y queda fijado.
+ */
+import fs from 'fs';
+import path from 'path';
+import type { S30, S25c } from './cuentas';
+
+/**
+ * Tipos mínimos de pdf-lib. Se declaran aquí y el paquete se carga de forma
+ * diferida para que el proyecto compile aunque la dependencia no esté instalada
+ * todavía: el resto del módulo Cuentas sigue funcionando y solo esta ruta avisa.
+ */
+interface PDFTextField { setText(v: string): void }
+interface PDFField { getName(): string }
+interface PDFForm {
+  getTextField(name: string): PDFTextField;
+  getFields(): PDFField[];
+  updateFieldAppearances?(): void;
+}
+interface PDFDoc { getForm(): PDFForm; save(): Promise<Uint8Array> }
+
+async function loadPdfLib(): Promise<{ PDFDocument: { load(b: Buffer): Promise<PDFDoc> } }> {
+  // Especificador en variable: evita que TypeScript exija los tipos del paquete
+  // en tiempo de compilación. La ruta devuelve un 501 explicable si no está.
+  const mod = 'pdf-lib';
+  return import(/* webpackIgnore: false */ mod) as unknown as Promise<{ PDFDocument: { load(b: Buffer): Promise<PDFDoc> } }>;
+}
+import { monthLabel } from './cuentasDomain';
+
+const TEMPLATES = path.join(process.cwd(), 'src', 'lib', 'pdf-templates');
+
+export type FormKind = 's30' | 's25c';
+
+const TEMPLATE_FILE: Record<FormKind, string> = {
+  s30:  'S-30-S.pdf',
+  s25c: 'S-25c-S.pdf',
+};
+
+export function templateExists(kind: FormKind): boolean {
+  return fs.existsSync(path.join(TEMPLATES, TEMPLATE_FILE[kind]));
+}
+
+/** Importe tal como lo escribe el formulario oficial: sin símbolo, dos decimales. */
+const amt = (n: number | null | undefined) =>
+  n == null || n === 0 ? '' : n.toFixed(2);
+
+/* ── Mapa S-30-S ────────────────────────────────────────────────────────────
+ * Página 1 (900_*): encabezado y etiquetas editables.
+ * Página 1 (901_*): importes. `_Total` son las líneas de subtotal.
+ * Verificar con el modo calibración antes de darlo por bueno.
+ */
+function mapS30(s30: S30, header: { label: string; city: string; state: string }) {
+  const inc = (code: string) => s30.incomeByCode.find(r => r.code === code)?.total ?? 0;
+  const exp = (code: string) => s30.expenseByCode.find(r => r.code === code)?.total ?? 0;
+
+  // Recibido para la congregación: donaciones en cajas frente a electrónicas.
+  const cajas       = inc('C') + inc('DC');
+  const electronica = inc('DB') + inc('DE');
+  // Otros ingresos: obra mundial y demás.
+  const obraMundial = inc('OM') + inc('DO');
+  const otrosIng    = s30.b - cajas - electronica - obraMundial;
+
+  return {
+    // Encabezado
+    '900_1_Text':  header.label,
+    '900_2_Text':  monthLabel(s30.ym),
+    // Etiquetas de líneas libres
+    '900_10_Text': 'Orador visitante / discursante (OV)',
+
+    // (a) Fondos al comienzo del mes
+    '901_1_S30_Value': amt(s30.a),
+
+    // RECIBIDO PARA LA CONGREGACIÓN
+    '901_2_S30_Value': amt(cajas),
+    '901_3_S30_Value': amt(electronica),
+    '901_6_S30_Total': amt(s30.b),
+
+    // OTROS INGRESOS
+    '901_7_S30_Value':  amt(obraMundial),
+    '901_8_S30_Value':  amt(otrosIng > 0.005 ? otrosIng : 0),
+    '901_10_S30_Total': amt(s30.b),
+
+    // Total de ingresos
+    '901_11_S30_Total': amt(s30.b),
+
+    // GASTOS DE LA CONGREGACIÓN
+    '901_12_S30_Value': amt(exp('GL') + exp('GM')),  // funcionamiento del Salón
+    '901_13_S30_Value': amt(exp('RM') + exp('ROM')), // resolución mensual
+    '901_14_S30_Value': amt(exp('OV')),              // orador visitante
+    '901_19_S30_Total': amt(s30.c),
+
+    // OTROS DESEMBOLSOS
+    '901_20_S30_Value': amt(exp('SOM') + exp('RE')),
+    '901_23_S30_Total': amt(s30.c),
+
+    // Totales y conciliación
+    '901_24_S30_Total': amt(s30.c),
+    '901_25_S30_Total': amt(s30.d),
+    '901_26_S30_Total': amt(s30.e),
+    '901_29_S30_Total': amt(s30.box_kingdom),
+    '901_30_S30_Total': amt(s30.f),
+    '901_31_S30_Total': amt(s30.g),
+    '901_32_S30_Total': amt(s30.h),
+    '901_33_S30_Total': amt(s30.i),
+    '901_34_S30_Total': amt(s30.k),
+  } as Record<string, string>;
+}
+
+/* ── Mapa S-25c ─────────────────────────────────────────────────────────────
+ * Formulario de auditoría trimestral: encabezado, fechas y los datos del
+ * sistema que el auditor coteja.
+ */
+function mapS25c(s25c: S25c, header: { label: string; city: string; state: string }) {
+  const m = s25c.months;
+  return {
+    '900_1_Text':  header.label,
+    '900_9_Text':  m[0]?.label ?? '',
+    '900_10_Text': m[2]?.label ?? '',
+    '900_11_Text': new Date().toLocaleDateString('es-MX'),
+
+    // Datos del sistema por mes: recibido y desembolsos
+    '900_12_Text_C': amt(m[0]?.income),
+    '900_13_Text_C': amt(m[1]?.income),
+    '900_14_Text_C': amt(m[2]?.income),
+    '900_15_Text_C': amt(m[0]?.expense),
+    '900_16_Text_C': amt(m[1]?.expense),
+    '900_17_Text_C': amt(m[2]?.expense),
+
+    // Obra mundial recibida y remesada en el trimestre
+    '900_18_Text_C': amt(s25c.totals.omIncome),
+    '900_19_Text_C': amt(s25c.totals.omRemit),
+
+    // Fondos al inicio y al final del trimestre
+    '900_23_Text_C': amt(s25c.openingFunds),
+    '900_24_Text_C': amt(s25c.closingFunds),
+  } as Record<string, string>;
+}
+
+/* ── Relleno ────────────────────────────────────────────────────────────────── */
+
+function setField(form: PDFForm, name: string, value: string) {
+  try {
+    form.getTextField(name).setText(value);
+  } catch {
+    // Campo inexistente o de otro tipo (casilla de verificación): se ignora.
+  }
+}
+
+export interface FillOptions {
+  /** Rellena cada casilla con su propio nombre, para ajustar el mapa. */
+  calibrate?: boolean;
+}
+
+export async function fillS30(
+  s30: S30,
+  header: { label: string; city: string; state: string },
+  opts: FillOptions = {},
+): Promise<Uint8Array> {
+  return fill('s30', mapS30(s30, header), opts);
+}
+
+export async function fillS25c(
+  s25c: S25c,
+  header: { label: string; city: string; state: string },
+  opts: FillOptions = {},
+): Promise<Uint8Array> {
+  return fill('s25c', mapS25c(s25c, header), opts);
+}
+
+async function fill(
+  kind: FormKind, values: Record<string, string>, opts: FillOptions,
+): Promise<Uint8Array> {
+  const file = path.join(TEMPLATES, TEMPLATE_FILE[kind]);
+  if (!fs.existsSync(file)) {
+    throw new Error(`Falta la plantilla oficial ${TEMPLATE_FILE[kind]} en src/lib/pdf-templates/`);
+  }
+
+  const { PDFDocument } = await loadPdfLib();
+  const pdf = await PDFDocument.load(fs.readFileSync(file));
+  const form = pdf.getForm();
+
+  if (opts.calibrate) {
+    // Cada casilla muestra su nombre: se imprime, se compara con el formulario
+    // oficial y se corrigen los mapas de arriba.
+    for (const f of form.getFields()) {
+      setField(form, f.getName(), f.getName().replace(/_Text_C|_Text|_S30_/g, (m: string) => m === '_S30_' ? '_' : ''));
+    }
+  } else {
+    for (const [name, value] of Object.entries(values)) {
+      if (value !== '') setField(form, name, value);
+    }
+  }
+
+  // Deja el PDF editable: el siervo de cuentas suele completar a mano las
+  // preguntas de la auditoría y las líneas que el sistema no conoce.
+  form.updateFieldAppearances?.();
+  return pdf.save();
+}
+
+/** Nombres de todos los campos de una plantilla, para depuración. */
+export async function listFields(kind: FormKind): Promise<string[]> {
+  const file = path.join(TEMPLATES, TEMPLATE_FILE[kind]);
+  const { PDFDocument } = await loadPdfLib();
+  const pdf = await PDFDocument.load(fs.readFileSync(file));
+  return pdf.getForm().getFields().map(f => f.getName());
+}

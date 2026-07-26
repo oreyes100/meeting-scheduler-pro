@@ -2,8 +2,8 @@
 
 import React from 'react';
 import {
-  ACCOUNTS, ACCOUNT_LABELS, ACCOUNT_ACCENT, money, num,
-  type S26, type S30, type S25c, type Summary, type Reconcile, type CuentasConfig,
+  ACCOUNTS, ACCOUNT_LABELS, money, num,
+  type Account, type S26, type S30, type S25c, type Summary, type Reconcile, type CuentasConfig,
 } from './types';
 
 /* ── Encabezado oficial compartido por los tres formularios ─────────────────── */
@@ -108,24 +108,54 @@ export function S26Sheet({ s26, official = false }: { s26: S26; official?: boole
   );
 }
 
-/** Tarjetas de saldo por cuenta + total general. */
+/**
+ * Tarjetas de saldo con degradado, como en el programa original.
+ * El color identifica la cuenta de un vistazo; el total general cierra la fila.
+ */
+const CARD_GRADIENT: Record<Account, string> = {
+  caja:      'from-orange-500 to-amber-600',
+  corriente: 'from-sky-500 to-blue-600',
+  sucursal:  'from-violet-500 to-purple-600',
+};
+
 export function BalanceCards({ s26 }: { s26: S26 }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {ACCOUNTS.map(a => (
-        <div key={a} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3">
-          <p className="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 truncate">
+        <div key={a}
+             className={`rounded-xl p-3.5 text-white shadow-sm bg-gradient-to-br ${CARD_GRADIENT[a]}`}>
+          <p className="text-[10px] uppercase tracking-widest text-white/85 truncate">
             {ACCOUNT_LABELS[a]}
           </p>
-          <p className={`text-lg font-bold mt-1 ${s26.closing[a] < 0 ? 'text-red-600 dark:text-red-400' : ACCOUNT_ACCENT[a]}`}>
+          <p className="text-2xl font-bold mt-1 tabular-nums drop-shadow-sm">
             {money(s26.closing[a])}
           </p>
         </div>
       ))}
-      <div className="bg-emerald-50 dark:bg-emerald-900/25 rounded-xl border border-emerald-200 dark:border-emerald-800 p-3">
-        <p className="text-[11px] uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Total general</p>
-        <p className="text-lg font-bold mt-1 text-emerald-700 dark:text-emerald-400">{money(s26.closingTotal)}</p>
+      <div className="rounded-xl p-3.5 text-white shadow-sm bg-gradient-to-br from-emerald-500 to-green-700">
+        <p className="text-[10px] uppercase tracking-widest text-white/85">Total general</p>
+        <p className="text-2xl font-bold mt-1 tabular-nums drop-shadow-sm">{money(s26.closingTotal)}</p>
       </div>
+    </div>
+  );
+}
+
+/** Botonera de acciones destacadas, como la del programa original. */
+export function ActionTiles({ actions }: {
+  actions: { key: string; title: string; sub: string; gradient: string; icon: React.ReactNode; onClick: () => void }[];
+}) {
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
+      {actions.map(a => (
+        <button key={a.key} onClick={a.onClick}
+                className={`rounded-xl px-3 py-3 text-white text-left shadow-sm transition-transform hover:scale-[1.02] bg-gradient-to-br ${a.gradient}`}>
+          <div className="flex items-center gap-2 mb-0.5">
+            {a.icon}
+            <span className="font-semibold text-xs leading-tight">{a.title}</span>
+          </div>
+          <p className="text-[10px] text-white/80 leading-tight">{a.sub}</p>
+        </button>
+      ))}
     </div>
   );
 }

@@ -4,14 +4,16 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Banknote, Plus, Pencil, Trash2, X, Check, AlertCircle, Printer, Wallet,
   CalendarCheck, BookOpen, BarChart3, SearchCheck, Tags, FileText, Settings2, Upload,
+  ScanLine, Download, Sparkles,
 } from 'lucide-react';
 import { IconSidebar } from '@/components/IconSidebar';
 import { SyncStatus } from '@/components/SyncStatus';
 import { useTheme } from '@/lib/theme';
 import { ArqueoModal } from '@/components/cuentas/ArqueoModal';
 import { ImportPanel } from '@/components/cuentas/ImportPanel';
+import { OcrPanel } from '@/components/cuentas/OcrPanel';
 import {
-  S26Sheet, BalanceCards, S30Report, S25cReport, IncomeExpenseChart,
+  S26Sheet, BalanceCards, ActionTiles, S30Report, S25cReport, IncomeExpenseChart,
   ReconcilePanel, FormHeader,
 } from '@/components/cuentas/Reports';
 import {
@@ -24,7 +26,7 @@ import {
 
 /* ── Navegación ─────────────────────────────────────────────────────────────── */
 
-type View = 's26' | 's30' | 'forms' | 'chart' | 'reconcile' | 'codes' | 'import' | 'config';
+type View = 's26' | 's30' | 'forms' | 'chart' | 'reconcile' | 'codes' | 'ocr' | 'import' | 'config';
 
 const NAV: { key: View; label: string; sub: string; Icon: typeof BookOpen }[] = [
   { key: 's26',       label: 'Hoja de Cuentas',   sub: 'S-26-S',            Icon: BookOpen },
@@ -33,6 +35,7 @@ const NAV: { key: View; label: string; sub: string; Icon: typeof BookOpen }[] = 
   { key: 'chart',     label: 'Relación I/E',      sub: 'Año de servicio',    Icon: BarChart3 },
   { key: 'reconcile', label: 'Análisis Contables', sub: 'Verificación',      Icon: SearchCheck },
   { key: 'codes',     label: 'Códigos CT',        sub: 'Catálogo',           Icon: Tags },
+  { key: 'ocr',       label: 'Subir Recibo',      sub: 'Captura con IA',     Icon: ScanLine },
   { key: 'import',    label: 'Importar',          sub: 'Respaldo CSV',       Icon: Upload },
   { key: 'config',    label: 'Configuración',     sub: 'Encabezado y cierre', Icon: Settings2 },
 ];
@@ -328,6 +331,16 @@ export default function CuentasPage() {
           {/* ── Hoja S-26 ─────────────────────────────────────────────────── */}
           {view === 's26' && s26 && filteredS26 && (
             <>
+              <div className="print:hidden">
+                <ActionTiles actions={[
+                  { key: 'ocr',    title: 'Subir Recibo',        sub: 'Captura automática con IA', gradient: 'from-teal-500 to-cyan-600',    icon: <ScanLine size={15} />,      onClick: () => setView('ocr') },
+                  { key: 'anal',   title: 'Análisis Contables',  sub: 'Verificación del mes',      gradient: 'from-fuchsia-500 to-purple-600', icon: <SearchCheck size={15} />, onClick: () => setView('reconcile') },
+                  { key: 'forms',  title: 'Formularios Oficiales', sub: 'S-26 / S-30 / S-25c',     gradient: 'from-orange-500 to-red-600',   icon: <Printer size={15} />,       onClick: () => setView('forms') },
+                  { key: 'cierre', title: 'Cierre de Fin de Mes', sub: 'Genera los asientos',      gradient: 'from-emerald-500 to-green-700', icon: <CalendarCheck size={15} />, onClick: () => setModal('cierre') },
+                  { key: 'arqueo', title: 'Arqueo de Caja',      sub: 'Corte y conteo',            gradient: 'from-amber-500 to-yellow-600', icon: <Wallet size={15} />,        onClick: () => setModal('arqueo') },
+                ]} />
+              </div>
+
               <BalanceCards s26={s26} />
 
               <div className="flex flex-wrap items-center gap-2 print:hidden">
@@ -420,10 +433,33 @@ export default function CuentasPage() {
                     {QUARTERS.map(q => <option key={q.n} value={q.n}>{q.label}</option>)}
                   </select>
                 )}
-                <button onClick={() => window.print()}
-                        className="ml-auto flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white">
-                  <Printer size={13} /> Imprimir formulario
-                </button>
+                <div className="ml-auto flex items-center gap-2">
+                  {formTab !== 's26' && (
+                    <>
+                      {/* El PDF oficial se rellena en el servidor sobre la plantilla
+                          de la organización: sale idéntico al que pide la sucursal. */}
+                      <a href={formTab === 's30'
+                            ? `/api/cuentas/forms?kind=s30&ym=${ym}`
+                            : `/api/cuentas/forms?kind=s25c&sy=${encodeURIComponent(sy)}&quarter=${quarter}`}
+                         target="_blank" rel="noopener noreferrer"
+                         className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-sky-700 hover:bg-sky-800 text-white">
+                        <Download size={13} /> PDF oficial
+                      </a>
+                      <a href={formTab === 's30'
+                            ? `/api/cuentas/forms?kind=s30&ym=${ym}&calibrate=1`
+                            : `/api/cuentas/forms?kind=s25c&sy=${encodeURIComponent(sy)}&quarter=${quarter}&calibrate=1`}
+                         target="_blank" rel="noopener noreferrer"
+                         title="Rellena cada casilla con su nombre, para ajustar el mapa de campos"
+                         className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+                        <Sparkles size={13} /> Calibrar
+                      </a>
+                    </>
+                  )}
+                  <button onClick={() => window.print()}
+                          className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white">
+                    <Printer size={13} /> Imprimir
+                  </button>
+                </div>
               </div>
 
               {formTab === 's26' && s26 && (
@@ -466,6 +502,12 @@ export default function CuentasPage() {
 
           {/* ── Códigos CT ────────────────────────────────────────────────── */}
           {view === 'codes' && <CodesPanel codes={codes} api={api} reload={loadCodes} flash={flash} setError={setError} />}
+
+          {/* ── Lectura de recibos con IA ─────────────────────────────────── */}
+          {view === 'ocr' && (
+            <OcrPanel api={api} codes={codes} flash={flash} setError={setError}
+                      onRegistered={() => loadMonth(ym)} />
+          )}
 
           {/* ── Importar respaldo ─────────────────────────────────────────── */}
           {view === 'import' && (
