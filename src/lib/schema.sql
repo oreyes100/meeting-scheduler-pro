@@ -571,3 +571,40 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_msg_user   ON messages(user_id, read_at);
 CREATE INDEX IF NOT EXISTS idx_msg_congre ON messages(congregation_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_dedupe ON messages(dedupe_key) WHERE dedupe_key IS NOT NULL;
+
+-- ─── 33. CUENTAS — CÓDIGOS CT (→ congregaciones) ─────────────────────────────
+CREATE TABLE IF NOT EXISTS cuentas_ct_codes (
+  id              text PRIMARY KEY,
+  code            text NOT NULL,
+  description     text NOT NULL,
+  default_account text NOT NULL DEFAULT 'recibido'
+                  CHECK (default_account IN ('recibido','principal','secundaria')),
+  default_type    text NOT NULL DEFAULT 'entrada'
+                  CHECK (default_type IN ('entrada','salida','transferencia')),
+  sort_order      integer DEFAULT 0,
+  congregation_id text REFERENCES congregations(id),
+  UNIQUE(code, congregation_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cuentas_ct_congre ON cuentas_ct_codes(congregation_id);
+
+-- ─── 34. CUENTAS — TRANSACCIONES S-26 (→ congregaciones) ─────────────────────
+CREATE TABLE IF NOT EXISTS cuentas_transactions (
+  id                  text PRIMARY KEY,
+  date                text NOT NULL,               -- YYYY-MM-DD
+  type                text NOT NULL CHECK (type IN ('entrada','salida','transferencia')),
+  account             text NOT NULL CHECK (account IN ('recibido','principal','secundaria')),
+  destination_account text CHECK (destination_account IN ('recibido','principal','secundaria')),
+  ct_code             text,
+  description         text NOT NULL,
+  amount              real NOT NULL CHECK (amount > 0),
+  receipt_ref         text,
+  notes               text,
+  created_by          text REFERENCES users(id) ON DELETE SET NULL,
+  created_at          text DEFAULT (datetime('now')),
+  updated_at          text DEFAULT (datetime('now')),
+  congregation_id     text REFERENCES congregations(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cuentas_tx_date   ON cuentas_transactions(date, congregation_id);
+CREATE INDEX IF NOT EXISTS idx_cuentas_tx_congre ON cuentas_transactions(congregation_id);

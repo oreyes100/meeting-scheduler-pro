@@ -47,3 +47,24 @@ export async function getSessionContext(): Promise<SessionContext> {
 export function unauthenticated() {
   return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 }
+
+/**
+ * Returns true if the authenticated user can access the Cuentas module.
+ * Rules: isSuperAdmin OR app_role in (admin, elder) OR permissions includes 'cuentas'.
+ */
+export function canAccessCuentas(ctx: SessionContext): boolean {
+  if (!ctx.userId || !ctx.congreId) return false;
+  if (ctx.isSuperAdmin) return true;
+  try {
+    const db = getDb();
+    const row = db.prepare(
+      `SELECT app_role, permissions FROM users WHERE id = ? LIMIT 1`
+    ).get(ctx.userId) as { app_role: string; permissions: string | null } | undefined;
+    if (!row) return false;
+    if (row.app_role === 'admin' || row.app_role === 'elder') return true;
+    const perms: string[] = JSON.parse(row.permissions || '[]');
+    return perms.includes('cuentas');
+  } catch {
+    return false;
+  }
+}
