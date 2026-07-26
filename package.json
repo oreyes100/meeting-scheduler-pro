@@ -10,7 +10,8 @@
     "lint": "eslint",
     "clean": "rm -rf .next .aider.tags.cache.v4 *.tsbuildinfo && echo 'Build cache cleared. Run npm run dev to rebuild.'",
     "shrink": "rm -rf node_modules .next .aider.tags.cache.v4 *.tsbuildinfo && echo 'Shrunk to source-only (~2MB). Run npm install when you need to develop again.'",
-    "prebuild": "rm -rf .next"
+    "prebuild": "rm -rf .next && node scripts/check-client-imports.mjs",
+    "check:client": "node scripts/check-client-imports.mjs"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.15.0",

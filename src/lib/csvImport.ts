@@ -6,7 +6,10 @@
  * mapeo antes de importar. Nada se escribe sin una pasada de validación previa.
  */
 
-import { ACCOUNTS, TYPES, type Account, type TxType } from './cuentas';
+// Importa del dominio puro, NO de `cuentas.ts`: este módulo corre también en el
+// navegador (ImportPanel analiza el CSV antes de enviarlo) y `cuentas.ts`
+// arrastra better-sqlite3.
+import { ACCOUNTS, TYPES, type Account, type TxType } from './cuentasDomain';
 
 /* ── Parser CSV (comillas, comas y saltos dentro de campo) ──────────────────── */
 
