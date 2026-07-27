@@ -8,11 +8,13 @@
  * La clave vive en GEMINI_API_KEY, nunca en el repositorio ni en la base.
  */
 
-// El modelo se puede cambiar sin tocar código. Un 429 con cero peticiones
-// correctas en el panel de Google no es falta de cuota consumida: es que ese
-// modelo no tiene cuota gratuita asignada en el proyecto, o la API no está
-// habilitada en él. Cambiar de modelo suele resolverlo.
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+// Se usa el alias `-latest` a propósito: los modelos con número de versión
+// dejan de ofrecerse a cuentas nuevas con el tiempo y devuelven 404
+// («no longer available to new users»), que fue lo que ocurrió con
+// gemini-2.5-flash. El alias sigue apuntando al modelo vigente.
+// Se puede fijar uno concreto con GEMINI_MODEL; para ver cuáles admite la clave
+// de la congregación: GET /api/cuentas/ocr?models=1
+const MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 const ENDPOINT = (key: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${key}`;
 
@@ -87,6 +89,11 @@ export async function runReceiptOcr(
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
+    if (res.status === 404) {
+      return { error:
+        `El modelo ${MODEL} no está disponible para esta clave. Consulta los que sí lo están ` +
+        `en /api/cuentas/ocr?models=1 y fija uno con la variable GEMINI_MODEL.` };
+    }
     if (res.status === 429) {
       return { error:
         `El modelo ${MODEL} rechazó la petición por cuota (429). Si el panel de Google no ` +

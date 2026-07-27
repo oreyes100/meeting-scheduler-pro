@@ -162,7 +162,7 @@ export default function TelegramPage() {
                       placeholder="Ej. -1001234567890"
                       className="w-full mt-0.5 border border-slate-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm bg-white dark:bg-gray-900"
                     />
-                    <span className="text-[10px] text-slate-400">Los grupos empiezan con -100 y los canales con -100.</span>
+                    <span className="text-[10px] text-slate-400">Grupo normal: negativo sin prefijo (-5437600385). Supergrupo o canal: empieza por -100. Obtenlo en api.telegram.org/bot TOKEN /getUpdates tras escribir en el chat.</span>
                   </label>
                 </section>
 
