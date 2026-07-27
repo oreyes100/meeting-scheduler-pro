@@ -164,12 +164,14 @@ function mapS25c(s25c: S25c, header: { label: string; city: string; state: strin
  * totales. La correspondencia se obtuvo contrastando las coordenadas de los
  * widgets con una impresión real:
  *
- *   fila N   fecha        900_(4+N)_Text_C      → 900_5 … 900_56
- *            descripción  900_(56+N)_Text       → 900_57 … 900_108
- *            código CT    900_(109+N)_Text_C    → 900_110 … 900_161
+ *   fila N   fecha        900_(6+N)_Text_C      → 900_7 … 900_58
+ *            descripción  900_(58+N)_Text       → 900_59 … 900_110
+ *            código CT    900_(110+N)_Text_C    → 900_111 … 900_162
  *            importes     90{1,2,3}_N (entrada) y 90{1,2,3}_(N+53) (salida)
  *
- * El primer código es `900_110_Text`, sin el sufijo `_C` que llevan los demás.
+ * Confirmado con un PDF de calibración impreso: los números que muestra cada
+ * casilla son la posición del campo en la lista ordenada alfabéticamente, y al
+ * resolverlos salió que la primera fila usa 900_7 / 900_59 / 900_111.
  * Los totales de columna usan el índice 53 de cada bloque.
  */
 const S26_ROWS = 52;
@@ -177,9 +179,9 @@ const S26_TOTALS_INDEX = 53;
 
 function s26RowFields(n: number) {           // n es 1-based
   return {
-    date: `900_${4 + n}_Text_C`,
-    desc: `900_${56 + n}_Text`,
-    code: n === 1 ? '900_110_Text' : `900_${109 + n}_Text_C`,
+    date: `900_${6 + n}_Text_C`,
+    desc: `900_${58 + n}_Text`,
+    code: `900_${110 + n}_Text_C`,
     cols: {
       caja:      { in: `901_${n}_S26Value`, out: `901_${n + 53}_S26Value` },
       corriente: { in: `902_${n}_S26Value`, out: `902_${n + 53}_S26Value` },
@@ -198,7 +200,7 @@ function mapS26(s26: S26, header: { label: string; city: string; state: string }
 
   // Primera línea: el saldo inicial del mes, como en la hoja del programa anterior.
   const first = s26RowFields(1);
-  out[first.desc] = `SALDO INICIAL — ${s26.openingTotal.toFixed(2)}`;
+  out[first.desc] = `SALDO INICIAL DEL MES — ${s26.openingTotal.toFixed(2)}`;
 
   s26.rows.slice(0, S26_ROWS - 1).forEach((r, i) => {
     const f = s26RowFields(i + 2);          // la fila 1 la ocupa el saldo inicial
@@ -213,7 +215,7 @@ function mapS26(s26: S26, header: { label: string; city: string; state: string }
 
   // Fila de totales de todas las columnas.
   const t = S26_TOTALS_INDEX;
-  out[`900_${56 + t}_Text`] = 'TOTALES DE TODAS LAS COLUMNAS';
+  out[`900_${58 + t}_Text`] = 'TOTALES DE TODAS LAS COLUMNAS';
   const blocks: Record<Account, string> = { caja: '901', corriente: '902', sucursal: '903' };
   for (const a of ACCOUNTS) {
     out[`${blocks[a]}_${t}_S26Value`]      = amt(s26.totals[a].in);
