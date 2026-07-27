@@ -58,64 +58,94 @@ const amt = (n: number | null | undefined) =>
   n == null || n === 0 ? '' : n.toFixed(2);
 
 /* ── Mapa S-30-S ────────────────────────────────────────────────────────────
- * Página 1 (900_*): encabezado y etiquetas editables.
- * Página 1 (901_*): importes. `_Total` son las líneas de subtotal.
- * Verificar con el modo calibración antes de darlo por bueno.
+ * Resuelto con el PDF de calibración: los números impresos son la posición del
+ * campo en la lista alfabética, y al traducirlos salió esta correspondencia.
+ *
+ * OJO con las letras: las del formulario oficial NO coinciden con las que usa
+ * el motor interno.
+ *   oficial (a) fondos al inicio      = a
+ *   oficial (b) recibido congregación = donaciones C/DC/DB/DE
+ *   oficial (c) otros ingresos        = obra mundial y demás
+ *   oficial (d) total de ingresos     = b del motor
+ *   oficial (e) gastos congregación   = gastos sin remesas
+ *   oficial (f) otros desembolsos     = remesas a la sucursal
+ *   oficial (g) total desembolsos     = c del motor
+ *   oficial (h) superávit / déficit   = d del motor
+ *   oficial (i) fondos al final       = e del motor
+ *   oficial (j) reservados            = f del motor
+ *   oficial (k) disponibles           = g del motor
  */
 function mapS30(s30: S30, header: { label: string; city: string; state: string }) {
-  const inc = (code: string) => s30.incomeByCode.find(r => r.code === code)?.total ?? 0;
-  const exp = (code: string) => s30.expenseByCode.find(r => r.code === code)?.total ?? 0;
+  const inc = (...codes: string[]) =>
+    codes.reduce((t, c) => t + (s30.incomeByCode.find(r => r.code === c)?.total ?? 0), 0);
+  const exp = (...codes: string[]) =>
+    codes.reduce((t, c) => t + (s30.expenseByCode.find(r => r.code === c)?.total ?? 0), 0);
 
-  // Recibido para la congregación: donaciones en cajas frente a electrónicas.
-  const cajas       = inc('C') + inc('DC');
-  const electronica = inc('DB') + inc('DE');
-  // Otros ingresos: obra mundial y demás.
-  const obraMundial = inc('OM') + inc('DO');
-  const otrosIng    = s30.b - cajas - electronica - obraMundial;
+  // INGRESOS
+  const cajas       = inc('C', 'DC');
+  const electronica = inc('DB', 'DE');
+  const recibidoCongre = cajas + electronica;
+  const obraMundial = inc('OM', 'DO');
+  const otrosIngresos = Math.round((s30.b - recibidoCongre) * 100) / 100;
+
+  // DESEMBOLSOS
+  const gastosSalon  = exp('GL', 'GM');
+  const resolucion   = exp('RM');
+  const oradorVisit  = exp('OV');
+  const otrosGastos  = exp('G', 'GA', 'GC', 'GS', 'OT');
+  const gastosCongre = gastosSalon + resolucion + oradorVisit + otrosGastos;
+  const remesas      = exp('SOM', 'RE', 'ROM');
+
+  const money = (n: number) => amt(Math.round(n * 100) / 100);
 
   return {
-    // Encabezado
-    '900_1_Text':  header.label,
-    '900_2_Text':  monthLabel(s30.ym),
-    // Etiquetas de líneas libres
-    '900_10_Text': 'Orador visitante / discursante (OV)',
+    '900_1_Text': header.label,
+    '900_2_Text': monthLabel(s30.ym),
 
     // (a) Fondos al comienzo del mes
-    '901_1_S30_Value': amt(s30.a),
+    '901_1_S30_Value': money(s30.a),
 
     // RECIBIDO PARA LA CONGREGACIÓN
-    '901_2_S30_Value': amt(cajas),
-    '901_3_S30_Value': amt(electronica),
-    '901_6_S30_Total': amt(s30.b),
+    '901_2_S30_Value': money(cajas),
+    '901_3_S30_Value': money(electronica),
+    '901_6_S30_Total': money(recibidoCongre),          // (b)
 
     // OTROS INGRESOS
-    '901_7_S30_Value':  amt(obraMundial),
-    '901_8_S30_Value':  amt(otrosIng > 0.005 ? otrosIng : 0),
-    '901_10_S30_Total': amt(s30.b),
+    '901_7_S30_Value':  money(obraMundial),
+    '901_10_S30_Total': money(otrosIngresos),          // (c)
+    '901_11_S30_Total': money(s30.b),                  // (d) total de ingresos
 
-    // Total de ingresos
-    '901_11_S30_Total': amt(s30.b),
-
-    // GASTOS DE LA CONGREGACIÓN
-    '901_12_S30_Value': amt(exp('GL') + exp('GM')),  // funcionamiento del Salón
-    '901_13_S30_Value': amt(exp('RM') + exp('ROM')), // resolución mensual
-    '901_14_S30_Value': amt(exp('OV')),              // orador visitante
-    '901_19_S30_Total': amt(s30.c),
+    // GASTOS DE LA CONGREGACIÓN — la etiqueta de cada línea libre va en 900_*
+    // y su importe en el 901_* de la MISMA fila; separarlos dejaba la cifra
+    // huérfana y el concepto sin cantidad.
+    '901_12_S30_Value': money(gastosSalon),
+    '901_13_S30_Value': money(resolucion),
+    '900_7_Text':       oradorVisit > 0 ? 'Orador visitante / discursante (OV)' : '',
+    '901_14_S30_Value': money(oradorVisit),
+    '900_8_Text':       otrosGastos > 0 ? 'Otros gastos de la congregación' : '',
+    '901_15_S30_Value': money(otrosGastos),
+    '901_19_S30_Total': money(gastosCongre),           // (e)
 
     // OTROS DESEMBOLSOS
-    '901_20_S30_Value': amt(exp('SOM') + exp('RE')),
-    '901_23_S30_Total': amt(s30.c),
+    '901_20_S30_Value': money(remesas),
+    '901_23_S30_Total': money(remesas),                // (f)
 
-    // Totales y conciliación
-    '901_24_S30_Total': amt(s30.c),
-    '901_25_S30_Total': amt(s30.d),
-    '901_26_S30_Total': amt(s30.e),
-    '901_29_S30_Total': amt(s30.box_kingdom),
-    '901_30_S30_Total': amt(s30.f),
-    '901_31_S30_Total': amt(s30.g),
-    '901_32_S30_Total': amt(s30.h),
-    '901_33_S30_Total': amt(s30.i),
-    '901_34_S30_Total': amt(s30.k),
+    '901_24_S30_Total': money(s30.c),                  // (g) total desembolsos
+    '901_25_S30_Total': money(s30.d),                  // (h) superávit / déficit
+    '901_26_S30_Total': money(s30.e),                  // (i) fondos al final
+
+    // FONDOS RESERVADOS
+    '900_14_Text':      s30.box_kingdom > 0 ? 'Contribuciones para Salones del Reino (DK)' : '',
+    '901_27_S30_Value': money(s30.box_kingdom),
+    '901_29_S30_Total': money(s30.f),                  // (j)
+    '901_30_S30_Total': money(s30.g),                  // (k) disponibles
+
+    // Página 2 — anuncio que se lee a la congregación
+    '900_17_Text_C':    monthLabel(s30.ym),
+    '901_31_S30_Total': money(recibidoCongre),         // cantidad (b)
+    '901_32_S30_Total': money(gastosCongre),           // cantidad (e)
+    '901_33_S30_Total': money(s30.e),                  // cantidad (i)
+    '901_34_S30_Total': money(remesas),                // cantidad (f)
   } as Record<string, string>;
 }
 
