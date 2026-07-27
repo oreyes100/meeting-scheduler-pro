@@ -26,6 +26,7 @@ export async function GET(request: Request) {
     const p = new URL(request.url).searchParams;
     const kind = p.get('kind') || 's30';
     const calibrate = p.get('calibrate') === '1';
+    const debug = p.get('debug') === '1';
 
     if (!['s26', 's30', 's25c'].includes(kind)) return badRequest(`kind desconocido: ${kind}`);
 
@@ -66,12 +67,16 @@ export async function GET(request: Request) {
       const ym = p.get('ym');
       if (!ym || !YM.test(ym)) return badRequest('ym requerido (YYYY-MM)');
       const { buildS26 } = await import('@/lib/cuentas');
-      bytes = await pdfForms.fillS26(buildS26(g.congreId, ym), header, { calibrate });
+      const s26 = buildS26(g.congreId, ym);
+      if (debug) return NextResponse.json({ kind, ym, values: pdfForms.previewValues('s26', { s26 }, header) });
+      bytes = await pdfForms.fillS26(s26, header, { calibrate });
       filename = `S-26-S ${ym}${calibrate ? ' (calibracion)' : ''}.pdf`;
     } else if (kind === 's30') {
       const ym = p.get('ym');
       if (!ym || !YM.test(ym)) return badRequest('ym requerido (YYYY-MM)');
-      bytes = await pdfForms.fillS30(buildS30(g.congreId, ym), header, { calibrate });
+      const s30 = buildS30(g.congreId, ym);
+      if (debug) return NextResponse.json({ kind, ym, values: pdfForms.previewValues('s30', { s30 }, header) });
+      bytes = await pdfForms.fillS30(s30, header, { calibrate });
       filename = `S-30-S ${ym}${calibrate ? ' (calibracion)' : ''}.pdf`;
     } else {
       const quarter = Number(p.get('quarter') || 1);
@@ -81,7 +86,9 @@ export async function GET(request: Request) {
         ? p.get('sy')!
         : (ym && YM.test(ym) ? serviceYearOf(ym) : null);
       if (!sy) return badRequest('sy requerido (YYYY/YYYY)');
-      bytes = await pdfForms.fillS25c(buildS25c(g.congreId, sy, quarter), header, { calibrate });
+      const s25c = buildS25c(g.congreId, sy, quarter);
+      if (debug) return NextResponse.json({ kind, sy, quarter, values: pdfForms.previewValues('s25c', { s25c }, header) });
+      bytes = await pdfForms.fillS25c(s25c, header, { calibrate });
       filename = `S-25c ${sy.replace('/', '-')} T${quarter}${calibrate ? ' (calibracion)' : ''}.pdf`;
     }
 

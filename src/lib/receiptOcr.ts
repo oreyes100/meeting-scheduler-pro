@@ -8,7 +8,11 @@
  * La clave vive en GEMINI_API_KEY, nunca en el repositorio ni en la base.
  */
 
-const MODEL = 'gemini-2.0-flash';
+// El modelo se puede cambiar sin tocar código. Un 429 con cero peticiones
+// correctas en el panel de Google no es falta de cuota consumida: es que ese
+// modelo no tiene cuota gratuita asignada en el proyecto, o la API no está
+// habilitada en él. Cambiar de modelo suele resolverlo.
+const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const ENDPOINT = (key: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${key}`;
 
@@ -83,6 +87,19 @@ export async function runReceiptOcr(
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
+    if (res.status === 429) {
+      return { error:
+        `El modelo ${MODEL} rechazó la petición por cuota (429). Si el panel de Google no ` +
+        `muestra consumo, no es que la hayas agotado: ese modelo no tiene cuota gratuita en ` +
+        `tu proyecto, o falta habilitar la API de Gemini. Prueba con otro modelo definiendo ` +
+        `GEMINI_MODEL (por ejemplo gemini-2.0-flash o gemini-flash-latest) y reinicia el servidor.` };
+    }
+    if (res.status === 400 && /API key not valid/i.test(detail)) {
+      return { error: 'La clave de API no es válida. Revísala en Configuración → Lectura de recibos.' };
+    }
+    if (res.status === 403) {
+      return { error: 'La clave no tiene permiso para usar la API de Gemini. Habilítala en el proyecto de Google.' };
+    }
     return { error: `La lectura con IA falló (${res.status}). ${detail.slice(0, 300)}` };
   }
 

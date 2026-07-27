@@ -157,9 +157,73 @@ function mapS25c(s25c: S25c, header: { label: string; city: string; state: strin
  * modo calibración: imprime el PDF con cada casilla rotulada, y con esa
  * referencia se completa ROW_FIELDS de abajo.
  */
-const S26_ROW_FIELDS: { date: string; desc: string; code: string;
-  cols: Record<Account, { in: string; out: string }>; saldo: string }[] = [
-  // Pendiente de calibración: ver la nota de arriba.
+/**
+ * Rejilla del S-26, obtenida de las coordenadas de los widgets de la plantilla.
+ *
+ * Las seis columnas de importes y el código CT se dedujeron sin ambigüedad: los
+ * bloques 901_/902_/903_ son Recibido/Principal/Secundaria, y dentro de cada uno
+ * los índices 1-53 son «Entrada» y 54-106 «Salida» (desplazamiento de +53).
+ *
+ * Fecha y descripción quedan pendientes: en la plantilla solo 59 de los 160
+ * campos del bloque 900_ exponen su rectángulo, y entre los que faltan están
+ * esas dos columnas. Se completan con el PDF de calibración delante.
+ */
+const S26_ROW_FIELDS: {
+  date?: string | null; desc?: string | null; code: string | null;
+  cols: Record<Account, { in: string; out: string }>;
+}[] = [
+  { code: null, cols: { caja: { in: '901_1_S26Value', out: '901_54_S26Value' }, corriente: { in: '902_1_S26Value', out: '902_54_S26Value' }, sucursal: { in: '903_1_S26Value', out: '903_54_S26Value' } } },
+  { code: '900_111_Text_C', cols: { caja: { in: '901_2_S26Value', out: '901_55_S26Value' }, corriente: { in: '902_2_S26Value', out: '902_55_S26Value' }, sucursal: { in: '903_2_S26Value', out: '903_55_S26Value' } } },
+  { code: '900_112_Text_C', cols: { caja: { in: '901_3_S26Value', out: '901_56_S26Value' }, corriente: { in: '902_3_S26Value', out: '902_56_S26Value' }, sucursal: { in: '903_3_S26Value', out: '903_56_S26Value' } } },
+  { code: '900_113_Text_C', cols: { caja: { in: '901_4_S26Value', out: '901_57_S26Value' }, corriente: { in: '902_4_S26Value', out: '902_57_S26Value' }, sucursal: { in: '903_4_S26Value', out: '903_57_S26Value' } } },
+  { code: '900_114_Text_C', cols: { caja: { in: '901_5_S26Value', out: '901_58_S26Value' }, corriente: { in: '902_5_S26Value', out: '902_58_S26Value' }, sucursal: { in: '903_5_S26Value', out: '903_58_S26Value' } } },
+  { code: '900_115_Text_C', cols: { caja: { in: '901_6_S26Value', out: '901_59_S26Value' }, corriente: { in: '902_6_S26Value', out: '902_59_S26Value' }, sucursal: { in: '903_6_S26Value', out: '903_59_S26Value' } } },
+  { code: '900_116_Text_C', cols: { caja: { in: '901_7_S26Value', out: '901_60_S26Value' }, corriente: { in: '902_7_S26Value', out: '902_60_S26Value' }, sucursal: { in: '903_7_S26Value', out: '903_60_S26Value' } } },
+  { code: '900_117_Text_C', cols: { caja: { in: '901_8_S26Value', out: '901_61_S26Value' }, corriente: { in: '902_8_S26Value', out: '902_61_S26Value' }, sucursal: { in: '903_8_S26Value', out: '903_61_S26Value' } } },
+  { code: '900_118_Text_C', cols: { caja: { in: '901_9_S26Value', out: '901_62_S26Value' }, corriente: { in: '902_9_S26Value', out: '902_62_S26Value' }, sucursal: { in: '903_9_S26Value', out: '903_62_S26Value' } } },
+  { code: '900_119_Text_C', cols: { caja: { in: '901_10_S26Value', out: '901_63_S26Value' }, corriente: { in: '902_10_S26Value', out: '902_63_S26Value' }, sucursal: { in: '903_10_S26Value', out: '903_63_S26Value' } } },
+  { code: '900_120_Text_C', cols: { caja: { in: '901_11_S26Value', out: '901_64_S26Value' }, corriente: { in: '902_11_S26Value', out: '902_64_S26Value' }, sucursal: { in: '903_11_S26Value', out: '903_64_S26Value' } } },
+  { code: '900_121_Text_C', cols: { caja: { in: '901_12_S26Value', out: '901_65_S26Value' }, corriente: { in: '902_12_S26Value', out: '902_65_S26Value' }, sucursal: { in: '903_12_S26Value', out: '903_65_S26Value' } } },
+  { code: '900_122_Text_C', cols: { caja: { in: '901_13_S26Value', out: '901_66_S26Value' }, corriente: { in: '902_13_S26Value', out: '902_66_S26Value' }, sucursal: { in: '903_13_S26Value', out: '903_66_S26Value' } } },
+  { code: '900_123_Text_C', cols: { caja: { in: '901_14_S26Value', out: '901_67_S26Value' }, corriente: { in: '902_14_S26Value', out: '902_67_S26Value' }, sucursal: { in: '903_14_S26Value', out: '903_67_S26Value' } } },
+  { code: '900_124_Text_C', cols: { caja: { in: '901_15_S26Value', out: '901_68_S26Value' }, corriente: { in: '902_15_S26Value', out: '902_68_S26Value' }, sucursal: { in: '903_15_S26Value', out: '903_68_S26Value' } } },
+  { code: '900_125_Text_C', cols: { caja: { in: '901_16_S26Value', out: '901_69_S26Value' }, corriente: { in: '902_16_S26Value', out: '902_69_S26Value' }, sucursal: { in: '903_16_S26Value', out: '903_69_S26Value' } } },
+  { code: '900_126_Text_C', cols: { caja: { in: '901_17_S26Value', out: '901_70_S26Value' }, corriente: { in: '902_17_S26Value', out: '902_70_S26Value' }, sucursal: { in: '903_17_S26Value', out: '903_70_S26Value' } } },
+  { code: '900_127_Text_C', cols: { caja: { in: '901_18_S26Value', out: '901_71_S26Value' }, corriente: { in: '902_18_S26Value', out: '902_71_S26Value' }, sucursal: { in: '903_18_S26Value', out: '903_71_S26Value' } } },
+  { code: '900_128_Text_C', cols: { caja: { in: '901_19_S26Value', out: '901_72_S26Value' }, corriente: { in: '902_19_S26Value', out: '902_72_S26Value' }, sucursal: { in: '903_19_S26Value', out: '903_72_S26Value' } } },
+  { code: '900_129_Text_C', cols: { caja: { in: '901_20_S26Value', out: '901_73_S26Value' }, corriente: { in: '902_20_S26Value', out: '902_73_S26Value' }, sucursal: { in: '903_20_S26Value', out: '903_73_S26Value' } } },
+  { code: '900_130_Text_C', cols: { caja: { in: '901_21_S26Value', out: '901_74_S26Value' }, corriente: { in: '902_21_S26Value', out: '902_74_S26Value' }, sucursal: { in: '903_21_S26Value', out: '903_74_S26Value' } } },
+  { code: '900_131_Text_C', cols: { caja: { in: '901_22_S26Value', out: '901_75_S26Value' }, corriente: { in: '902_22_S26Value', out: '902_75_S26Value' }, sucursal: { in: '903_22_S26Value', out: '903_75_S26Value' } } },
+  { code: '900_132_Text_C', cols: { caja: { in: '901_23_S26Value', out: '901_76_S26Value' }, corriente: { in: '902_23_S26Value', out: '902_76_S26Value' }, sucursal: { in: '903_23_S26Value', out: '903_76_S26Value' } } },
+  { code: '900_133_Text_C', cols: { caja: { in: '901_24_S26Value', out: '901_77_S26Value' }, corriente: { in: '902_24_S26Value', out: '902_77_S26Value' }, sucursal: { in: '903_24_S26Value', out: '903_77_S26Value' } } },
+  { code: '900_134_Text_C', cols: { caja: { in: '901_25_S26Value', out: '901_78_S26Value' }, corriente: { in: '902_25_S26Value', out: '902_78_S26Value' }, sucursal: { in: '903_25_S26Value', out: '903_78_S26Value' } } },
+  { code: '900_135_Text_C', cols: { caja: { in: '901_26_S26Value', out: '901_79_S26Value' }, corriente: { in: '902_26_S26Value', out: '902_79_S26Value' }, sucursal: { in: '903_26_S26Value', out: '903_79_S26Value' } } },
+  { code: '900_136_Text_C', cols: { caja: { in: '901_27_S26Value', out: '901_80_S26Value' }, corriente: { in: '902_27_S26Value', out: '902_80_S26Value' }, sucursal: { in: '903_27_S26Value', out: '903_80_S26Value' } } },
+  { code: '900_137_Text_C', cols: { caja: { in: '901_28_S26Value', out: '901_81_S26Value' }, corriente: { in: '902_28_S26Value', out: '902_81_S26Value' }, sucursal: { in: '903_28_S26Value', out: '903_81_S26Value' } } },
+  { code: '900_138_Text_C', cols: { caja: { in: '901_29_S26Value', out: '901_82_S26Value' }, corriente: { in: '902_29_S26Value', out: '902_82_S26Value' }, sucursal: { in: '903_29_S26Value', out: '903_82_S26Value' } } },
+  { code: '900_139_Text_C', cols: { caja: { in: '901_30_S26Value', out: '901_83_S26Value' }, corriente: { in: '902_30_S26Value', out: '902_83_S26Value' }, sucursal: { in: '903_30_S26Value', out: '903_83_S26Value' } } },
+  { code: '900_140_Text_C', cols: { caja: { in: '901_31_S26Value', out: '901_84_S26Value' }, corriente: { in: '902_31_S26Value', out: '902_84_S26Value' }, sucursal: { in: '903_31_S26Value', out: '903_84_S26Value' } } },
+  { code: '900_141_Text_C', cols: { caja: { in: '901_32_S26Value', out: '901_85_S26Value' }, corriente: { in: '902_32_S26Value', out: '902_85_S26Value' }, sucursal: { in: '903_32_S26Value', out: '903_85_S26Value' } } },
+  { code: '900_142_Text_C', cols: { caja: { in: '901_33_S26Value', out: '901_86_S26Value' }, corriente: { in: '902_33_S26Value', out: '902_86_S26Value' }, sucursal: { in: '903_33_S26Value', out: '903_86_S26Value' } } },
+  { code: '900_143_Text_C', cols: { caja: { in: '901_34_S26Value', out: '901_87_S26Value' }, corriente: { in: '902_34_S26Value', out: '902_87_S26Value' }, sucursal: { in: '903_34_S26Value', out: '903_87_S26Value' } } },
+  { code: '900_144_Text_C', cols: { caja: { in: '901_35_S26Value', out: '901_88_S26Value' }, corriente: { in: '902_35_S26Value', out: '902_88_S26Value' }, sucursal: { in: '903_35_S26Value', out: '903_88_S26Value' } } },
+  { code: '900_145_Text_C', cols: { caja: { in: '901_36_S26Value', out: '901_89_S26Value' }, corriente: { in: '902_36_S26Value', out: '902_89_S26Value' }, sucursal: { in: '903_36_S26Value', out: '903_89_S26Value' } } },
+  { code: '900_146_Text_C', cols: { caja: { in: '901_37_S26Value', out: '901_90_S26Value' }, corriente: { in: '902_37_S26Value', out: '902_90_S26Value' }, sucursal: { in: '903_37_S26Value', out: '903_90_S26Value' } } },
+  { code: '900_147_Text_C', cols: { caja: { in: '901_38_S26Value', out: '901_91_S26Value' }, corriente: { in: '902_38_S26Value', out: '902_91_S26Value' }, sucursal: { in: '903_38_S26Value', out: '903_91_S26Value' } } },
+  { code: '900_148_Text_C', cols: { caja: { in: '901_39_S26Value', out: '901_92_S26Value' }, corriente: { in: '902_39_S26Value', out: '902_92_S26Value' }, sucursal: { in: '903_39_S26Value', out: '903_92_S26Value' } } },
+  { code: '900_149_Text_C', cols: { caja: { in: '901_40_S26Value', out: '901_93_S26Value' }, corriente: { in: '902_40_S26Value', out: '902_93_S26Value' }, sucursal: { in: '903_40_S26Value', out: '903_93_S26Value' } } },
+  { code: '900_150_Text_C', cols: { caja: { in: '901_41_S26Value', out: '901_94_S26Value' }, corriente: { in: '902_41_S26Value', out: '902_94_S26Value' }, sucursal: { in: '903_41_S26Value', out: '903_94_S26Value' } } },
+  { code: '900_151_Text_C', cols: { caja: { in: '901_42_S26Value', out: '901_95_S26Value' }, corriente: { in: '902_42_S26Value', out: '902_95_S26Value' }, sucursal: { in: '903_42_S26Value', out: '903_95_S26Value' } } },
+  { code: '900_152_Text_C', cols: { caja: { in: '901_43_S26Value', out: '901_96_S26Value' }, corriente: { in: '902_43_S26Value', out: '902_96_S26Value' }, sucursal: { in: '903_43_S26Value', out: '903_96_S26Value' } } },
+  { code: '900_153_Text_C', cols: { caja: { in: '901_44_S26Value', out: '901_97_S26Value' }, corriente: { in: '902_44_S26Value', out: '902_97_S26Value' }, sucursal: { in: '903_44_S26Value', out: '903_97_S26Value' } } },
+  { code: '900_154_Text_C', cols: { caja: { in: '901_45_S26Value', out: '901_98_S26Value' }, corriente: { in: '902_45_S26Value', out: '902_98_S26Value' }, sucursal: { in: '903_45_S26Value', out: '903_98_S26Value' } } },
+  { code: '900_155_Text_C', cols: { caja: { in: '901_46_S26Value', out: '901_99_S26Value' }, corriente: { in: '902_46_S26Value', out: '902_99_S26Value' }, sucursal: { in: '903_46_S26Value', out: '903_99_S26Value' } } },
+  { code: '900_156_Text_C', cols: { caja: { in: '901_47_S26Value', out: '901_100_S26Value' }, corriente: { in: '902_47_S26Value', out: '902_100_S26Value' }, sucursal: { in: '903_47_S26Value', out: '903_100_S26Value' } } },
+  { code: '900_157_Text_C', cols: { caja: { in: '901_48_S26Value', out: '901_101_S26Value' }, corriente: { in: '902_48_S26Value', out: '902_101_S26Value' }, sucursal: { in: '903_48_S26Value', out: '903_101_S26Value' } } },
+  { code: '900_158_Text_C', cols: { caja: { in: '901_49_S26Value', out: '901_102_S26Value' }, corriente: { in: '902_49_S26Value', out: '902_102_S26Value' }, sucursal: { in: '903_49_S26Value', out: '903_102_S26Value' } } },
+  { code: '900_159_Text_C', cols: { caja: { in: '901_50_S26Value', out: '901_103_S26Value' }, corriente: { in: '902_50_S26Value', out: '902_103_S26Value' }, sucursal: { in: '903_50_S26Value', out: '903_103_S26Value' } } },
+  { code: '900_160_Text_C', cols: { caja: { in: '901_51_S26Value', out: '901_104_S26Value' }, corriente: { in: '902_51_S26Value', out: '902_104_S26Value' }, sucursal: { in: '903_51_S26Value', out: '903_104_S26Value' } } },
+  { code: '900_161_Text_C', cols: { caja: { in: '901_52_S26Value', out: '901_105_S26Value' }, corriente: { in: '902_52_S26Value', out: '902_105_S26Value' }, sucursal: { in: '903_52_S26Value', out: '903_105_S26Value' } } },
 ];
 
 function mapS26(s26: S26, header: { label: string; city: string; state: string }) {
@@ -173,18 +237,29 @@ function mapS26(s26: S26, header: { label: string; city: string; state: string }
   // Rejilla de asientos: solo se rellena cuando el mapa esté calibrado.
   s26.rows.forEach((r, i) => {
     const f = S26_ROW_FIELDS[i];
-    if (!f) return;
-    out[f.date] = String(Number(r.date.slice(8, 10)));
-    out[f.desc] = r.description;
-    out[f.code] = r.code ?? '';
+    if (!f) return;                       // más asientos que filas del formulario
+    if (f.date) out[f.date] = String(Number(r.date.slice(8, 10)));
+    if (f.desc) out[f.desc] = r.description;
+    if (f.code) out[f.code] = r.code ?? '';
     for (const a of ACCOUNTS) {
       out[f.cols[a].in]  = amt(r.cols[a].in);
       out[f.cols[a].out] = amt(r.cols[a].out);
     }
-    out[f.saldo] = r.saldo.toFixed(2);
   });
 
   return out;
+}
+
+/** Valores que se escribirían, para verificar el mapa sin abrir el PDF. */
+export function previewValues(
+  kind: FormKind,
+  data: { s26?: S26; s30?: S30; s25c?: S25c },
+  header: { label: string; city: string; state: string },
+): Record<string, string> {
+  if (kind === 's26'  && data.s26)  return mapS26(data.s26, header);
+  if (kind === 's30'  && data.s30)  return mapS30(data.s30, header);
+  if (kind === 's25c' && data.s25c) return mapS25c(data.s25c, header);
+  return {};
 }
 
 export async function fillS26(
@@ -240,6 +315,11 @@ async function fill(
   const { PDFDocument } = await loadPdfLib();
   const pdf = await PDFDocument.load(fs.readFileSync(file));
   const form = pdf.getForm();
+
+  // La plantilla puede traer valores previos —la del S-25c llegó con una
+  // auditoría de ejemplo rellena—, y lo que no se sobrescriba se imprimiría como
+  // si fuera de esta congregación. Se vacían todos los campos primero.
+  for (const f of form.getFields()) setField(form, f.getName(), '');
 
   if (opts.calibrate) {
     // Cada casilla muestra su nombre: se imprime, se compara con el formulario
