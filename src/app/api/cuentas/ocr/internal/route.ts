@@ -26,7 +26,11 @@ export async function POST(request: Request) {
       `SELECT code, description, kind FROM cuentas_codes WHERE congregation_id = ? ORDER BY sort_order`
     ).all(congregationId) as { code: string; description: string; kind: string }[];
 
-    return NextResponse.json(await runReceiptOcr(dataUrl, codes));
+    const cfg = getDb().prepare(
+      `SELECT ai_api_key FROM cuentas_config WHERE congregation_id = ?`
+    ).get(congregationId) as { ai_api_key: string | null } | undefined;
+
+    return NextResponse.json(await runReceiptOcr(dataUrl, codes, cfg?.ai_api_key));
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Error' }, { status: 500 });
   }

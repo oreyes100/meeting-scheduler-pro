@@ -434,20 +434,20 @@ export default function CuentasPage() {
                   </select>
                 )}
                 <div className="ml-auto flex items-center gap-2">
-                  {formTab !== 's26' && (
+                  {(
                     <>
                       {/* El PDF oficial se rellena en el servidor sobre la plantilla
                           de la organización: sale idéntico al que pide la sucursal. */}
-                      <a href={formTab === 's30'
-                            ? `/api/cuentas/forms?kind=s30&ym=${ym}`
-                            : `/api/cuentas/forms?kind=s25c&sy=${encodeURIComponent(sy)}&quarter=${quarter}`}
+                      <a href={formTab === 's25c'
+                            ? `/api/cuentas/forms?kind=s25c&sy=${encodeURIComponent(sy)}&quarter=${quarter}`
+                            : `/api/cuentas/forms?kind=${formTab}&ym=${ym}`}
                          target="_blank" rel="noopener noreferrer"
                          className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-sky-700 hover:bg-sky-800 text-white">
                         <Download size={13} /> PDF oficial
                       </a>
-                      <a href={formTab === 's30'
-                            ? `/api/cuentas/forms?kind=s30&ym=${ym}&calibrate=1`
-                            : `/api/cuentas/forms?kind=s25c&sy=${encodeURIComponent(sy)}&quarter=${quarter}&calibrate=1`}
+                      <a href={formTab === 's25c'
+                            ? `/api/cuentas/forms?kind=s25c&sy=${encodeURIComponent(sy)}&quarter=${quarter}&calibrate=1`
+                            : `/api/cuentas/forms?kind=${formTab}&ym=${ym}&calibrate=1`}
                          target="_blank" rel="noopener noreferrer"
                          title="Rellena cada casilla con su nombre, para ajustar el mapa de campos"
                          className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
@@ -1017,7 +1017,8 @@ function ConfigPanel({ cfg, setCfg, codes, api, flash, setError }: {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(v),
       });
-      setCfg(v); setDraft(null); flash('Encabezado actualizado');
+      setCfg({ ...v, ai_api_key: undefined, has_ai_key: v.ai_api_key ? v.ai_api_key !== '-' : cfg.has_ai_key });
+      setDraft(null); flash('Configuración guardada');
     } catch (e) { setError(e instanceof Error ? e.message : 'Error'); }
     finally { setBusy(false); }
   }
@@ -1121,6 +1122,31 @@ function ConfigPanel({ cfg, setCfg, codes, api, flash, setError }: {
             </p>
           </div>
         </div>
+      </div>
+
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <h2 className="font-semibold text-sm mb-1 flex items-center gap-1.5">
+          <Sparkles size={14} className="text-violet-500" /> Lectura de recibos con IA
+        </h2>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+          Clave de Google AI Studio (Gemini) para leer los recibos, tanto desde «Subir Recibo»
+          como desde el bot de Telegram. Consíguela gratis en{' '}
+          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer"
+             className="text-sky-600 dark:text-sky-400 underline">aistudio.google.com/apikey</a>.
+        </p>
+
+        <label className={lbl}>
+          Clave de API {cfg.has_ai_key && <span className="text-emerald-600 dark:text-emerald-400">· hay una guardada</span>}
+        </label>
+        <input type="password" autoComplete="off"
+               value={v.ai_api_key ?? ''}
+               onChange={e => edit({ ai_api_key: e.target.value })}
+               placeholder={cfg.has_ai_key ? '•••••••• (deja vacío para conservarla)' : 'AIza…'}
+               className={inp} />
+        <p className="text-[11px] text-gray-400 mt-1">
+          Por seguridad no se muestra la clave guardada. Deja el campo vacío para conservarla,
+          o escribe un guion (<code>-</code>) para borrarla.
+        </p>
       </div>
 
       <button onClick={save} disabled={busy}

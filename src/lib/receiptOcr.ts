@@ -50,10 +50,15 @@ Reglas:
 
 /** Lee un recibo y devuelve transacciones propuestas. Nunca escribe en la base. */
 export async function runReceiptOcr(
-  dataUrl: string, codes: CodeRow[],
+  dataUrl: string, codes: CodeRow[], apiKey?: string | null,
 ): Promise<{ transactions: ReceiptTx[]; model: string } | { error: string }> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return { error: 'Falta GEMINI_API_KEY en el servidor.' };
+  // La clave puede venir de la configuración de la congregación (editable desde
+  // la interfaz) o del entorno. Se prefiere la de la congregación para que cada
+  // una pueda usar su propia cuota sin tocar el servidor.
+  const key = apiKey || process.env.GEMINI_API_KEY;
+  if (!key) {
+    return { error: 'Falta la clave de IA. Añádela en Cuentas → Configuración → Lectura de recibos.' };
+  }
 
   const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
   if (!m) return { error: 'Formato de imagen no reconocido' };

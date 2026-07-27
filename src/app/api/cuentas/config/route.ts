@@ -36,6 +36,8 @@ export async function GET() {
         res_pct_code:    (cfg?.res_pct_code as string)    ?? DEFAULT_CIERRE.res_pct_code,
         res_pct_percent: Number(cfg?.res_pct_percent ?? DEFAULT_CIERRE.res_pct_percent),
         res_pct_source:  (cfg?.res_pct_source as string)  ?? DEFAULT_CIERRE.res_pct_source,
+        // Nunca se devuelve la clave: solo si hay una guardada.
+        has_ai_key: !!cfg?.ai_api_key,
       },
     });
   } catch (e) { return serverError(e); }
@@ -59,13 +61,17 @@ export async function PUT(request: Request) {
     getDb().prepare(`
       INSERT INTO cuentas_config
         (congregation_id, label, city, state, remit_code, res_pub_code, res_pub_amount,
-         res_pct_code, res_pct_percent, res_pct_source, updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?, datetime('now'))
+         res_pct_code, res_pct_percent, res_pct_source, ai_api_key, updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?, datetime('now'))
       ON CONFLICT(congregation_id) DO UPDATE SET
         label = excluded.label, city = excluded.city, state = excluded.state,
         remit_code = excluded.remit_code, res_pub_code = excluded.res_pub_code,
         res_pub_amount = excluded.res_pub_amount, res_pct_code = excluded.res_pct_code,
         res_pct_percent = excluded.res_pct_percent, res_pct_source = excluded.res_pct_source,
+        -- Cadena vacía = no tocar la clave guardada; '-' = borrarla.
+        ai_api_key = CASE WHEN excluded.ai_api_key IS NULL THEN cuentas_config.ai_api_key
+                          WHEN excluded.ai_api_key = '-' THEN NULL
+                          ELSE excluded.ai_api_key END,
         updated_at = datetime('now')
     `).run(
       g.congreId,
@@ -78,6 +84,7 @@ export async function PUT(request: Request) {
       code(b.res_pct_code,   DEFAULT_CIERRE.res_pct_code),
       pct,
       code(b.res_pct_source, DEFAULT_CIERRE.res_pct_source),
+      b.ai_api_key ? String(b.ai_api_key).trim() : null,
     );
 
     return NextResponse.json({ success: true });

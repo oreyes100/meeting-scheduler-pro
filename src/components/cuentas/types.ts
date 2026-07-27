@@ -130,12 +130,15 @@ export interface CuentasConfig {
   res_pct_code: string;
   res_pct_percent: number;
   res_pct_source: string;
+  /** El servidor nunca devuelve la clave, solo si existe. */
+  has_ai_key?: boolean;
+  ai_api_key?: string;
 }
 
 export const EMPTY_CONFIG: CuentasConfig = {
   label: '', city: '', state: '',
   remit_code: 'SOM', res_pub_code: 'RM', res_pub_amount: 0,
-  res_pct_code: 'RM', res_pct_percent: 10, res_pct_source: 'C',
+  res_pct_code: 'RM', res_pct_percent: 10, res_pct_source: 'C', has_ai_key: false,
 };
 
 export interface CierreEntry {

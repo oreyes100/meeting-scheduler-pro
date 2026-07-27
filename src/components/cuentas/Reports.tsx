@@ -314,24 +314,74 @@ export function S25cReport({ s25c }: { s25c: S25c }) {
 
       <div>
         <p className="font-semibold mb-1">VERIFICACIÓN DE LAS DONACIONES</p>
-        <ol className="list-decimal ml-5 space-y-1 text-gray-600 dark:text-gray-400">
-          <li>Sume, por mes, las copias de los formularios <em>Registro de transacción</em> (S-24) y compare
-            el total de cada mes con la columna «Recibido/Entrada» de la <em>Hoja de cuentas</em> (S-26).</li>
-          <li>¿Se registran todas las donaciones en la <em>Hoja de cuentas</em>?</li>
-          <li>¿Se anotan correctamente los códigos de las entradas?</li>
-          <li>¿Se hacen los depósitos semanalmente?</li>
+        <ol className="list-decimal ml-5 space-y-2 text-gray-600 dark:text-gray-400">
+          <li>
+            Sume, por mes, las copias de los formularios <em>Registro de transacción</em> (S-24) de las
+            donaciones que le haya entregado el secretario. Compare el total de cada mes con el total de
+            la columna «Recibido/Entrada» de la <em>Hoja de cuentas</em> (S-26) del mes correspondiente.
+            <p className="mt-1 text-gray-800 dark:text-gray-200">
+              <strong>Datos del sistema para comparar:</strong>{' '}
+              {s25c.months.map(m => `${m.label}: ${money(m.income)}`).join(' · ')}
+            </p>
+            <p className="text-gray-500">¿Coinciden los totales? ______________</p>
+          </li>
+          <li>¿Se registran todas las donaciones en la <em>Hoja de cuentas</em>? ______________</li>
+          <li>¿Se anotan correctamente los códigos de las entradas? ______________</li>
+          <li>Compare las fechas y las cantidades de los depósitos con la <em>Hoja de cuentas</em>.
+              ¿Se hacen los depósitos semanalmente? ______________</li>
         </ol>
       </div>
 
       <div>
         <p className="font-semibold mb-1">VERIFICACIÓN DE LOS DESEMBOLSOS</p>
-        <ol className="list-decimal ml-5 space-y-1 text-gray-600 dark:text-gray-400">
-          <li>¿Hay una factura, resolución u otro documento justificativo para todos los pagos anotados?</li>
-          <li>¿Aprueba el coordinador del cuerpo de ancianos todas las facturas y recibos?</li>
-          <li>¿Se envían a la sucursal todas las donaciones recogidas para la obra mundial?</li>
-          <li>¿Se abonan lo antes posible todos los cargos de la sucursal?</li>
-          <li>Compare el <em>Registro de traspaso de fondos</em> (TO-62) de cada mes con el acuse de recibo.</li>
-          <li>¿Se envían a la sucursal, como donación para la obra mundial, los fondos que superan el saldo máximo?</li>
+        <ol className="list-decimal ml-5 space-y-2 text-gray-600 dark:text-gray-400">
+          <li>¿Hay una factura, resolución u otro documento justificativo para todos los pagos
+              anotados en la <em>Hoja de cuentas</em>? ______________</li>
+          <li>¿Aprueba el coordinador del cuerpo de ancianos todas las facturas y recibos? ______________</li>
+          <li>
+            ¿Se envían a la sucursal todas las donaciones recogidas para la obra mundial?
+            <p className="mt-1 text-gray-800 dark:text-gray-200">
+              <strong>Donaciones OM recibidas:</strong> {money(s25c.totals.omIncome)} ·{' '}
+              <strong>Remesas enviadas:</strong> {money(s25c.totals.omRemit)}
+              {Math.abs(s25c.totals.omIncome - s25c.totals.omRemit) >= 0.01 && (
+                <span className="text-amber-700 dark:text-amber-400">
+                  {' '}· diferencia {money(s25c.totals.omIncome - s25c.totals.omRemit)}
+                </span>
+              )}
+            </p>
+          </li>
+          <li>¿Se abonan lo antes posible todos los cargos de la sucursal? ______________</li>
+          <li>
+            Compare el <em>Registro de traspaso de fondos</em> (TO-62) de cada mes con el acuse de
+            recibo de donación enviado por la sucursal.
+            <p className="mt-1 text-gray-800 dark:text-gray-200">
+              <strong>Donaciones para obra mundial (OM/DO) registradas:</strong> {money(s25c.totals.omIncome)} ·{' '}
+              <strong>Remesas (SOM/RE/ROM) registradas:</strong> {money(s25c.totals.omRemit)}
+            </p>
+            <p className="text-gray-500">¿Coinciden las cantidades? ______________</p>
+          </li>
+          <li>¿Se envían a la sucursal, en concepto de donación para la obra mundial, los fondos que
+              superan el saldo máximo de la congregación durante varios meses? ______________</li>
+        </ol>
+      </div>
+
+      <div>
+        <p className="font-semibold mb-1">VERIFICACIÓN DE LA CUENTA PRINCIPAL</p>
+        <ol className="list-decimal ml-5 space-y-2 text-gray-600 dark:text-gray-400">
+          <li>
+            En la página 2 de la <em>Hoja de cuentas</em> (S-26) de cada mes, ¿coincide el saldo de la
+            caja de efectivo conciliado con la cantidad de «Cuenta principal/Saldo final» del recuadro
+            «Resumen de la hoja de cuentas»?
+            <p className="mt-1 text-gray-800 dark:text-gray-200">
+              <strong>Verificación del sistema:</strong> fondos al final del trimestre ={' '}
+              {money(s25c.closingFunds)}
+            </p>
+            <p className="text-gray-500">
+              (El sistema verifica automáticamente que fondos finales = fondos iniciales + ingresos − gastos.)
+            </p>
+          </li>
+          <li>¿Hay un <em>Registro de transacción</em> (S-24) de pago debidamente cumplimentado por
+              cada pago registrado en la <em>Hoja de cuentas</em>? ______________</li>
         </ol>
       </div>
 

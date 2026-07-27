@@ -643,6 +643,7 @@ CREATE TABLE IF NOT EXISTS cuentas_config (
   res_pct_code     text    NOT NULL DEFAULT 'RM',   -- resolución porcentual
   res_pct_percent  real    NOT NULL DEFAULT 10,     -- % sobre donaciones código C
   res_pct_source   text    NOT NULL DEFAULT 'C',    -- código base del porcentaje
+  ai_api_key       text,                            -- clave de Gemini para leer recibos
   updated_at       text DEFAULT (datetime('now'))
 );
 
