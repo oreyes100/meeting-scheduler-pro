@@ -31,11 +31,26 @@ interface PDFForm {
 }
 interface PDFDoc { getForm(): PDFForm; save(): Promise<Uint8Array> }
 
-async function loadPdfLib(): Promise<{ PDFDocument: { load(b: Buffer): Promise<PDFDoc> } }> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+interface PdfLib {
+  PDFDocument: { load(b: Buffer): Promise<PDFDoc> };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  PDFName: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  PDFArray: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  PDFDict: any;
+}
+
+async function loadPdfLib(): Promise<PdfLib> {
   // Especificador en variable: evita que TypeScript exija los tipos del paquete
   // en tiempo de compilación. La ruta devuelve un 501 explicable si no está.
+  // Se devuelven PDFName/PDFArray/PDFDict junto con PDFDocument para que
+  // repairAcroFormFields use la MISMA instancia del módulo: en webpack,
+  // dos dynamic import() del mismo especificador pueden dar objetos distintos
+  // y entonces instanceof falla, impidiendo que el repair encuentre los campos.
   const mod = 'pdf-lib';
-  return import(/* webpackIgnore: false */ mod) as unknown as Promise<{ PDFDocument: { load(b: Buffer): Promise<PDFDoc> } }>;
+  return import(/* webpackIgnore: false */ mod) as unknown as Promise<PdfLib>;
 }
 import { monthLabel, ACCOUNTS, type Account } from './cuentasDomain';
 
@@ -150,33 +165,152 @@ function mapS30(s30: S30, header: { label: string; city: string; state: string }
 }
 
 /* ── Mapa S-25c ─────────────────────────────────────────────────────────────
- * Formulario de auditoría trimestral: encabezado, fechas y los datos del
- * sistema que el auditor coteja.
+ * Formulario de auditoría trimestral. Es un cuestionario Sí/No/N.A.; no tiene
+ * celdas de importes. Los campos se identificaron con el PDF de calibración
+ * (campo visual N = posición N en la lista de campos ordenados
+ * alfabéticamente). Mapa COMPLETO de los 47 campos:
+ *
+ *  ENCABEZADO
+ *   #11 900_1_Text   → Nombre de la congregación
+ *   #22 900_2_Text_C → Trimestre auditado: desde (Mes/Año)
+ *   #33 900_3_Text_C → hasta (Mes/Año)
+ *   #42 900_4_Text_C → Fecha de la auditoría
+ *
+ *  VERIFICACIÓN DE LAS DONACIONES
+ *   #43 900_5_Text_C  → don.1  ¿Coinciden los totales?
+ *   #44 900_6_Text_C  → don.2  ¿Se registran todas las donaciones?
+ *   #45 900_7_Text_C  → don.3  ¿Se anotan correctamente los códigos?
+ *   #46 900_8_Text_C  → don.4  ¿Se hacen los depósitos semanalmente?
+ *   #47 900_9_Text   → comentarios donaciones (línea 1)
+ *    #1 900_10_Text  → comentarios donaciones (línea 2)
+ *    #2 900_11_Text  → comentarios donaciones (línea 3)
+ *
+ *  VERIFICACIÓN DE LOS DESEMBOLSOS
+ *    #3 900_12_Text_C → des.1a  ¿Hay factura/documento por todos los pagos?
+ *    #4 900_13_Text_C → des.1b  ¿Aprueba el coordinador?
+ *    #5 900_14_Text_C → des.1c  ¿Aprueba la congregación por resolución?
+ *    #6 900_15_Text_C → des.2   ¿Se envían donaciones OM a la sucursal?
+ *    #7 900_16_Text_C → des.3   ¿Se envían cantidades totales mensuales?
+ *    #8 900_17_Text_C → des.4   ¿Se abonan cargos de la sucursal?
+ *    #9 900_18_Text_C → des.5   ¿Coinciden Registro traspaso con acuse?
+ *   #10 900_19_Text_C → des.6   ¿Se envían fondos que superan saldo máx?
+ *   #12 900_20_Text  → comentarios desembolsos (línea 1)
+ *   #13 900_21_Text  → comentarios desembolsos (línea 2)
+ *   #14 900_22_Text  → comentarios desembolsos (línea 3)
+ *
+ *  VERIFICACIÓN DE LA CUENTA PRINCIPAL
+ *   #15 900_23_Text_C → cta_p.1  ¿Coincide saldo conciliado?
+ *   #16 900_24_Text_C → cta_p.2  ¿Hay S-24 por cada pago?
+ *   #17 900_25_Text_C → cta_p.3  ¿Aprobaron coordinador y secretario ajustes?
+ *   #18 900_26_Text  → comentarios cuenta principal (líneas 1-4)
+ *   #19 900_27_Text
+ *   #20 900_28_Text
+ *   #21 900_29_Text
+ *
+ *  VERIFICACIÓN DE LA CUENTA SECUNDARIA
+ *   #23 900_30_Text_C → cta_s.1  ¿Coincide saldo secundario conciliado?
+ *   #24 900_31_Text_C → cta_s.2  ¿Se aprueban adecuadamente los traspasos?
+ *   #25 900_32_Text_C → cta_s.3  ¿Aprobaron coordinador y secretario ajustes?
+ *   #26 900_33_Text  → comentarios cuenta secundaria (líneas 1-3)
+ *   #27 900_34_Text
+ *   #28 900_35_Text
+ *
+ *  REPASO DE LOS PROCEDIMIENTOS GENERALES
+ *   #29 900_36_Text_C → rep.1  ¿Se siguen instrucciones?
+ *   #30 900_37_Text_C → rep.2  ¿Son exactos y ordenados los registros?
+ *   #31 900_38_Text_C → rep.3  ¿Están al día los registros?
+ *   #32 900_39_Text_C → rep.4  ¿Son exactos los informes mensuales?
+ *   #34 900_40_Text_C → rep.5  ¿Hay anotación del saldo máximo aprobado?
+ *   #35 900_41_Text  → comentarios repaso (líneas 1-5)
+ *   … #39 900_45_Text
+ *
+ *  FIRMAS
+ *   #40 900_46_Text_C → Auditoría realizada por
+ *   #41 900_47_Text_C → Revisada por (Secretario)
  */
-function mapS25c(s25c: S25c, header: { label: string; city: string; state: string }) {
+function mapS25c(
+  s25c: S25c,
+  header: { label: string; city: string; state: string },
+  answers: Record<string, string> = {},
+) {
   const m = s25c.months;
-  return {
+
+  // Formato "Mes/Año" para los campos de fecha del trimestre.
+  const fmtMonthYear = (ym: string) => {
+    if (!ym) return '';
+    const [y, mo] = ym.split('-').map(Number);
+    return `${String(mo).padStart(2, '0')}/${y}`;
+  };
+
+  const out: Record<string, string> = {
+    // Encabezado
     '900_1_Text':  header.label,
-    '900_9_Text':  m[0]?.label ?? '',
-    '900_10_Text': m[2]?.label ?? '',
-    '900_11_Text': new Date().toLocaleDateString('es-MX'),
+    '900_2_Text_C': fmtMonthYear(m[0]?.ym ?? ''),
+    '900_3_Text_C': fmtMonthYear(m[2]?.ym ?? ''),
+    '900_4_Text_C': new Date().toLocaleDateString('es-MX'),
+  };
 
-    // Datos del sistema por mes: recibido y desembolsos
-    '900_12_Text_C': amt(m[0]?.income),
-    '900_13_Text_C': amt(m[1]?.income),
-    '900_14_Text_C': amt(m[2]?.income),
-    '900_15_Text_C': amt(m[0]?.expense),
-    '900_16_Text_C': amt(m[1]?.expense),
-    '900_17_Text_C': amt(m[2]?.expense),
+  // Mapa de respuesta del cuestionario → nombre de campo PDF.
+  const ANSWER_MAP: Record<string, string> = {
+    // Donaciones
+    'don.1':   '900_5_Text_C',
+    'don.2':   '900_6_Text_C',
+    'don.3':   '900_7_Text_C',
+    'don.4':   '900_8_Text_C',
+    // Desembolsos
+    'des.1a':  '900_12_Text_C',
+    'des.1b':  '900_13_Text_C',
+    'des.1c':  '900_14_Text_C',
+    'des.2':   '900_15_Text_C',
+    'des.3':   '900_16_Text_C',
+    'des.4':   '900_17_Text_C',
+    'des.5':   '900_18_Text_C',
+    'des.6':   '900_19_Text_C',
+    // Cuenta principal
+    'cta_p.1': '900_23_Text_C',
+    'cta_p.2': '900_24_Text_C',
+    'cta_p.3': '900_25_Text_C',
+    // Cuenta secundaria
+    'cta_s.1': '900_30_Text_C',
+    'cta_s.2': '900_31_Text_C',
+    'cta_s.3': '900_32_Text_C',
+    // Repaso de procedimientos generales
+    'rep.1':   '900_36_Text_C',
+    'rep.2':   '900_37_Text_C',
+    'rep.3':   '900_38_Text_C',
+    'rep.4':   '900_39_Text_C',
+    'rep.5':   '900_40_Text_C',
+  };
 
-    // Obra mundial recibida y remesada en el trimestre
-    '900_18_Text_C': amt(s25c.totals.omIncome),
-    '900_19_Text_C': amt(s25c.totals.omRemit),
+  // Mapa de notas/comentarios por sección → campos de texto libre.
+  const NOTE_FIELDS: Record<string, string[]> = {
+    'don_notes':   ['900_9_Text',  '900_10_Text', '900_11_Text'],
+    'des_notes':   ['900_20_Text', '900_21_Text', '900_22_Text'],
+    'cta_p_notes': ['900_26_Text', '900_27_Text', '900_28_Text', '900_29_Text'],
+    'cta_s_notes': ['900_33_Text', '900_34_Text', '900_35_Text'],
+    'rep_notes':   ['900_41_Text', '900_42_Text', '900_43_Text', '900_44_Text', '900_45_Text'],
+  };
 
-    // Fondos al inicio y al final del trimestre
-    '900_23_Text_C': amt(s25c.openingFunds),
-    '900_24_Text_C': amt(s25c.closingFunds),
-  } as Record<string, string>;
+  const labelOf = (raw: string) =>
+    raw === 'si' ? 'Sí' : raw === 'no' ? 'No' : raw === 'na' ? 'N.A.' : raw;
+
+  for (const [key, field] of Object.entries(ANSWER_MAP)) {
+    const raw = answers[key];
+    if (raw) out[field] = labelOf(raw);
+  }
+
+  // Notas de sección: se unen hasta 5 notas individuales en las líneas disponibles.
+  for (const [noteKey, fields] of Object.entries(NOTE_FIELDS)) {
+    const raw = answers[noteKey] ?? '';
+    if (!raw) continue;
+    // Partir por saltos de línea y distribuir en los campos de línea.
+    const lines = raw.split('\n').filter(Boolean);
+    lines.forEach((line, i) => {
+      if (fields[i]) out[fields[i]] = line.slice(0, 200);
+    });
+  }
+
+  return out;
 }
 
 /* ── Mapa S-26-S ────────────────────────────────────────────────────────────
@@ -280,10 +414,11 @@ export function previewValues(
   kind: FormKind,
   data: { s26?: S26; s30?: S30; s25c?: S25c },
   header: { label: string; city: string; state: string },
+  answers: Record<string, string> = {},
 ): Record<string, string> {
   if (kind === 's26'  && data.s26)  return mapS26(data.s26, header);
   if (kind === 's30'  && data.s30)  return mapS30(data.s30, header);
-  if (kind === 's25c' && data.s25c) return mapS25c(data.s25c, header);
+  if (kind === 's25c' && data.s25c) return mapS25c(data.s25c, header, answers);
   return {};
 }
 
@@ -321,8 +456,54 @@ export async function fillS25c(
   s25c: S25c,
   header: { label: string; city: string; state: string },
   opts: FillOptions = {},
+  answers: Record<string, string> = {},
 ): Promise<Uint8Array> {
-  return fill('s25c', mapS25c(s25c, header), opts);
+  return fill('s25c', mapS25c(s25c, header, answers), opts);
+}
+
+/**
+ * Algunos PDF de la organización (S-25c-S.pdf) tienen los Widget annotations
+ * en las páginas pero el array /AcroForm/Fields vacío, así que pdf-lib
+ * devuelve form.getFields() === [] aunque haya campos físicamente en el PDF.
+ * Esta función los vincula antes de operar.
+ *
+ * Recibe `lib` desde el llamador para garantizar que PDFName/PDFArray/PDFDict
+ * son de la MISMA instancia del módulo que creó el objeto `pdf`: si se
+ * importasen por separado, instanceof fallaría en webpack y el repair no
+ * encontraría los campos.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function repairAcroFormFields(pdf: any, lib: PdfLib): Promise<void> {
+  try {
+    const { PDFName, PDFArray, PDFDict } = lib;
+
+    const context = pdf.context;
+    const pages = pdf.getPages();
+    const widgetRefs: unknown[] = [];
+
+    for (const page of pages) {
+      const annotsRaw = page.node.get(PDFName.of('Annots'));
+      if (!annotsRaw) continue;
+      const arr = context.lookupMaybe(annotsRaw, PDFArray) ?? annotsRaw;
+      if (typeof arr?.size !== 'function') continue;
+      for (let i = 0; i < arr.size(); i++) widgetRefs.push(arr.get(i));
+    }
+    if (widgetRefs.length === 0) return;
+
+    const acroFormRef = pdf.catalog.get(PDFName.of('AcroForm'));
+    if (!acroFormRef) return;
+    const acroForm = context.lookupMaybe(acroFormRef, PDFDict);
+    if (!acroForm) return;
+
+    const fieldsRef = acroForm.get(PDFName.of('Fields'));
+    const existing = fieldsRef ? context.lookupMaybe(fieldsRef, PDFArray) : null;
+    if (existing && existing.size() > 0) return; // ya vinculados
+
+    acroForm.set(PDFName.of('Fields'), context.obj(widgetRefs));
+  } catch {
+    // Fallo silencioso — si la reparación no corre, los campos no se escriben
+    // pero el PDF sigue siendo válido y editable a mano.
+  }
 }
 
 async function fill(
@@ -333,8 +514,13 @@ async function fill(
     throw new Error(`Falta la plantilla oficial ${TEMPLATE_FILE[kind]} en src/lib/pdf-templates/`);
   }
 
-  const { PDFDocument } = await loadPdfLib();
-  const pdf = await PDFDocument.load(fs.readFileSync(file));
+  const lib = await loadPdfLib();
+  const pdf = await lib.PDFDocument.load(fs.readFileSync(file));
+
+  // Vincular widgets sueltos al AcroForm (necesario para S-25c-S.pdf).
+  // Se pasa `lib` para que PDFName/PDFArray/PDFDict sean de la misma instancia.
+  await repairAcroFormFields(pdf, lib);
+
   const form = pdf.getForm();
 
   // La plantilla puede traer valores previos —la del S-25c llegó con una

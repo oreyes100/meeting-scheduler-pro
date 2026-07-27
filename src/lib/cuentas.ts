@@ -355,6 +355,10 @@ export interface S25cMonth {
   expense: number;
   omIncome: number;
   omRemit: number;
+  /** Total de asientos de gasto en el mes */
+  expenseCount: number;
+  /** Cuántos de esos gastos tienen receipt_ref (excluye asientos CIERRE-) */
+  expenseWithReceipt: number;
 }
 
 export interface S25c {
@@ -367,6 +371,12 @@ export interface S25c {
   closingFunds: number;
   /** Fondos finales = Fondos iniciales + Ingresos − Gastos */
   reconciled: boolean;
+  /**
+   * Respuestas pre-calculadas por el sistema para el cuestionario S-25c.
+   * Claves: don.1-4, des.1a/1b/1c/2-6, cta_p.1-3, cta_s.1-3, rep.1-5.
+   * Valores: 'si' | 'no' | 'na' | '' (vacío = auditor debe determinar).
+   */
+  autoAnswers: Record<string, string>;
 }
 
 export function buildS25c(congreId: string, sy: string, quarter: number): S25c {
@@ -374,10 +384,19 @@ export function buildS25c(congreId: string, sy: string, quarter: number): S25c {
   const all = serviceYearMonths(sy);
   const yms = q.offsets.map(o => all[o]);
 
-  const months: S25cMonth[] = yms.map(ym => {
+  // Cargar transacciones de cada mes una sola vez para reutilizarlas.
+  const monthTxData = yms.map(ym => {
     const txs = txOfMonth(congreId, ym);
     const incomes  = txs.filter(t => t.type === 'income');
     const expenses = txs.filter(t => t.type === 'expense');
+    return { ym, txs, incomes, expenses };
+  });
+
+  const months: S25cMonth[] = monthTxData.map(({ ym, incomes, expenses }) => {
+    const expenseCount = expenses.length;
+    const expenseWithReceipt = expenses.filter(
+      t => t.receipt_ref && !String(t.receipt_ref).startsWith('CIERRE-')
+    ).length;
     return {
       ym,
       label: monthLabel(ym),
@@ -385,6 +404,8 @@ export function buildS25c(congreId: string, sy: string, quarter: number): S25c {
       expense:  round2(expenses.reduce((s, t) => s + t.amount, 0)),
       omIncome: round2(incomes.filter(t => t.code && (OM_INCOME_CODES as readonly string[]).includes(t.code)).reduce((s, t) => s + t.amount, 0)),
       omRemit:  round2(expenses.filter(t => t.code && (OM_REMIT_CODES as readonly string[]).includes(t.code)).reduce((s, t) => s + t.amount, 0)),
+      expenseCount,
+      expenseWithReceipt,
     };
   });
 
@@ -398,11 +419,88 @@ export function buildS25c(congreId: string, sy: string, quarter: number): S25c {
   const openingFunds = totalOf(openingBalance(congreId, yms[0]));
   const lastS26 = buildS26(congreId, yms[2]);
   const closingFunds = lastS26.closingTotal;
+  const reconciled   = Math.abs(openingFunds + totals.income - totals.expense - closingFunds) < 0.01;
+
+  /* ── Auto-respuestas del cuestionario ──────────────────────────────────────
+   * El sistema puede determinar algunas respuestas a partir de los registros
+   * contables. El auditor las revisa y puede cambiar cualquiera antes de
+   * imprimir el PDF oficial.  Vacío ('') = el auditor debe determinarlo.
+   */
+  const allExpenses = monthTxData.flatMap(m => m.expenses);
+  const allIncomes  = monthTxData.flatMap(m => m.incomes);
+
+  // Gastos que no son asientos de cierre automático.
+  const realExpenses = allExpenses.filter(
+    t => !String(t.receipt_ref ?? '').startsWith('CIERRE-')
+  );
+  const allRealHaveReceipt = realExpenses.length === 0 ||
+    realExpenses.every(t => t.receipt_ref);
+
+  // ¿Hay remesas OM (SOM/ROM) en cada mes del trimestre?
+  const omRemitCodes = ['SOM', 'ROM'];
+  const monthsWithOmRemit = monthTxData.filter(({ expenses: exp }) =>
+    exp.some(t => t.code && omRemitCodes.includes(t.code))
+  ).length;
+
+  const auto: Record<string, string> = {};
+
+  // Verificación de las donaciones
+  // don.1: los totales están en el sistema para que el auditor los compare.
+  auto['don.1'] = 'si';
+  // don.2: por definición, todo lo registrado en el sistema está en la Hoja.
+  auto['don.2'] = 'si';
+  // don.3: ¿tienen código de transacción todos los ingresos?
+  auto['don.3'] = allIncomes.length === 0 || allIncomes.every(t => t.code) ? 'si' : 'no';
+  // don.4: no se puede determinar sin analizar fechas de depósito.
+
+  // Verificación de los desembolsos
+  // 1a: ¿Todos los pagos tienen factura/recibo en el sistema?
+  auto['des.1a'] = allRealHaveReceipt ? 'si' : 'no';
+  // 1b: aprobación del coordinador — no se puede determinar desde datos.
+  // 1c: ¿hay gastos por resolución (código RM)?
+  auto['des.1c'] = allExpenses.some(t => t.code === 'RM') ? 'si' : 'na';
+  // 2: ¿se enviaron remesas OM todos los meses del trimestre?
+  if (totals.omIncome === 0 && totals.omRemit === 0) {
+    auto['des.2'] = 'na'; // No hubo donaciones OM
+  } else {
+    auto['des.2'] = monthsWithOmRemit >= yms.length ? 'si' : 'no';
+  }
+  // 3: donaciones mensuales aprobadas por resolución — requiere comparar con
+  //    resoluciones, no determinable automáticamente.
+  // 4: cargos de la sucursal (código RE)
+  auto['des.4'] = allExpenses.some(t => t.code === 'RE') ? 'si' : 'na';
+  // 5: ¿el total enviado coincide con el total recibido de OM?
+  if (totals.omIncome > 0 || totals.omRemit > 0) {
+    auto['des.5'] = Math.abs(totals.omIncome - totals.omRemit) < 0.01 ? 'si' : 'no';
+  } else {
+    auto['des.5'] = 'na';
+  }
+  // 6: saldo máximo — no hay datos de saldo máximo configurado.
+  auto['des.6'] = 'na';
+
+  // Verificación de la cuenta principal
+  auto['cta_p.1'] = reconciled ? 'si' : 'no';
+  auto['cta_p.2'] = allRealHaveReceipt ? 'si' : 'no';
+  // cta_p.3: si está cuadrado no hay discrepancias que resolver.
+  auto['cta_p.3'] = reconciled ? 'na' : '';
+
+  // Verificación de la cuenta secundaria — congregación con caja en efectivo,
+  // sin cuenta secundaria; todas las preguntas son N/A.
+  auto['cta_s.1'] = 'na';
+  auto['cta_s.2'] = 'na';
+  auto['cta_s.3'] = 'na';
+
+  // Repaso de los procedimientos generales
+  auto['rep.1'] = 'si';
+  auto['rep.2'] = reconciled ? 'si' : '';
+  auto['rep.3'] = 'si';
+  auto['rep.4'] = reconciled ? 'si' : '';
+  // rep.5: ¿hay anotación del saldo máximo aprobado? — no determinable.
 
   return {
     serviceYear: sy, quarter: q.n, quarterLabel: q.label,
-    months, totals, openingFunds, closingFunds,
-    reconciled: Math.abs(openingFunds + totals.income - totals.expense - closingFunds) < 0.01,
+    months, totals, openingFunds, closingFunds, reconciled,
+    autoAnswers: auto,
   };
 }
 

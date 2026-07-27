@@ -1,0 +1,33 @@
+{
+  "exclude": [
+    "node_modules/**",
+    ".next/**",
+    ".git/**",
+    ".vercel/**",
+    "*.db",
+    "*.pdf",
+    "*.zip",
+    "*.mp4",
+    "*.png",
+    "*.jpg",
+    "*.jpeg",
+    "*.gif",
+    "*.svg",
+    "*.ico",
+    "package-lock.json",
+    "tsconfig.tsbuildinfo",
+    "capacitor-www/**",
+    "android/**",
+    "meetings/**"
+  ],
+  "include": [
+    "src/**/*.{ts,tsx,js,jsx}",
+    "Wiki/**/*.md",
+    "MOCs/**/*.md",
+    "*.md",
+    ".claude/**/*.{md,json,jsonl,sh,py}",
+    "sql/**/*.sql",
+    "scripts/**/*.js",
+    "docs/**/*.md"
+  ]
+}

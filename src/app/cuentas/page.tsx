@@ -22,6 +22,7 @@ import {
   MONTH_NAMES_ES, EMPTY_CONFIG,
   type Account, type TxType, type CtCode, type S26, type S30, type S25c,
   type Summary, type Reconcile, type CuentasConfig, type Transaction, type CierreEntry,
+  type S25cAnswers, type S25cAnswer, type S25cAnswerValue,
 } from '@/components/cuentas/types';
 
 /* ── Navegación ─────────────────────────────────────────────────────────────── */
@@ -69,6 +70,7 @@ export default function CuentasPage() {
   const [s26, setS26] = useState<S26 | null>(null);
   const [s30, setS30] = useState<S30 | null>(null);
   const [s25c, setS25c] = useState<S25c | null>(null);
+  const [s25cAnswers, setS25cAnswers] = useState<S25cAnswers>({});
   const [summary, setSummary] = useState<Summary | null>(null);
   const [rec, setRec] = useState<Reconcile | null>(null);
   const [codes, setCodes] = useState<CtCode[]>([]);
@@ -124,7 +126,16 @@ export default function CuentasPage() {
 
   const loadS25c = useCallback((y: string, q: number) =>
     api(`/api/cuentas/reports?kind=s25c&sy=${encodeURIComponent(y)}&quarter=${q}`)
-      .then(d => setS25c(d.s25c as S25c))
+      .then(d => {
+        const data = d.s25c as S25c;
+        setS25c(data);
+        // Pre-fill answers with auto-computed values; auditor can override
+        const init: S25cAnswers = {};
+        for (const [k, v] of Object.entries(data.autoAnswers ?? {})) {
+          if (v) init[k] = { answer: v as S25cAnswerValue, notes: '' };
+        }
+        setS25cAnswers(init);
+      })
       .catch(e => setError(e instanceof Error ? e.message : 'Error')), [api]);
 
   useEffect(() => { loadCodes(); loadConfig(); }, [loadCodes, loadConfig]);
@@ -433,27 +444,33 @@ export default function CuentasPage() {
                     {QUARTERS.map(q => <option key={q.n} value={q.n}>{q.label}</option>)}
                   </select>
                 )}
-                <div className="ml-auto flex items-center gap-2">
-                  {(
-                    <>
-                      {/* El PDF oficial se rellena en el servidor sobre la plantilla
-                          de la organización: sale idéntico al que pide la sucursal. */}
-                      <a href={formTab === 's25c'
-                            ? `/api/cuentas/forms?kind=s25c&sy=${encodeURIComponent(sy)}&quarter=${quarter}`
-                            : `/api/cuentas/forms?kind=${formTab}&ym=${ym}`}
-                         target="_blank" rel="noopener noreferrer"
-                         className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-sky-700 hover:bg-sky-800 text-white">
-                        <Download size={13} /> PDF oficial
-                      </a>
-                      <a href={formTab === 's25c'
-                            ? `/api/cuentas/forms?kind=s25c&sy=${encodeURIComponent(sy)}&quarter=${quarter}&calibrate=1`
-                            : `/api/cuentas/forms?kind=${formTab}&ym=${ym}&calibrate=1`}
-                         target="_blank" rel="noopener noreferrer"
-                         title="Rellena cada casilla con su nombre, para ajustar el mapa de campos"
-                         className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
-                        <Sparkles size={13} /> Calibrar
-                      </a>
-                    </>
+                <div className="ml-auto flex items-center gap-2 flex-wrap">
+                  {/* PDF oficial sobre plantilla de la organización */}
+                  {/* Para el S-25c se codifican las respuestas del cuestionario en &a= */}
+                  <a href={formTab === 's25c'
+                        ? `/api/cuentas/forms?kind=s25c&sy=${encodeURIComponent(sy)}&quarter=${quarter}&a=${encodeURIComponent(
+                            Object.entries(s25cAnswers).filter(([,v])=>v.answer).map(([k,v])=>`${k}:${v.answer}`).join(',')
+                          )}`
+                        : `/api/cuentas/forms?kind=${formTab}&ym=${ym}`}
+                     target="_blank" rel="noopener noreferrer"
+                     className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-sky-700 hover:bg-sky-800 text-white">
+                    <Download size={13} /> PDF oficial
+                  </a>
+                  <a href={formTab === 's25c'
+                        ? `/api/cuentas/forms?kind=s25c&sy=${encodeURIComponent(sy)}&quarter=${quarter}&calibrate=1`
+                        : `/api/cuentas/forms?kind=${formTab}&ym=${ym}&calibrate=1`}
+                     target="_blank" rel="noopener noreferrer"
+                     title="Rellena cada casilla con su nombre, para ajustar el mapa de campos"
+                     className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+                    <Sparkles size={13} /> Calibrar
+                  </a>
+                  {formTab === 's25c' && (
+                    <a href={`/api/cuentas/forms?kind=receipts-quarter&sy=${encodeURIComponent(sy)}&quarter=${quarter}`}
+                       target="_blank" rel="noopener noreferrer"
+                       title="Reporte HTML de todos los egresos del trimestre con indicación de comprobante"
+                       className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white">
+                      <Download size={13} /> Recibos del trimestre
+                    </a>
                   )}
                   <button onClick={() => window.print()}
                           className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white">
@@ -481,7 +498,11 @@ export default function CuentasPage() {
                   <FormHeader title="INFORME SOBRE LA AUDITORÍA DE LAS CUENTAS DE LA CONGREGACIÓN"
                               subtitle="S-25c" cfg={cfg}
                               right={`${s25c.quarterLabel} · Año de Servicio ${s25c.serviceYear}`} />
-                  <S25cReport s25c={s25c} />
+                  <S25cReport
+                    s25c={s25c}
+                    answers={s25cAnswers}
+                    onAnswerChange={(k, v: S25cAnswer) => setS25cAnswers(a => ({ ...a, [k]: v }))}
+                  />
                 </>
               )}
             </div>

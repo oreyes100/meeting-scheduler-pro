@@ -104,10 +104,21 @@ export interface S30 {
 
 export interface S25c {
   serviceYear: string; quarter: number; quarterLabel: string;
-  months: { ym: string; label: string; income: number; expense: number; omIncome: number; omRemit: number }[];
+  months: {
+    ym: string; label: string;
+    income: number; expense: number;
+    omIncome: number; omRemit: number;
+    expenseCount: number; expenseWithReceipt: number;
+  }[];
   totals: { income: number; expense: number; omIncome: number; omRemit: number };
   openingFunds: number; closingFunds: number; reconciled: boolean;
+  /** Respuestas pre-computadas por el sistema. El auditor puede editarlas. */
+  autoAnswers: Record<string, string>;
 }
+
+export type S25cAnswerValue = '' | 'si' | 'no' | 'na';
+export interface S25cAnswer { answer: S25cAnswerValue; notes: string }
+export type S25cAnswers = Record<string, S25cAnswer>
 
 export interface Summary {
   serviceYear: string;

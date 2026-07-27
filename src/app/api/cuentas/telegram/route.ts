@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { getDb } from '@/lib/sqlite';
+import { runReceiptOcr } from '@/lib/receiptOcr';
 
 /**
  * Agente de recibos por Telegram.
@@ -88,22 +89,35 @@ function renderProposal(rows: Proposal[]): string {
 export async function POST(request: Request) {
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
   if (!secret) {
+    console.error('[telegram] TELEGRAM_WEBHOOK_SECRET no configurado');
     return NextResponse.json({ error: 'TELEGRAM_WEBHOOK_SECRET no configurado' }, { status: 501 });
   }
-  if (request.headers.get('x-telegram-bot-api-secret-token') !== secret) {
-    // Silencioso a propósito: no confirmar a un intruso que la ruta existe.
+
+  const incoming = request.headers.get('x-telegram-bot-api-secret-token');
+  if (incoming !== secret) {
+    console.warn('[telegram] secret inválido:', { incoming: incoming?.slice(0, 4) + '…', expected: secret.slice(0, 4) + '…' });
     return new NextResponse(null, { status: 401 });
   }
 
+  let body: string;
   try {
-    const update: TgUpdate = await request.json();
+    body = await request.text();
+  } catch (e) {
+    console.error('[telegram] no se pudo leer el body:', e);
+    return NextResponse.json({ ok: true });
+  }
+
+  console.log('[telegram] update recibido:', body.slice(0, 500));
+
+  try {
+    const update: TgUpdate = JSON.parse(body);
 
     if (update.callback_query) return handleCallback(update.callback_query);
     if (update.message)        return handleMessage(update.message);
 
+    console.log('[telegram] update sin message ni callback_query, ignorado');
     return NextResponse.json({ ok: true });
   } catch (e) {
-    // Un error nunca debe hacer que Telegram reintente en bucle.
     console.error('[telegram] fallo procesando update:', e);
     return NextResponse.json({ ok: true });
   }
@@ -113,14 +127,23 @@ export async function POST(request: Request) {
 
 async function handleMessage(msg: NonNullable<TgUpdate['message']>) {
   const chatId = String(msg.chat.id);
-  const ctx = congregationForChat(chatId);
+  console.log('[telegram] handleMessage chatId:', chatId,
+    'text:', msg.text?.slice(0, 80), 'photo:', !!msg.photo, 'doc:', !!msg.document);
 
+  const ctx = congregationForChat(chatId);
   if (!ctx) {
-    // El chat no está vinculado: no se puede saber a qué congregación asentar.
+    console.warn('[telegram] chatId no vinculado:', chatId);
+    try {
+      const rows = getDb().prepare(
+        `SELECT telegram_chat_id, telegram_enabled FROM messaging_settings`
+      ).all() as { telegram_chat_id: string | null; telegram_enabled: number }[];
+      console.warn('[telegram] registrados en messaging_settings:', JSON.stringify(rows));
+    } catch {}
     return NextResponse.json({ ok: true });
   }
 
   const { token, congregationId } = ctx;
+  console.log('[telegram] congregación encontrada:', congregationId);
 
   if (msg.text?.startsWith('/')) {
     await tg(token, 'sendMessage', {
@@ -135,6 +158,7 @@ async function handleMessage(msg: NonNullable<TgUpdate['message']>) {
   const doc = msg.document && /^(image\/|application\/pdf)/.test(msg.document.mime_type ?? '')
     ? msg.document : null;
   const fileId = photo?.file_id ?? doc?.file_id;
+  console.log('[telegram] fileId:', fileId, 'mime:', doc?.mime_type);
   if (!fileId) return NextResponse.json({ ok: true });
 
   const size = photo?.file_size ?? doc?.file_size ?? 0;
@@ -148,7 +172,9 @@ async function handleMessage(msg: NonNullable<TgUpdate['message']>) {
   // Descarga del archivo desde Telegram.
   const info = await tg(token, 'getFile', { file_id: fileId }) as { result?: { file_path?: string } };
   const filePath = info?.result?.file_path;
+  console.log('[telegram] getFile result:', JSON.stringify(info).slice(0, 200));
   if (!filePath) {
+    console.error('[telegram] no se obtuvo file_path de getFile:', JSON.stringify(info));
     await tg(token, 'sendMessage', { chat_id: chatId, text: 'No pude descargar el archivo.' });
     return NextResponse.json({ ok: true });
   }
@@ -156,26 +182,50 @@ async function handleMessage(msg: NonNullable<TgUpdate['message']>) {
   const bin = await fetch(FILE(token, filePath)).then(r => r.arrayBuffer());
   const mime = doc?.mime_type ?? 'image/jpeg';
   const dataUrl = `data:${mime};base64,${Buffer.from(bin).toString('base64')}`;
+  console.log('[telegram] imagen descargada, mime:', mime, 'bytes:', bin.byteLength);
 
-  // Lectura con IA reutilizando el mismo motor que la interfaz web.
-  const origin = process.env.APP_ORIGIN || 'http://127.0.0.1:3000';
-  const ocr = await fetch(`${origin}/api/cuentas/ocr/internal`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-internal-secret': process.env.TELEGRAM_WEBHOOK_SECRET! },
-    body: JSON.stringify({ dataUrl, congregationId }),
-  }).then(r => r.json()).catch(() => null) as { transactions?: Proposal[]; error?: string } | null;
+  // Lectura con IA: llamada directa al motor (no vía HTTP propio, que falla en producción).
+  const db = getDb();
+  const codes = db.prepare(
+    `SELECT code, description, kind FROM cuentas_codes WHERE congregation_id = ? ORDER BY sort_order`
+  ).all(congregationId) as { code: string; description: string; kind: string }[];
 
-  if (!ocr || ocr.error || !ocr.transactions?.length) {
+  const cfg = db.prepare(
+    `SELECT ai_api_key FROM cuentas_config WHERE congregation_id = ?`
+  ).get(congregationId) as { ai_api_key: string | null } | undefined;
+
+  console.log('[telegram] codes count:', codes.length, 'hasAiKey:', !!(cfg?.ai_api_key || process.env.GEMINI_API_KEY));
+
+  let ocrResult: Awaited<ReturnType<typeof runReceiptOcr>>;
+  try {
+    ocrResult = await runReceiptOcr(dataUrl, codes, cfg?.ai_api_key);
+    console.log('[telegram] ocrResult:', JSON.stringify(ocrResult).slice(0, 300));
+  } catch (e) {
+    console.error('[telegram] runReceiptOcr threw:', e);
     await tg(token, 'sendMessage', {
       chat_id: chatId,
-      text: ocr?.error
-        ? `No pude leer el recibo: ${ocr.error}`
-        : 'No reconocí ninguna transacción en esa imagen. Prueba con más luz o más cerca.',
+      text: `Error inesperado al procesar el recibo: ${e instanceof Error ? e.message : String(e)}`,
     });
     return NextResponse.json({ ok: true });
   }
 
-  const rows: Proposal[] = ocr.transactions.map(t => ({
+  if ('error' in ocrResult) {
+    await tg(token, 'sendMessage', {
+      chat_id: chatId,
+      text: `No pude leer el recibo: ${ocrResult.error}`,
+    });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (!ocrResult.transactions?.length) {
+    await tg(token, 'sendMessage', {
+      chat_id: chatId,
+      text: 'No reconocí ninguna transacción en esa imagen. Prueba con más luz o más cerca.',
+    });
+    return NextResponse.json({ ok: true });
+  }
+
+  const rows: Proposal[] = ocrResult.transactions.map(t => ({
     ...t, account: t.kind === 'expense' ? 'corriente' : 'caja',
   }));
 
@@ -282,11 +332,44 @@ async function handleCallback(cb: NonNullable<TgUpdate['callback_query']>) {
   return NextResponse.json({ ok: true });
 }
 
-/** GET: comprobación rápida de que el webhook está desplegado. */
-export async function GET() {
+/** GET: diagnóstico de estado del bot. No expone tokens. */
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+
+  // ?webhook=1 → consultar getWebhookInfo al primer bot configurado
+  if (searchParams.get('webhook') === '1') {
+    try {
+      const row = getDb().prepare(
+        `SELECT telegram_bot_token FROM messaging_settings WHERE telegram_bot_token IS NOT NULL LIMIT 1`
+      ).get() as { telegram_bot_token: string } | undefined;
+      if (!row) return NextResponse.json({ error: 'No hay token configurado en messaging_settings' });
+      const info = await fetch(`https://api.telegram.org/bot${row.telegram_bot_token}/getWebhookInfo`).then(r => r.json());
+      return NextResponse.json(info);
+    } catch (e) {
+      return NextResponse.json({ error: String(e) }, { status: 500 });
+    }
+  }
+
+  // Diagnóstico general
+  let settings: { telegram_chat_id: string | null; telegram_enabled: number; has_token: boolean }[] = [];
+  try {
+    const rows = getDb().prepare(
+      `SELECT telegram_chat_id, telegram_enabled, telegram_bot_token FROM messaging_settings`
+    ).all() as { telegram_chat_id: string | null; telegram_enabled: number; telegram_bot_token: string | null }[];
+    settings = rows.map(r => ({
+      telegram_chat_id: r.telegram_chat_id,
+      telegram_enabled: r.telegram_enabled,
+      has_token: !!r.telegram_bot_token,
+    }));
+  } catch {}
+
   return NextResponse.json({
     ok: true,
-    configured: !!process.env.TELEGRAM_WEBHOOK_SECRET,
-    hint: 'Registra el webhook con setWebhook y el mismo secret_token.',
+    env: {
+      TELEGRAM_WEBHOOK_SECRET: !!process.env.TELEGRAM_WEBHOOK_SECRET,
+      GEMINI_API_KEY: !!process.env.GEMINI_API_KEY,
+    },
+    messaging_settings: settings,
+    hint: 'Añade ?webhook=1 para consultar getWebhookInfo directamente a Telegram.',
   });
 }
