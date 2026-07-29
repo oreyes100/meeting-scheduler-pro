@@ -77,3 +77,6 @@ credenciales_publicadores.csv
 # SQLite database and exports (personal data — never commit)
 data/
 .verify/
+
+# Clave SSH de Cowork — nunca commitear
+.claude/ssh/
