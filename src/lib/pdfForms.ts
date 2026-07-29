@@ -280,6 +280,9 @@ function mapS25c(
     'rep.3':   '900_38_Text_C',
     'rep.4':   '900_39_Text_C',
     'rep.5':   '900_40_Text_C',
+    // Firmas
+    'auditor':     '900_46_Text_C',
+    'secretario':  '900_47_Text_C',
   };
 
   // Mapa de notas/comentarios por sección → campos de texto libre.
@@ -378,25 +381,34 @@ function mapS26(s26: S26, header: { label: string; city: string; state: string }
   });
 
   // Fila de totales de todas las columnas.
+  // Los campos de totales usan S26TotalValue (no S26Value como los asientos).
   const t = S26_TOTALS_INDEX;
   out[`900_${58 + t}_Text`] = 'TOTALES DE TODAS LAS COLUMNAS';
   const blocks: Record<Account, string> = { caja: '901', corriente: '902', sucursal: '903' };
   for (const a of ACCOUNTS) {
-    out[`${blocks[a]}_${t}_S26Value`]      = amt(s26.totals[a].in);
-    out[`${blocks[a]}_${t + 53}_S26Value`] = amt(s26.totals[a].out);
+    out[`${blocks[a]}_${t}_S26TotalValue`]      = amt(s26.totals[a].in);
+    out[`${blocks[a]}_${t + 53}_S26TotalValue`] = amt(s26.totals[a].out);
   }
 
-  // Página 2 — resumen de la hoja de cuentas.
-  out['904_44_S26Amount']      = amt(s26.opening.caja);
-  out['904_45_S26Amount']      = amt(s26.totals.caja.in);
-  out['904_46_S26Amount']      = amt(s26.totals.caja.out);
-  out['904_47_S26TotalAmount'] = amt(s26.closing.caja);
-  out['904_49_S26Amount']      = amt(s26.opening.corriente);
-  out['904_51_S26Amount']      = amt(s26.totals.corriente.in);
-  out['904_53_S26Amount']      = amt(s26.totals.corriente.out);
-  out['904_54_S26TotalAmount'] = amt(s26.closing.corriente);
-  out['904_55_S26Amount']      = amt(s26.closing.sucursal);
-  out['904_56_S26TotalAmount'] = amt(s26.closingTotal);
+  // Página 2 — Conciliación Cuenta Principal (Caja de dinero en efectivo).
+  // La congregación no tiene cuenta secundaria, así que 904_44-56 se dejan
+  // en blanco (son los campos de CONCILIACIÓN CUENTA SECUNDARIA, no del resumen).
+  out['904_1_Text_C']          = new Date().toLocaleDateString('es-MX');
+  out['904_24_S26Amount']      = amt(s26.closing.corriente);   // dinero en caja
+  out['904_27_S26TotalAmount'] = amt(s26.closing.corriente);   // saldo conciliado
+
+  // Página 2 — RESUMEN DE LA HOJA DE CUENTAS
+  out['904_28_Text_C']         = s26.monthLabel;
+  out['904_29_S26Amount']      = amt(s26.opening.caja);
+  out['904_30_S26TotalAmount'] = amt(s26.totals.caja.in);
+  out['904_31_S26TotalAmount'] = amt(s26.totals.caja.out);
+  out['904_32_S26TotalAmount'] = amt(s26.closing.caja);
+  out['904_33_S26Amount']      = amt(s26.opening.corriente);
+  out['904_34_S26TotalAmount'] = amt(s26.totals.corriente.in);
+  out['904_35_S26TotalAmount'] = amt(s26.totals.corriente.out);
+  out['904_36_S26TotalAmount'] = amt(s26.closing.corriente);
+  // 904_38-41: CUENTA SECUNDARIA — vacío (la congregación no tiene cuenta secundaria)
+  out['904_42_S26TotalAmount'] = amt(s26.closingTotal);
 
   return out;
 }
@@ -467,15 +479,14 @@ export async function fillS25c(
  * devuelve form.getFields() === [] aunque haya campos físicamente en el PDF.
  * Esta función los vincula antes de operar.
  *
- * Recibe `lib` desde el llamador para garantizar que PDFName/PDFArray/PDFDict
- * son de la MISMA instancia del módulo que creó el objeto `pdf`: si se
- * importasen por separado, instanceof fallaría en webpack y el repair no
- * encontraría los campos.
+ * Usa duck-typing en vez de instanceof para evitar fallos cuando webpack
+ * crea instancias distintas del módulo (instanceof PDFDict/PDFArray falla
+ * cross-chunk y el repair se silencia sin escribir nada).
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function repairAcroFormFields(pdf: any, lib: PdfLib): Promise<void> {
   try {
-    const { PDFName, PDFArray, PDFDict } = lib;
+    const { PDFName, PDFArray } = lib;
 
     const context = pdf.context;
     const pages = pdf.getPages();
@@ -484,20 +495,34 @@ async function repairAcroFormFields(pdf: any, lib: PdfLib): Promise<void> {
     for (const page of pages) {
       const annotsRaw = page.node.get(PDFName.of('Annots'));
       if (!annotsRaw) continue;
+      // PDFArray guard funciona aquí porque Annots siempre viene de la misma
+      // instancia del módulo que cargó el PDF.
       const arr = context.lookupMaybe(annotsRaw, PDFArray) ?? annotsRaw;
       if (typeof arr?.size !== 'function') continue;
       for (let i = 0; i < arr.size(); i++) widgetRefs.push(arr.get(i));
     }
     if (widgetRefs.length === 0) return;
 
-    const acroFormRef = pdf.catalog.get(PDFName.of('AcroForm'));
-    if (!acroFormRef) return;
-    const acroForm = context.lookupMaybe(acroFormRef, PDFDict);
-    if (!acroForm) return;
+    // AcroForm puede estar inline (PDFDict con .get()) o como ref (PDFRef sin .get()).
+    // Se usa duck-typing para no depender de instanceof cross-chunk.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const acroFormRaw: any = pdf.catalog.get(PDFName.of('AcroForm'));
+    if (!acroFormRaw) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const acroForm: any = typeof acroFormRaw.get === 'function'
+      ? acroFormRaw
+      : context.indirectObjects?.get(acroFormRaw);
+    if (typeof acroForm?.get !== 'function') return;
 
-    const fieldsRef = acroForm.get(PDFName.of('Fields'));
-    const existing = fieldsRef ? context.lookupMaybe(fieldsRef, PDFArray) : null;
-    if (existing && existing.size() > 0) return; // ya vinculados
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fieldsRaw: any = acroForm.get(PDFName.of('Fields'));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const existing: any = fieldsRaw
+      ? (typeof fieldsRaw.size === 'function'
+          ? fieldsRaw
+          : context.indirectObjects?.get(fieldsRaw))
+      : null;
+    if (existing && typeof existing.size === 'function' && existing.size() > 0) return;
 
     acroForm.set(PDFName.of('Fields'), context.obj(widgetRefs));
   } catch {
