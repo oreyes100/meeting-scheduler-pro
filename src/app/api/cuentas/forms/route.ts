@@ -284,6 +284,11 @@ export async function GET(request: Request) {
         const [k, v] = pair.split(':');
         if (k && v) answers[k.trim()] = v.trim();
       }
+      // Nombres de auditor y secretario como params separados (evita conflictos con comas)
+      const auditor = p.get('auditor');
+      const secretario = p.get('secretario');
+      if (auditor) answers['auditor'] = auditor;
+      if (secretario) answers['secretario'] = secretario;
       if (debug) return NextResponse.json({ kind, sy, quarter, answers, values: pdfForms.previewValues('s25c', { s25c }, header, answers) });
       bytes = await pdfForms.fillS25c(s25c, header, { calibrate }, answers);
       filename = `S-25c ${sy.replace('/', '-')} T${quarter}${calibrate ? ' (calibracion)' : ''}.pdf`;

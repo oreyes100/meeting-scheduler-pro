@@ -71,6 +71,8 @@ export default function CuentasPage() {
   const [s30, setS30] = useState<S30 | null>(null);
   const [s25c, setS25c] = useState<S25c | null>(null);
   const [s25cAnswers, setS25cAnswers] = useState<S25cAnswers>({});
+  const [auditorName, setAuditorName] = useState('');
+  const [secretarioName, setSecretarioName] = useState('');
   const [summary, setSummary] = useState<Summary | null>(null);
   const [rec, setRec] = useState<Reconcile | null>(null);
   const [codes, setCodes] = useState<CtCode[]>([]);
@@ -439,10 +441,18 @@ export default function CuentasPage() {
                   </button>
                 ))}
                 {formTab === 's25c' && (
-                  <select value={quarter} onChange={e => setQuarter(Number(e.target.value))}
-                          className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 text-xs">
-                    {QUARTERS.map(q => <option key={q.n} value={q.n}>{q.label}</option>)}
-                  </select>
+                  <>
+                    <select value={quarter} onChange={e => setQuarter(Number(e.target.value))}
+                            className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 text-xs">
+                      {QUARTERS.map(q => <option key={q.n} value={q.n}>{q.label}</option>)}
+                    </select>
+                    <input value={auditorName} onChange={e => setAuditorName(e.target.value)}
+                           placeholder="Auditor" title="Auditoría realizada por"
+                           className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 text-xs w-36" />
+                    <input value={secretarioName} onChange={e => setSecretarioName(e.target.value)}
+                           placeholder="Secretario" title="Revisada por (Secretario)"
+                           className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 text-xs w-36" />
+                  </>
                 )}
                 <div className="ml-auto flex items-center gap-2 flex-wrap">
                   {/* PDF oficial sobre plantilla de la organización */}
@@ -450,7 +460,7 @@ export default function CuentasPage() {
                   <a href={formTab === 's25c'
                         ? `/api/cuentas/forms?kind=s25c&sy=${encodeURIComponent(sy)}&quarter=${quarter}&a=${encodeURIComponent(
                             Object.entries(s25cAnswers).filter(([,v])=>v.answer).map(([k,v])=>`${k}:${v.answer}`).join(',')
-                          )}`
+                          )}${auditorName ? `&auditor=${encodeURIComponent(auditorName)}` : ''}${secretarioName ? `&secretario=${encodeURIComponent(secretarioName)}` : ''}`
                         : `/api/cuentas/forms?kind=${formTab}&ym=${ym}`}
                      target="_blank" rel="noopener noreferrer"
                      className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-sky-700 hover:bg-sky-800 text-white">
