@@ -10,10 +10,10 @@ jobs:
       - name: Copy standalone to correct PM2 path and restart
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: congregaciontj.duckdns.org
+          host: ${{ secrets.VPS_HOST }}
           port: 22211
-          username: devops
-          password: ${{ secrets.VPS_SSH_PASSWORD }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
           command_timeout: 120s
           script: |
             echo "=== Copying new standalone to PM2 path ==="

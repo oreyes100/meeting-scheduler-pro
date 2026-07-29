@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
+import { z } from 'zod';
 import { getDb } from '@/lib/sqlite';
 import { signSession, COOKIE_NAME, sessionCookieOptions } from '@/lib/auth';
+
+const LoginSchema = z.object({
+  identifier: z.string().min(1, 'identifier requerido'),
+  password: z.string().min(1, 'password requerido'),
+});
 
 // In-memory rate limit: key → { count, resetAt }
 const attempts = new Map<string, { count: number; resetAt: number }>();
@@ -34,12 +40,13 @@ function clearRateLimit(key: string) {
 
 export async function POST(request: Request) {
   try {
-    const { identifier, password } = await request.json();
-    if (!identifier || !password) {
-      return NextResponse.json({ error: 'identifier y password requeridos' }, { status: 400 });
+    const parsed = LoginSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 });
     }
+    const { identifier, password } = parsed.data;
 
-    const id = String(identifier).trim().toLowerCase();
+    const id = identifier.trim().toLowerCase();
     const rlKey = getRateLimitKey(request, id);
 
     if (!checkRateLimit(rlKey)) {

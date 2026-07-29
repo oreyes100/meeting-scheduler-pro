@@ -80,3 +80,7 @@ data/
 
 # Clave SSH de Cowork — nunca commitear
 .claude/ssh/
+
+# Scripts locales con credenciales — nunca commitear
+deploy-now.sh
+*.local.sh

@@ -33,7 +33,7 @@ function unwrap<T>(mod: T): T {
 }
 
 export async function exportXlsx({ title, subtitle, columns, rows }: PrintTableOptions) {
-  const raw = await import('xlsx');
+  const raw = await import('xlsx-js-style');
   const XLSX: any = unwrap(raw);
   const data = [columns, ...rows.map(r => r.map(cellText))];
   const ws = XLSX.utils.aoa_to_sheet(data);

@@ -1,7 +1,22 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { getDb } from '@/lib/sqlite';
 import { DEFAULT_CIERRE } from '@/lib/cuentas';
 import { requireCuentas, badRequest, serverError } from '../_guard';
+
+const ConfigSchema = z.object({
+  label:          z.string().optional(),
+  city:           z.string().optional(),
+  state:          z.string().optional(),
+  treasurer_name: z.string().optional(),
+  remit_code:     z.string().optional(),
+  res_pub_code:   z.string().optional(),
+  res_pub_amount: z.number().min(0).optional(),
+  res_pct_code:   z.string().optional(),
+  res_pct_percent:z.number().min(0).max(100).optional(),
+  res_pct_source: z.string().optional(),
+  ai_api_key:     z.string().optional(),
+});
 
 /**
  * Encabezado de los formularios S-26 / S-30 / S-25c y parámetros del cierre de mes.
@@ -49,7 +64,9 @@ export async function PUT(request: Request) {
   if (!g.ok) return g.res;
 
   try {
-    const b = await request.json();
+    const parsed = ConfigSchema.safeParse(await request.json());
+    if (!parsed.success) return badRequest(parsed.error.issues[0]?.message ?? 'Datos inválidos');
+    const b = parsed.data;
 
     const pubAmount = Number(b.res_pub_amount ?? 0);
     const pct = Number(b.res_pct_percent ?? 0);
