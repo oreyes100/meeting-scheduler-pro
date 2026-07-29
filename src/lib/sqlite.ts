@@ -253,6 +253,7 @@ export function getDb(): Database.Database {
     `ALTER TABLE cuentas_config ADD COLUMN res_pct_percent real NOT NULL DEFAULT 10`,
     `ALTER TABLE cuentas_config ADD COLUMN res_pct_source text NOT NULL DEFAULT 'C'`,
     `ALTER TABLE cuentas_config ADD COLUMN ai_api_key text`,
+    `ALTER TABLE cuentas_config ADD COLUMN treasurer_name text`,
   ];
   for (const sql of runMigrations) {
     try { _db.exec(sql); } catch { /* column already exists */ }

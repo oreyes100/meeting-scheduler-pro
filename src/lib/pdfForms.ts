@@ -90,7 +90,7 @@ const amt = (n: number | null | undefined) =>
  *   oficial (j) reservados            = f del motor
  *   oficial (k) disponibles           = g del motor
  */
-function mapS30(s30: S30, header: { label: string; city: string; state: string }) {
+function mapS30(s30: S30, header: { label: string; city: string; state: string; treasurer_name?: string }) {
   const inc = (...codes: string[]) =>
     codes.reduce((t, c) => t + (s30.incomeByCode.find(r => r.code === c)?.total ?? 0), 0);
   const exp = (...codes: string[]) =>
@@ -154,6 +154,10 @@ function mapS30(s30: S30, header: { label: string; city: string; state: string }
     '901_27_S30_Value': money(s30.box_kingdom),
     '901_29_S30_Total': money(s30.f),                  // (j)
     '901_30_S30_Total': money(s30.g),                  // (k) disponibles
+
+    // Siervo de cuentas — campo 900_16_Text_C (y≈83, fondo pág 1).
+    // Si el campo es incorrecto, generar S-30 calibración para confirmar.
+    '900_16_Text_C': header.treasurer_name ?? '',
 
     // Página 2 — anuncio que se lee a la congregación
     '900_17_Text_C':    monthLabel(s30.ym),
@@ -458,7 +462,7 @@ export interface FillOptions {
 
 export async function fillS30(
   s30: S30,
-  header: { label: string; city: string; state: string },
+  header: { label: string; city: string; state: string; treasurer_name?: string },
   opts: FillOptions = {},
 ): Promise<Uint8Array> {
   return fill('s30', mapS30(s30, header), opts);

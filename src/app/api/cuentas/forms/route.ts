@@ -236,8 +236,8 @@ export async function GET(request: Request) {
 
     // Encabezado del formulario.
     const cfg = getDb().prepare(
-      `SELECT label, city, state FROM cuentas_config WHERE congregation_id = ?`
-    ).get(g.congreId) as { label: string; city: string; state: string } | undefined;
+      `SELECT label, city, state, treasurer_name FROM cuentas_config WHERE congregation_id = ?`
+    ).get(g.congreId) as { label: string; city: string; state: string; treasurer_name?: string } | undefined;
 
     const congre = getDb().prepare(
       `SELECT name, city FROM congregations WHERE id = ?`
@@ -247,6 +247,7 @@ export async function GET(request: Request) {
       label: cfg?.label || congre?.name || '',
       city:  cfg?.city  || congre?.city || '',
       state: cfg?.state || '',
+      treasurer_name: cfg?.treasurer_name || '',
     };
 
     let bytes: Uint8Array;

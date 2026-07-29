@@ -52,6 +52,31 @@ function txBefore(congreId: string, ym: string): Transaction[] {
   `).all(congreId, ym) as Transaction[];
 }
 
+/**
+ * Filtra transacciones "income" que son el lado receptor de una transferencia
+ * ya registrada en el mismo conjunto — artefacto de la migración del sistema
+ * legacy donde cada depósito generaba DOS registros (salida de caja + entrada
+ * de cuenta). El sistema actual crea un único `transfer` que cubre ambos lados,
+ * por lo que estos income duplicados inflan la columna ENTRADA de corriente.
+ *
+ * Criterio doble para no eliminar ingresos legítimos que coincidan en monto:
+ *   1. El income tiene "(Transferencia recibida)" en su descripción.
+ *   2. Existe un transfer en el mismo conjunto con to_account + date + amount iguales.
+ */
+function dedupeTransferCounterparts<T extends Pick<Transaction, 'type' | 'account' | 'to_account' | 'amount' | 'date' | 'description'>>(txs: T[]): T[] {
+  const arrivals = new Set(
+    txs
+      .filter(t => t.type === 'transfer' && t.to_account)
+      .map(t => `${t.date}|${t.to_account}|${t.amount}`)
+  );
+  if (arrivals.size === 0) return txs;
+  return txs.filter(t =>
+    !(t.type === 'income' &&
+      t.description?.includes('(Transferencia recibida)') &&
+      arrivals.has(`${t.date}|${t.account}|${t.amount}`))
+  );
+}
+
 /** Aplica una transacción sobre un balance mutable. */
 function apply(b: Balance, tx: Pick<Transaction, 'type' | 'account' | 'to_account' | 'amount'>) {
   if (tx.type === 'income') {
@@ -83,13 +108,13 @@ export function carryForward(congreId: string, ym: string): Balance {
 
   const from = anchor ? anchor.ym : '0000-00';
   const rows = db.prepare(`
-    SELECT type, account, to_account, amount
+    SELECT type, account, to_account, amount, date, description
     FROM cuentas_transactions
     WHERE congregation_id = ? AND substr(date,1,7) >= ? AND substr(date,1,7) < ?
     ORDER BY date ASC, created_at ASC
   `).all(congreId, from, ym) as Transaction[];
 
-  for (const tx of rows) apply(b, tx);
+  for (const tx of dedupeTransferCounterparts(rows)) apply(b, tx);
   for (const k of ACCOUNTS) b[k] = round2(b[k]);
   return b;
 }
@@ -184,7 +209,7 @@ export function buildS26(congreId: string, ym: string): S26 {
     caja: { in: 0, out: 0 }, corriente: { in: 0, out: 0 }, sucursal: { in: 0, out: 0 },
   };
 
-  const rows: S26Row[] = txOfMonth(congreId, ym).map(tx => {
+  const rows: S26Row[] = dedupeTransferCounterparts(txOfMonth(congreId, ym)).map(tx => {
     const cols: Record<Account, { in: number; out: number }> = {
       caja: { in: 0, out: 0 }, corriente: { in: 0, out: 0 }, sucursal: { in: 0, out: 0 },
     };
@@ -287,7 +312,7 @@ function groupByCode(txs: Transaction[], descs: Map<string, string>): CodeTotal[
 export function buildS30(congreId: string, ym: string): S30 {
   const descs = codeDescriptions(congreId);
   const opening = openingBalance(congreId, ym);
-  const txs = txOfMonth(congreId, ym);
+  const txs = dedupeTransferCounterparts(txOfMonth(congreId, ym));
 
   const incomes  = txs.filter(t => t.type === 'income');
   const expenses = txs.filter(t => t.type === 'expense');

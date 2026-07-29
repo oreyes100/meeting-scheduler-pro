@@ -134,6 +134,8 @@ export interface Reconcile {
 
 export interface CuentasConfig {
   label: string; city: string; state: string;
+  /** Nombre del siervo de cuentas — aparece en el formulario S-30-S. */
+  treasurer_name: string;
   /** Parámetros del cierre de mes. */
   remit_code: string;
   res_pub_code: string;
@@ -147,7 +149,7 @@ export interface CuentasConfig {
 }
 
 export const EMPTY_CONFIG: CuentasConfig = {
-  label: '', city: '', state: '',
+  label: '', city: '', state: '', treasurer_name: '',
   remit_code: 'SOM', res_pub_code: 'RM', res_pub_amount: 0,
   res_pct_code: 'RM', res_pct_percent: 10, res_pct_source: 'C', has_ai_key: false,
 };

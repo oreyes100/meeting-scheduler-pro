@@ -1082,6 +1082,11 @@ function ConfigPanel({ cfg, setCfg, codes, api, flash, setError }: {
                      placeholder="MICH" className={inp} />
             </div>
           </div>
+          <div>
+            <label className={lbl}>Siervo de cuentas</label>
+            <input value={v.treasurer_name ?? ''} onChange={e => edit({ treasurer_name: e.target.value })}
+                   placeholder="Nombre completo" className={inp} />
+          </div>
         </div>
       </div>
 

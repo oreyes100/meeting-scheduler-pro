@@ -20,7 +20,7 @@ export async function GET() {
     ).get(g.congreId) as { name: string; city: string | null } | undefined;
 
     const cfg = db.prepare(
-      `SELECT label, city, state, remit_code, res_pub_code, res_pub_amount,
+      `SELECT label, city, state, treasurer_name, remit_code, res_pub_code, res_pub_amount,
               res_pct_code, res_pct_percent, res_pct_source
        FROM cuentas_config WHERE congregation_id = ?`
     ).get(g.congreId) as Record<string, unknown> | undefined;
@@ -30,6 +30,7 @@ export async function GET() {
         label: (cfg?.label as string) || congre?.name || '',
         city:  (cfg?.city as string)  || congre?.city || '',
         state: (cfg?.state as string) || '',
+        treasurer_name: (cfg?.treasurer_name as string) || '',
         remit_code:      (cfg?.remit_code as string)      ?? DEFAULT_CIERRE.remit_code,
         res_pub_code:    (cfg?.res_pub_code as string)    ?? DEFAULT_CIERRE.res_pub_code,
         res_pub_amount:  Number(cfg?.res_pub_amount  ?? DEFAULT_CIERRE.res_pub_amount),
@@ -60,11 +61,12 @@ export async function PUT(request: Request) {
 
     getDb().prepare(`
       INSERT INTO cuentas_config
-        (congregation_id, label, city, state, remit_code, res_pub_code, res_pub_amount,
+        (congregation_id, label, city, state, treasurer_name, remit_code, res_pub_code, res_pub_amount,
          res_pct_code, res_pct_percent, res_pct_source, ai_api_key, updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?, datetime('now'))
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?, datetime('now'))
       ON CONFLICT(congregation_id) DO UPDATE SET
         label = excluded.label, city = excluded.city, state = excluded.state,
+        treasurer_name = excluded.treasurer_name,
         remit_code = excluded.remit_code, res_pub_code = excluded.res_pub_code,
         res_pub_amount = excluded.res_pub_amount, res_pct_code = excluded.res_pct_code,
         res_pct_percent = excluded.res_pct_percent, res_pct_source = excluded.res_pct_source,
@@ -78,6 +80,7 @@ export async function PUT(request: Request) {
       b.label != null ? String(b.label).trim() : null,
       b.city  != null ? String(b.city).trim()  : null,
       b.state != null ? String(b.state).trim() : null,
+      b.treasurer_name != null ? String(b.treasurer_name).trim() : null,
       code(b.remit_code,     DEFAULT_CIERRE.remit_code),
       code(b.res_pub_code,   DEFAULT_CIERRE.res_pub_code),
       pubAmount,
