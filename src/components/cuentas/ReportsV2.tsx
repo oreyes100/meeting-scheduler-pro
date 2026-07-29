@@ -1,9 +1,10 @@
 'use client';
 
 import React from 'react';
+import { Pencil, Trash2 } from 'lucide-react';
 import {
   ACCOUNTS, ACCOUNT_LABELS, money, num,
-  type Account, type S26, type S30, type S25c, type Summary, type Reconcile, type CuentasConfig,
+  type Account, type S26, type S26Row, type S30, type S25c, type Summary, type Reconcile, type CuentasConfig,
   type S25cAnswers, type S25cAnswer, type S25cAnswerValue,
 } from './types';
 
@@ -27,16 +28,28 @@ export function FormHeader({ title, subtitle, cfg, right }: {
 
 /* ── S-26: Hoja de cuentas (grid oficial de 10 columnas) ────────────────────── */
 
-export function S26Sheet({ s26, official = false }: { s26: S26; official?: boolean }) {
+export function S26Sheet({
+  s26,
+  official = false,
+  onEdit,
+  onDelete,
+  onOpeningEdit,
+}: {
+  s26: S26;
+  official?: boolean;
+  onEdit?: (r: S26Row) => void;
+  onDelete?: (r: S26Row) => void;
+  onOpeningEdit?: () => void;
+}) {
   const cell = 'px-2 py-1 text-right tabular-nums';
   const border = 'border border-gray-300 dark:border-gray-600';
+  const showActions = !official && (onEdit || onDelete || onOpeningEdit);
+  const colSpanBase = 10;
 
   return (
     <div className="overflow-x-auto">
       <table className={`w-full text-xs ${border}`} style={{ borderCollapse: 'collapse' }}>
         <thead>
-          {/* Encabezado de dos niveles: 4 columnas simples con rowSpan y 3 cuentas
-              con colSpan=2 (Entrada / Salida), igual que el formulario impreso. */}
           <tr className="bg-gray-100 dark:bg-gray-700">
             <th rowSpan={2} className={`${border} px-2 py-1`}>FECHA</th>
             <th rowSpan={2} className={`${border} px-2 py-1 text-left`}>DESCRIPCIÓN DE TRANSACCIÓN</th>
@@ -45,6 +58,7 @@ export function S26Sheet({ s26, official = false }: { s26: S26; official?: boole
             <th colSpan={2} className={`${border} px-2 py-1`}>CUENTA PRINCIPAL</th>
             <th colSpan={2} className={`${border} px-2 py-1`}>CUENTA SECUNDARIA</th>
             <th rowSpan={2} className={`${border} px-2 py-1`}>SALDO</th>
+            {showActions && <th rowSpan={2} className={`${border} px-1 py-1 print:hidden`} />}
           </tr>
           <tr className="bg-gray-100 dark:bg-gray-700">
             {ACCOUNTS.map(a => (
@@ -63,6 +77,17 @@ export function S26Sheet({ s26, official = false }: { s26: S26; official?: boole
             </td>
             <td className={border} colSpan={6} />
             <td className={`${border} ${cell}`}>{s26.openingTotal.toFixed(2)}</td>
+            {showActions && (
+              <td className={`${border} px-1 print:hidden`}>
+                {onOpeningEdit && (
+                  <button onClick={onOpeningEdit}
+                          className="p-0.5 text-gray-400 hover:text-emerald-600"
+                          title="Editar saldo inicial">
+                    <Pencil size={11} />
+                  </button>
+                )}
+              </td>
+            )}
           </tr>
 
           {s26.rows.map(r => (
@@ -77,20 +102,39 @@ export function S26Sheet({ s26, official = false }: { s26: S26; official?: boole
                 </React.Fragment>
               ))}
               <td className={`${border} ${cell} font-medium`}>{r.saldo.toFixed(2)}</td>
+              {showActions && (
+                <td className={`${border} px-1 print:hidden`}>
+                  <div className="flex gap-0.5 justify-center">
+                    {onEdit && (
+                      <button onClick={() => onEdit(r)}
+                              className="p-0.5 text-gray-400 hover:text-emerald-600"
+                              title="Editar">
+                        <Pencil size={11} />
+                      </button>
+                    )}
+                    {onDelete && !r.receipt_ref?.startsWith('CIERRE-') && (
+                      <button onClick={() => onDelete(r)}
+                              className="p-0.5 text-gray-400 hover:text-red-600"
+                              title="Eliminar">
+                        <Trash2 size={11} />
+                      </button>
+                    )}
+                  </div>
+                </td>
+              )}
             </tr>
           ))}
 
           {s26.rows.length === 0 && (
             <tr>
-              <td className={`${border} px-2 py-6 text-center text-gray-400`} colSpan={10}>
+              <td className={`${border} px-2 py-6 text-center text-gray-400`} colSpan={showActions ? colSpanBase + 1 : colSpanBase}>
                 Sin transacciones en este mes.
               </td>
             </tr>
           )}
 
-          {/* Relleno de filas vacías para que el formulario impreso conserve su alto */}
           {official && Array.from({ length: Math.max(0, 26 - s26.rows.length) }).map((_, i) => (
-            <tr key={`pad-${i}`}><td className={border} colSpan={10}>&nbsp;</td></tr>
+            <tr key={`pad-${i}`}><td className={border} colSpan={colSpanBase}>&nbsp;</td></tr>
           ))}
 
           <tr className="bg-gray-100 dark:bg-gray-700 font-semibold">
@@ -102,6 +146,7 @@ export function S26Sheet({ s26, official = false }: { s26: S26; official?: boole
               </React.Fragment>
             ))}
             <td className={`${border} ${cell}`}>{s26.closingTotal.toFixed(2)}</td>
+            {showActions && <td className={`${border} print:hidden`} />}
           </tr>
         </tbody>
       </table>

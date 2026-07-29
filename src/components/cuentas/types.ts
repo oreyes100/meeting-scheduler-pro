@@ -143,6 +143,8 @@ export interface CuentasConfig {
   res_pct_code: string;
   res_pct_percent: number;
   res_pct_source: string;
+  maintenance_code: string;
+  maintenance_amount: number;
   /** El servidor nunca devuelve la clave, solo si existe. */
   has_ai_key?: boolean;
   ai_api_key?: string;
@@ -151,11 +153,13 @@ export interface CuentasConfig {
 export const EMPTY_CONFIG: CuentasConfig = {
   label: '', city: '', state: '', treasurer_name: '',
   remit_code: 'SOM', res_pub_code: 'RM', res_pub_amount: 0,
-  res_pct_code: 'RM', res_pct_percent: 10, res_pct_source: 'C', has_ai_key: false,
+  res_pct_code: 'RM', res_pct_percent: 10, res_pct_source: 'C',
+  maintenance_code: 'GC', maintenance_amount: 0,
+  has_ai_key: false,
 };
 
 export interface CierreEntry {
-  kind: 'remit' | 'res_pub' | 'res_pct';
+  kind: 'remit' | 'res_pub' | 'res_pct' | 'maintenance';
   code: string;
   description: string;
   amount: number;

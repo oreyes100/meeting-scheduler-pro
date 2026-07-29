@@ -383,33 +383,12 @@ export default function CuentasPage() {
                 </button>
               </div>
 
-              <S26Sheet s26={filteredS26} />
-
-              {/* Acciones por fila, separadas del formulario oficial */}
-              {visibleRows.length > 0 && (
-                <div className="print:hidden">
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Editar o eliminar asientos</p>
-                  <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
-                    {visibleRows.map(r => (
-                      <div key={r.id} className="flex items-center gap-2 px-3 py-1.5 text-xs">
-                        <span className="font-mono text-gray-400 w-20 shrink-0">{r.date}</span>
-                        <span className="w-10 shrink-0 font-medium">{r.code}</span>
-                        <span className="flex-1 truncate">{r.description}</span>
-                        <span className="tabular-nums shrink-0">{money(r.amount)}</span>
-                        {r.receipt_ref?.startsWith('CIERRE-') && (
-                          <span className="shrink-0 px-1.5 py-0.5 rounded bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300">cierre</span>
-                        )}
-                        <button onClick={() => openEdit(r)} className="p-1 text-gray-400 hover:text-emerald-600 shrink-0">
-                          <Pencil size={12} />
-                        </button>
-                        <button onClick={() => deleteTx(r)} className="p-1 text-gray-400 hover:text-red-600 shrink-0">
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <S26Sheet
+                s26={filteredS26}
+                onEdit={openEdit}
+                onDelete={deleteTx}
+                onOpeningEdit={() => setModal('opening')}
+              />
             </>
           )}
 
@@ -805,9 +784,10 @@ interface CierrePreview {
 }
 
 const KIND_LABEL: Record<CierreEntry['kind'], string> = {
-  remit:   'Remesa de obra mundial',
-  res_pub: 'Resolución por publicador',
-  res_pct: 'Resolución porcentual',
+  remit:       'Remesa de obra mundial',
+  res_pub:     'Resolución por publicador',
+  res_pct:     'Resolución porcentual',
+  maintenance: 'Mantenimiento',
 };
 
 function CierreModal({ ym, api, onClose, onDone }: {
@@ -1155,6 +1135,25 @@ function ConfigPanel({ cfg, setCfg, codes, api, flash, setError }: {
             </div>
             <p className="text-[11px] text-gray-400 mt-1">
               Por omisión, 10% de las donaciones para la congregación (código C) del mes.
+            </p>
+          </div>
+
+          <div className="pt-3 border-t border-gray-100 dark:border-gray-700">
+            <p className="text-xs font-semibold mb-2">Mantenimiento mensual</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={lbl}>Monto fijo ($)</label>
+                <input type="number" min="0" step="0.01" value={v.maintenance_amount}
+                       onChange={e => edit({ maintenance_amount: Number(e.target.value) || 0 })}
+                       className={inp} />
+              </div>
+              <div>
+                <label className={lbl}>Código</label>
+                {codeSelect(v.maintenance_code, c => edit({ maintenance_code: c }), 'expense')}
+              </div>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1">
+              Gasto mensual fijo de mantenimiento del Salón del Reino. En 0 no se genera el asiento.
             </p>
           </div>
         </div>

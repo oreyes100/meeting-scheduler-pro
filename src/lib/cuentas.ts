@@ -634,7 +634,8 @@ export function buildReconcile(congreId: string, ym: string): { ym: string; mont
 export function cierreConfig(congreId: string): CierreConfig {
   try {
     const row = getDb().prepare(`
-      SELECT remit_code, res_pub_code, res_pub_amount, res_pct_code, res_pct_percent, res_pct_source
+      SELECT remit_code, res_pub_code, res_pub_amount, res_pct_code, res_pct_percent, res_pct_source,
+             maintenance_code, maintenance_amount
       FROM cuentas_config WHERE congregation_id = ?
     `).get(congreId) as CierreConfig | undefined;
     return row ? { ...DEFAULT_CIERRE, ...row } : { ...DEFAULT_CIERRE };
@@ -711,6 +712,17 @@ export function cierrePreview(
         basis: `${cfg.res_pct_percent}% de ${base.toFixed(2)} (código ${cfg.res_pct_source})`,
       });
     }
+  }
+
+  // 4 · Mantenimiento mensual fijo
+  if (cfg.maintenance_amount > 0) {
+    entries.push({
+      kind: 'maintenance',
+      code: cfg.maintenance_code,
+      description: `Mantenimiento (${monthLabel(ym)})`,
+      amount: cfg.maintenance_amount,
+      basis: `Monto fijo mensual configurado`,
+    });
   }
 
   return { config: cfg, entries, total: round2(entries.reduce((s, e) => s + e.amount, 0)) };
