@@ -1,0 +1,27 @@
+name: Fix VPS Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Copy standalone to correct PM2 path and restart
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: congregaciontj.duckdns.org
+          port: 22211
+          username: devops
+          password: ${{ secrets.VPS_SSH_PASSWORD }}
+          command_timeout: 120s
+          script: |
+            echo "=== Copying new standalone to PM2 path ==="
+            cp -r /opt/msp/standalone/. /opt/msp/.next/standalone/
+            echo "=== Restarting PM2 ==="
+            ~/.npm-global/bin/pm2 restart meeting-scheduler-pro --update-env
+            sleep 5
+            ~/.npm-global/bin/pm2 list
+            echo "=== Health check ==="
+            curl -sk --max-time 15 https://congregaciontj.duckdns.org/api/health || echo "health endpoint not yet up"
+            echo "=== DONE ==="
