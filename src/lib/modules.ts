@@ -44,6 +44,7 @@ export const MODULES: AppModule[] = [
   { key: 'permissions', path: '/permissions', title: 'Privilegios', description: 'Control de acceso por usuario', Icon: ShieldCheck, adminOnly: true },
   { key: 'backup', path: '/backup', title: 'Respaldar y Restaurar', description: 'Exportar/importar la base de datos — puede borrar datos existentes', Icon: Archive, adminOnly: true },
   { key: 'cuentas', path: '/cuentas', title: 'Cuentas', description: 'Contabilidad de la congregación (S-26, S-30)', Icon: Banknote },
+  { key: 'cuentas-v2', path: '/cuentas-v2', title: 'Cuentas v2 ⚗️', description: 'Contabilidad — nueva versión en desarrollo (S-25c interactivo)', Icon: Banknote, adminOnly: true },
   { key: 'super-admin', path: '/super-admin', title: 'Super Administrador', description: 'Gestionar congregaciones y módulos habilitados', Icon: Building2, superAdminOnly: true },
 ];
 

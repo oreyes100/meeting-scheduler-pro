@@ -4,6 +4,7 @@ import React from 'react';
 import {
   ACCOUNTS, ACCOUNT_LABELS, money, num,
   type Account, type S26, type S30, type S25c, type Summary, type Reconcile, type CuentasConfig,
+  type S25cAnswers, type S25cAnswer, type S25cAnswerValue,
 } from './types';
 
 /* ── Encabezado oficial compartido por los tres formularios ─────────────────── */
@@ -295,135 +296,351 @@ export function S30Report({ s30 }: { s30: S30 }) {
 
 /* ── S-25c: Auditoría trimestral ────────────────────────────────────────────── */
 
-export function S25cReport({ s25c }: { s25c: S25c }) {
-  const border = 'border border-gray-300 dark:border-gray-600';
+/** Campo de respuesta Sí / No / N.A. con nota opcional. */
+function AnswerField({
+  qKey, answers, onChange, autoLabel,
+}: {
+  qKey: string;
+  answers: S25cAnswers;
+  onChange: (key: string, val: S25cAnswer) => void;
+  autoLabel?: string; // tooltip indicando el valor auto-calculado
+}) {
+  const v: S25cAnswer = answers[qKey] ?? { answer: '', notes: '' };
+  const selCls = 'border border-gray-300 dark:border-gray-600 rounded px-2 py-0.5 text-xs bg-white dark:bg-gray-800 focus:outline-none focus:border-sky-500';
+  const noteCls = 'flex-1 min-w-0 border border-gray-200 dark:border-gray-600 rounded px-2 py-0.5 text-xs bg-white dark:bg-gray-800 placeholder-gray-400 focus:outline-none focus:border-sky-500';
+
+  const badge = v.answer === 'si'
+    ? <span className="text-emerald-700 dark:text-emerald-400 font-semibold text-xs">✓ Sí</span>
+    : v.answer === 'no'
+    ? <span className="text-red-700 dark:text-red-400 font-semibold text-xs">✗ No</span>
+    : v.answer === 'na'
+    ? <span className="text-gray-500 text-xs">N/A</span>
+    : null;
 
   return (
-    <div className="text-xs space-y-4">
+    <div className="mt-1.5 flex flex-wrap items-center gap-2 print:gap-4">
+      <select
+        value={v.answer}
+        onChange={e => onChange(qKey, { ...v, answer: e.target.value as S25cAnswerValue })}
+        className={selCls}
+        title={autoLabel ? `Auto: ${autoLabel}` : undefined}
+      >
+        <option value="">— sin responder —</option>
+        <option value="si">✓ Sí</option>
+        <option value="no">✗ No</option>
+        <option value="na">N/A</option>
+      </select>
+      {badge}
+      {(v.answer === 'si' || v.answer === 'no') && (
+        <input
+          value={v.notes}
+          placeholder="Observaciones…"
+          onChange={e => onChange(qKey, { ...v, notes: e.target.value })}
+          className={noteCls}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Bloque de comentarios de sección (notas libres que van a los campos de texto del PDF). */
+function SectionNotes({
+  noteKey, answers, onChange, label = 'Comentarios:',
+}: {
+  noteKey: string;
+  answers: S25cAnswers;
+  onChange: (key: string, val: S25cAnswer) => void;
+  label?: string;
+}) {
+  const v: S25cAnswer = answers[noteKey] ?? { answer: 'na', notes: '' };
+  return (
+    <div className="mt-2">
+      <label className="text-xs text-gray-500 dark:text-gray-400">{label}</label>
+      <textarea
+        rows={2}
+        value={v.notes}
+        placeholder="Escriba aquí las observaciones…"
+        onChange={e => onChange(noteKey, { answer: 'na', notes: e.target.value })}
+        className="mt-0.5 w-full border border-gray-200 dark:border-gray-600 rounded px-2 py-1 text-xs bg-white dark:bg-gray-800 placeholder-gray-400 focus:outline-none focus:border-sky-500 resize-none"
+      />
+    </div>
+  );
+}
+
+export function S25cReport({
+  s25c, answers = {}, onAnswerChange,
+}: {
+  s25c: S25c;
+  answers?: S25cAnswers;
+  onAnswerChange?: (key: string, val: S25cAnswer) => void;
+}) {
+  const border = 'border border-gray-300 dark:border-gray-600';
+  const noop = () => {};
+  const onChange = onAnswerChange ?? noop;
+  const auto = s25c.autoAnswers ?? {};
+
+  const AF = (qKey: string) => (
+    <AnswerField qKey={qKey} answers={answers} onChange={onChange}
+      autoLabel={auto[qKey]} />
+  );
+
+  const totalExpenseCount = s25c.months.reduce((s, m) => s + m.expenseCount, 0);
+  const totalWithReceipt  = s25c.months.reduce((s, m) => s + m.expenseWithReceipt, 0);
+  const totalMissing      = totalExpenseCount - totalWithReceipt;
+
+  return (
+    <div className="text-xs space-y-5">
       <p className="text-center">
-        <strong>Trimestre auditado:</strong> {s25c.months[0]?.label} hasta {s25c.months[2]?.label}
+        <strong>Trimestre auditado:</strong> {s25c.months[0]?.label} – {s25c.months[2]?.label}
+        {' · '}<span className={s25c.reconciled
+          ? 'text-emerald-700 dark:text-emerald-400'
+          : 'text-red-700 dark:text-red-400 font-semibold'}>
+          {s25c.reconciled ? '✓ Cuadrado' : '✗ Descuadrado'}
+        </span>
       </p>
 
-      <p className="text-justify text-gray-600 dark:text-gray-400 leading-relaxed">
-        Para comenzar la auditoría trimestral, el siervo de cuentas debe suministrar el archivo actual
-        de las cuentas de la congregación y el archivo de aprobaciones vigentes. El secretario debe
-        suministrar las copias de todas las donaciones anotadas en los formularios <em>Registro de
-        transacción</em> (S-24) de los meses auditados. El auditor deberá disponer de las
-        <em> Instrucciones para la contabilidad de la congregación</em> (S-27c).
-      </p>
-
+      {/* ── Datos de referencia del sistema ───────────────────────────────── */}
       <div>
-        <p className="font-semibold mb-1">VERIFICACIÓN DE LAS DONACIONES</p>
-        <ol className="list-decimal ml-5 space-y-2 text-gray-600 dark:text-gray-400">
-          <li>
-            Sume, por mes, las copias de los formularios <em>Registro de transacción</em> (S-24) de las
-            donaciones que le haya entregado el secretario. Compare el total de cada mes con el total de
-            la columna «Recibido/Entrada» de la <em>Hoja de cuentas</em> (S-26) del mes correspondiente.
-            <p className="mt-1 text-gray-800 dark:text-gray-200">
-              <strong>Datos del sistema para comparar:</strong>{' '}
-              {s25c.months.map(m => `${m.label}: ${money(m.income)}`).join(' · ')}
-            </p>
-            <p className="text-gray-500">¿Coinciden los totales? ______________</p>
-          </li>
-          <li>¿Se registran todas las donaciones en la <em>Hoja de cuentas</em>? ______________</li>
-          <li>¿Se anotan correctamente los códigos de las entradas? ______________</li>
-          <li>Compare las fechas y las cantidades de los depósitos con la <em>Hoja de cuentas</em>.
-              ¿Se hacen los depósitos semanalmente? ______________</li>
-        </ol>
-      </div>
-
-      <div>
-        <p className="font-semibold mb-1">VERIFICACIÓN DE LOS DESEMBOLSOS</p>
-        <ol className="list-decimal ml-5 space-y-2 text-gray-600 dark:text-gray-400">
-          <li>¿Hay una factura, resolución u otro documento justificativo para todos los pagos
-              anotados en la <em>Hoja de cuentas</em>? ______________</li>
-          <li>¿Aprueba el coordinador del cuerpo de ancianos todas las facturas y recibos? ______________</li>
-          <li>
-            ¿Se envían a la sucursal todas las donaciones recogidas para la obra mundial?
-            <p className="mt-1 text-gray-800 dark:text-gray-200">
-              <strong>Donaciones OM recibidas:</strong> {money(s25c.totals.omIncome)} ·{' '}
-              <strong>Remesas enviadas:</strong> {money(s25c.totals.omRemit)}
-              {Math.abs(s25c.totals.omIncome - s25c.totals.omRemit) >= 0.01 && (
-                <span className="text-amber-700 dark:text-amber-400">
-                  {' '}· diferencia {money(s25c.totals.omIncome - s25c.totals.omRemit)}
-                </span>
-              )}
-            </p>
-          </li>
-          <li>¿Se abonan lo antes posible todos los cargos de la sucursal? ______________</li>
-          <li>
-            Compare el <em>Registro de traspaso de fondos</em> (TO-62) de cada mes con el acuse de
-            recibo de donación enviado por la sucursal.
-            <p className="mt-1 text-gray-800 dark:text-gray-200">
-              <strong>Donaciones para obra mundial (OM/DO) registradas:</strong> {money(s25c.totals.omIncome)} ·{' '}
-              <strong>Remesas (SOM/RE/ROM) registradas:</strong> {money(s25c.totals.omRemit)}
-            </p>
-            <p className="text-gray-500">¿Coinciden las cantidades? ______________</p>
-          </li>
-          <li>¿Se envían a la sucursal, en concepto de donación para la obra mundial, los fondos que
-              superan el saldo máximo de la congregación durante varios meses? ______________</li>
-        </ol>
-      </div>
-
-      <div>
-        <p className="font-semibold mb-1">VERIFICACIÓN DE LA CUENTA PRINCIPAL</p>
-        <ol className="list-decimal ml-5 space-y-2 text-gray-600 dark:text-gray-400">
-          <li>
-            En la página 2 de la <em>Hoja de cuentas</em> (S-26) de cada mes, ¿coincide el saldo de la
-            caja de efectivo conciliado con la cantidad de «Cuenta principal/Saldo final» del recuadro
-            «Resumen de la hoja de cuentas»?
-            <p className="mt-1 text-gray-800 dark:text-gray-200">
-              <strong>Verificación del sistema:</strong> fondos al final del trimestre ={' '}
-              {money(s25c.closingFunds)}
-            </p>
-            <p className="text-gray-500">
-              (El sistema verifica automáticamente que fondos finales = fondos iniciales + ingresos − gastos.)
-            </p>
-          </li>
-          <li>¿Hay un <em>Registro de transacción</em> (S-24) de pago debidamente cumplimentado por
-              cada pago registrado en la <em>Hoja de cuentas</em>? ______________</li>
-        </ol>
-      </div>
-
-      <div>
-        <p className="font-semibold mb-1">DATOS DEL SISTEMA PARA LA AUDITORÍA</p>
+        <p className="font-semibold mb-1 text-gray-600 dark:text-gray-400">DATOS DEL SISTEMA</p>
         <table className={`w-full ${border}`} style={{ borderCollapse: 'collapse' }}>
           <thead>
             <tr className="bg-gray-100 dark:bg-gray-700">
               <th className={`${border} px-2 py-1 text-left`}>Mes</th>
-              <th className={`${border} px-2 py-1 text-right`}>Recibido (Entrada)</th>
+              <th className={`${border} px-2 py-1 text-right`}>Recibido</th>
               <th className={`${border} px-2 py-1 text-right`}>Desembolsos</th>
-              <th className={`${border} px-2 py-1 text-right`}>Donaciones OM</th>
+              <th className={`${border} px-2 py-1 text-right`}>Don. OM</th>
               <th className={`${border} px-2 py-1 text-right`}>Remesas OM</th>
+              <th className={`${border} px-2 py-1 text-right`}>Egresos</th>
+              <th className={`${border} px-2 py-1 text-right`}>Con comprobante</th>
             </tr>
           </thead>
           <tbody>
-            {s25c.months.map(m => (
-              <tr key={m.ym}>
-                <td className={`${border} px-2 py-1`}>{m.label}</td>
-                <td className={`${border} px-2 py-1 text-right tabular-nums`}>{money(m.income)}</td>
-                <td className={`${border} px-2 py-1 text-right tabular-nums`}>{money(m.expense)}</td>
-                <td className={`${border} px-2 py-1 text-right tabular-nums`}>{money(m.omIncome)}</td>
-                <td className={`${border} px-2 py-1 text-right tabular-nums`}>{money(m.omRemit)}</td>
-              </tr>
-            ))}
+            {s25c.months.map(m => {
+              const missing = m.expenseCount - m.expenseWithReceipt;
+              return (
+                <tr key={m.ym}>
+                  <td className={`${border} px-2 py-1`}>{m.label}</td>
+                  <td className={`${border} px-2 py-1 text-right tabular-nums`}>{money(m.income)}</td>
+                  <td className={`${border} px-2 py-1 text-right tabular-nums`}>{money(m.expense)}</td>
+                  <td className={`${border} px-2 py-1 text-right tabular-nums`}>{money(m.omIncome)}</td>
+                  <td className={`${border} px-2 py-1 text-right tabular-nums`}>{money(m.omRemit)}</td>
+                  <td className={`${border} px-2 py-1 text-right tabular-nums`}>{m.expenseCount}</td>
+                  <td className={`${border} px-2 py-1 text-right tabular-nums ${missing > 0 ? 'text-amber-700 dark:text-amber-400 font-semibold' : 'text-emerald-700 dark:text-emerald-400'}`}>
+                    {missing > 0 ? `⚠ ${m.expenseWithReceipt}/${m.expenseCount}` : `✓ ${m.expenseWithReceipt}`}
+                  </td>
+                </tr>
+              );
+            })}
             <tr className="bg-gray-100 dark:bg-gray-700 font-semibold">
-              <td className={`${border} px-2 py-1`}>Total del trimestre</td>
+              <td className={`${border} px-2 py-1`}>Trimestre</td>
               <td className={`${border} px-2 py-1 text-right tabular-nums`}>{money(s25c.totals.income)}</td>
               <td className={`${border} px-2 py-1 text-right tabular-nums`}>{money(s25c.totals.expense)}</td>
               <td className={`${border} px-2 py-1 text-right tabular-nums`}>{money(s25c.totals.omIncome)}</td>
               <td className={`${border} px-2 py-1 text-right tabular-nums`}>{money(s25c.totals.omRemit)}</td>
+              <td className={`${border} px-2 py-1 text-right tabular-nums`}>{totalExpenseCount}</td>
+              <td className={`${border} px-2 py-1 text-right tabular-nums ${totalMissing > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
+                {totalMissing > 0 ? `⚠ ${totalWithReceipt}/${totalExpenseCount}` : `✓ ${totalWithReceipt}`}
+              </td>
             </tr>
           </tbody>
         </table>
+        <p className="mt-1 text-gray-500 dark:text-gray-400">
+          Fondos inicio: <strong className="text-gray-800 dark:text-gray-200">{money(s25c.openingFunds)}</strong>
+          {' · '}Fondos final: <strong className="text-gray-800 dark:text-gray-200">{money(s25c.closingFunds)}</strong>
+        </p>
+      </div>
 
-        <p className="mt-2">
-          Fondos al inicio del trimestre: <strong>{money(s25c.openingFunds)}</strong> ·
-          Fondos al final del trimestre: <strong>{money(s25c.closingFunds)}</strong>
+      {/* ── 1. Verificación de las donaciones ────────────────────────────── */}
+      <div>
+        <p className="font-semibold mb-2 border-b border-gray-200 dark:border-gray-600 pb-1">
+          VERIFICACIÓN DE LAS DONACIONES
         </p>
-        <p className={s25c.reconciled ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}>
-          {s25c.reconciled ? '✓' : '✗'} CONCILIACIÓN: Fondos finales = Fondos iniciales + Ingresos − Gastos
+        <ol className="list-decimal ml-5 space-y-3 text-gray-700 dark:text-gray-300">
+          <li>
+            Sume, por mes, los formularios <em>Registro de transacción</em> (S-24) y compare con la
+            columna «Recibido/Entrada» de la <em>Hoja de cuentas</em> (S-26).{' '}
+            <em>Sistema:</em>{' '}
+            {s25c.months.map(m => `${m.label.split(' ')[0]} ${money(m.income)}`).join(' · ')}.
+            ¿Coinciden los totales?
+            {AF('don.1')}
+          </li>
+          <li>
+            ¿Se registran todas las donaciones en la <em>Hoja de cuentas</em>?
+            {AF('don.2')}
+          </li>
+          <li>
+            Para los tres meses, compare cada <em>Registro de transacción</em> con la descripción y el
+            código registrados en la <em>Hoja de cuentas</em>. ¿Se anotan correctamente los códigos?
+            {AF('don.3')}
+          </li>
+          <li>
+            Compare las fechas y las cantidades de los depósitos en la caja de efectivo con la{' '}
+            <em>Hoja de cuentas</em>. ¿Se hacen los depósitos semanalmente?
+            {AF('don.4')}
+          </li>
+        </ol>
+        <SectionNotes noteKey="don_notes" answers={answers} onChange={onChange} />
+      </div>
+
+      {/* ── 2. Verificación de los desembolsos ───────────────────────────── */}
+      <div>
+        <p className="font-semibold mb-2 border-b border-gray-200 dark:border-gray-600 pb-1">
+          VERIFICACIÓN DE LOS DESEMBOLSOS
         </p>
+        <ol className="list-decimal ml-5 space-y-3 text-gray-700 dark:text-gray-300">
+          <li>
+            <ol className="list-[lower-alpha] ml-5 space-y-2">
+              <li>
+                ¿Hay una factura, resolución u otro documento justificativo para <strong>todos</strong>{' '}
+                los pagos anotados en la <em>Hoja de cuentas</em>?
+                {totalMissing > 0 && (
+                  <p className="mt-0.5 text-amber-700 dark:text-amber-400">
+                    ⚠ El sistema detecta {totalMissing} {totalMissing === 1 ? 'egreso sin' : 'egresos sin'} comprobante.
+                  </p>
+                )}
+                {AF('des.1a')}
+              </li>
+              <li>
+                ¿Aprueba (poniendo sus iniciales) el coordinador del cuerpo de ancianos, u otro anciano
+                asignado en su ausencia, todas las facturas, los recibos de compra o los formularios
+                <em> Registro de transacción</em> (S-24)?
+                {AF('des.1b')}
+              </li>
+              <li>
+                ¿Aprueba la congregación mediante resolución los desembolsos de gastos no habituales
+                que superen el límite aprobado por transacción?{' '}
+                <em>(Indique «N/A» si la pregunta no aplica.)</em>
+                {AF('des.1c')}
+              </li>
+            </ol>
+          </li>
+          <li>
+            ¿Se envían a la sucursal todas las donaciones recogidas para la obra mundial según se
+            indica en el Apéndice B de las <em>Instrucciones para la contabilidad de la
+            congregación</em> (S-27c)?{' '}
+            <em>Sistema: OM recibido {money(s25c.totals.omIncome)} · Remesas enviadas {money(s25c.totals.omRemit)}.
+            {Math.abs(s25c.totals.omIncome - s25c.totals.omRemit) >= 0.01 && (
+              <span className="text-amber-700 dark:text-amber-400">
+                {' '}Diferencia: {money(Math.abs(s25c.totals.omIncome - s25c.totals.omRemit))}.
+              </span>
+            )}</em>
+            {AF('des.2')}
+          </li>
+          <li>
+            ¿Se envían a la sucursal las cantidades totales de las donaciones mensuales aprobadas por
+            resolución?{' '}
+            <em>(Indique «N/A» si las donaciones se han reducido para sufragar gastos pendientes.)</em>
+            {AF('des.3')}
+          </li>
+          <li>
+            ¿Se abonan lo antes posible todos los cargos de la sucursal?{' '}
+            <em>(Vea el último extracto enviado por la sucursal. Indique «N/A» si no ha habido cargos.)</em>
+            {AF('des.4')}
+          </li>
+          <li>
+            Compare el <em>Registro de traspaso de fondos</em> (TO-62) de cada mes con el acuse de
+            recibo de donación enviado por la sucursal.{' '}
+            <em>Sistema: OM {money(s25c.totals.omIncome)} · SOM/ROM {money(s25c.totals.omRemit)}.</em>{' '}
+            ¿Coinciden las cantidades?
+            {AF('des.5')}
+          </li>
+          <li>
+            ¿Se envían a la sucursal, en concepto de donación para la obra mundial, los fondos que
+            superan el saldo máximo de la congregación durante varios meses?{' '}
+            <em>(Indique «N/A» si la pregunta no aplica.)</em>
+            {AF('des.6')}
+          </li>
+        </ol>
+        <SectionNotes noteKey="des_notes" answers={answers} onChange={onChange} />
+      </div>
+
+      {/* ── 3. Verificación de la cuenta principal ───────────────────────── */}
+      <div>
+        <p className="font-semibold mb-2 border-b border-gray-200 dark:border-gray-600 pb-1">
+          VERIFICACIÓN DE LA CUENTA PRINCIPAL
+        </p>
+        <ol className="list-decimal ml-5 space-y-3 text-gray-700 dark:text-gray-300">
+          <li>
+            En la página 2 de la <em>Hoja de cuentas</em> (S-26) de cada mes, ¿coincide el saldo
+            de la caja de efectivo conciliado de la línea 4 del recuadro «Conciliación de la cuenta
+            principal» con la cantidad de «Cuenta principal/Saldo final»?{' '}
+            <em>Sistema: fondos al final {money(s25c.closingFunds)}.
+            {s25c.reconciled
+              ? ' Conciliación: ✓ cuadrado.'
+              : ' Conciliación: ✗ descuadrado.'}</em>
+            {AF('cta_p.1')}
+          </li>
+          <li>
+            ¿Hay un <em>Registro de transacción</em> (S-24) de pago debidamente cumplimentado por
+            cada pago registrado en la <em>Hoja de cuentas</em>?
+            {AF('cta_p.2')}
+          </li>
+          <li>
+            ¿Han aprobado el coordinador del cuerpo de ancianos y el secretario los ajustes necesarios
+            para resolver discrepancias?{' '}
+            <em>(Indique «N/A» si la pregunta no aplica.)</em>
+            {AF('cta_p.3')}
+          </li>
+        </ol>
+        <SectionNotes noteKey="cta_p_notes" answers={answers} onChange={onChange} />
+      </div>
+
+      {/* ── 4. Verificación de la cuenta secundaria ──────────────────────── */}
+      <div>
+        <p className="font-semibold mb-2 border-b border-gray-200 dark:border-gray-600 pb-1">
+          VERIFICACIÓN DE LA CUENTA SECUNDARIA{' '}
+          <span className="font-normal text-gray-500">(Complete solo si la congregación tiene otra cuenta)</span>
+        </p>
+        <ol className="list-decimal ml-5 space-y-3 text-gray-700 dark:text-gray-300">
+          <li>
+            En la página 2 de la <em>Hoja de cuentas</em> (S-26) de cada mes, ¿coincide el saldo
+            conciliado de la línea 8 de la «Conciliación de la cuenta secundaria» con «Cuenta
+            secundaria/Saldo final»?
+            {AF('cta_s.1')}
+          </li>
+          <li>
+            ¿Se aprueban adecuadamente los traspasos de la cuenta secundaria?
+            {AF('cta_s.2')}
+          </li>
+          <li>
+            ¿Han aprobado el coordinador del cuerpo de ancianos y el secretario los ajustes necesarios
+            para resolver discrepancias?{' '}
+            <em>(Indique «N/A» si la pregunta no aplica.)</em>
+            {AF('cta_s.3')}
+          </li>
+        </ol>
+        <SectionNotes noteKey="cta_s_notes" answers={answers} onChange={onChange} />
+      </div>
+
+      {/* ── 5. Repaso de los procedimientos generales ────────────────────── */}
+      <div>
+        <p className="font-semibold mb-2 border-b border-gray-200 dark:border-gray-600 pb-1">
+          REPASO DE LOS PROCEDIMIENTOS GENERALES
+        </p>
+        <ol className="list-decimal ml-5 space-y-3 text-gray-700 dark:text-gray-300">
+          <li>
+            ¿Se están siguiendo las instrucciones para la contabilidad de la congregación?
+            {AF('rep.1')}
+          </li>
+          <li>
+            ¿Son exactos los registros? ¿Están ordenados?
+            {AF('rep.2')}
+          </li>
+          <li>
+            ¿Están al día los registros?
+            {AF('rep.3')}
+          </li>
+          <li>
+            ¿Son exactos los informes mensuales de las cuentas de la congregación?{' '}
+            <em>(Compruebe un mes.)</em>
+            {AF('rep.4')}
+          </li>
+          <li>
+            ¿Hay en el archivo de aprobaciones vigentes una anotación con el saldo máximo aprobado?
+            {AF('rep.5')}
+          </li>
+        </ol>
+        <SectionNotes noteKey="rep_notes" answers={answers} onChange={onChange} />
       </div>
     </div>
   );
