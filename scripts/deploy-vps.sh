@@ -37,6 +37,12 @@ cp -r "$BUILD_DIR/.next/static" "$PROD_DIR/.next/static"
 # 4. Public
 cp -r "$BUILD_DIR/public/." "$PROD_DIR/public/"
 
+# 5. Assets leídos en runtime vía process.cwd() (pdfForms.ts: src/lib/pdf-templates)
+#    El server standalone corre con cwd=/opt/msp, así que estos deben existir ahí.
+mkdir -p "$PROD_DIR/src/lib/pdf-templates"
+cp -r "$BUILD_DIR/src/lib/pdf-templates/." "$PROD_DIR/src/lib/pdf-templates/"
+chmod 644 "$PROD_DIR/src/lib/pdf-templates/"*.pdf
+
 # Reiniciar PM2 (full delete+start para recargar env vars)
 $PM2 delete meeting-scheduler-pro 2>/dev/null || true
 $PM2 start "$PROD_DIR/ecosystem.config.cjs"
