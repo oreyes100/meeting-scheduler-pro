@@ -1,7 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Printer, FileText, Calendar, UserCheck, LayoutGrid } from 'lucide-react';
+import { X, Printer, FileText, Calendar, UserCheck, LayoutGrid, FileSpreadsheet, File } from 'lucide-react';
+import { buildSlips } from '@/lib/s89Individual';
+import {
+  downloadS89IndividualPdf, downloadS89IndividualDocx, downloadS89Xlsx, downloadS89Csv,
+} from '@/lib/exportS89';
 
 const CONGREGATION_NAME = 'La Estación';
 
@@ -188,6 +192,36 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
       .catch(() => {});
     return () => { cancelled = true; };
   }, [isOpen]);
+
+  // S-89: modalidad multi-up (varias por hoja) vs individual (85 mm, una por página).
+  const [s89Mode, setS89Mode] = useState<'multi' | 'individual'>('multi');
+  const [s89Busy, setS89Busy] = useState(false);
+
+  // Precargar los módulos de export al abrir para no perder el user-gesture window.
+  useEffect(() => {
+    if (!isOpen) return;
+    import('jspdf').catch(() => {});
+    import('docx').catch(() => {});
+    import('xlsx-js-style').catch(() => {});
+  }, [isOpen]);
+
+  const runS89Export = async (kind: 'pdf' | 'docx' | 'xlsx' | 'csv') => {
+    if (!selectedMeeting) return;
+    const slips = buildSlips(selectedMeeting);
+    if (slips.length === 0) return;
+    const base = `Hojas_S-89_${selectedMeeting.date}`;
+    setS89Busy(true);
+    try {
+      if (kind === 'pdf')       await downloadS89IndividualPdf(slips, base);
+      else if (kind === 'docx') await downloadS89IndividualDocx(slips, base);
+      else if (kind === 'xlsx') await downloadS89Xlsx(slips, base);
+      else                      downloadS89Csv(slips, base);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Error al exportar');
+    } finally {
+      setS89Busy(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -514,9 +548,61 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                 <div>
                   {selectedMeeting ? (
                     <>
-                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 no-print border-b pb-2">
+                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 no-print border-b pb-2">
                         Hojas S-89 — {fmtJW(selectedMeeting.date)}
                       </p>
+
+                      {/* Toggle: varias por hoja vs individual 85 mm */}
+                      <div className="no-print mb-4 flex items-center gap-2">
+                        <div className="inline-flex rounded-lg border border-slate-300 overflow-hidden text-sm">
+                          <button
+                            onClick={() => setS89Mode('multi')}
+                            className={`px-3 py-1.5 font-medium ${s89Mode === 'multi' ? 'bg-sky-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-100'}`}
+                          >
+                            Varias por hoja
+                          </button>
+                          <button
+                            onClick={() => setS89Mode('individual')}
+                            className={`px-3 py-1.5 font-medium border-l border-slate-300 ${s89Mode === 'individual' ? 'bg-sky-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-100'}`}
+                          >
+                            Individual 85 mm
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Panel de export para la modalidad individual */}
+                      {s89Mode === 'individual' && (() => {
+                        const slipCount = buildSlips(selectedMeeting).length;
+                        return (
+                          <div className="no-print mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <p className="text-sm text-slate-600 mb-3">
+                              Una hojita por asignación estudiantil (85 × 127 mm), solo con los datos del asignado.
+                              {' '}<span className="font-semibold">{slipCount}</span> hojita(s) para esta semana.
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              <button disabled={s89Busy || slipCount === 0} onClick={() => runS89Export('pdf')}
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-rose-600 text-white text-sm font-semibold hover:bg-rose-700 disabled:opacity-40">
+                                <FileText className="w-4 h-4" /> PDF
+                              </button>
+                              <button disabled={s89Busy || slipCount === 0} onClick={() => runS89Export('docx')}
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-sky-700 text-white text-sm font-semibold hover:bg-sky-800 disabled:opacity-40">
+                                <File className="w-4 h-4" /> DOCX
+                              </button>
+                              <button disabled={s89Busy || slipCount === 0} onClick={() => runS89Export('xlsx')}
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-40">
+                                <FileSpreadsheet className="w-4 h-4" /> XLSX
+                              </button>
+                              <button disabled={s89Busy || slipCount === 0} onClick={() => runS89Export('csv')}
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-600 text-white text-sm font-semibold hover:bg-slate-700 disabled:opacity-40">
+                                <FileSpreadsheet className="w-4 h-4" /> CSV
+                              </button>
+                            </div>
+                            <p className="text-[11px] text-slate-400 mt-2">
+                              CSV: Nombre, Ayudante, Fecha, Núm. de intervención, Sala.
+                            </p>
+                          </div>
+                        );
+                      })()}
 
                       {(selectedMeeting.parts as Part[])
                         .filter(p => p.role === 'student' && p.assigned_user_id)
