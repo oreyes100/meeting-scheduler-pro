@@ -17,13 +17,24 @@ cd "$BUILD_DIR"
 npm ci --prefer-offline
 npm run build
 
+# Limpiar dirs que pueden tener archivos root-owned de deploys anteriores
+# (si falla, ignorar — lo nuevo se copiará encima)
+sudo rm -rf "$PROD_DIR/.next/standalone" 2>/dev/null || true
+sudo rm -rf "$PROD_DIR/.next/server" 2>/dev/null || true
+
 # Swap: layout del VPS tiene server.js en raíz de /opt/msp, .next/ a su lado
+# 1. Servidor standalone
 cp "$BUILD_DIR/.next/standalone/server.js" "$PROD_DIR/server.js"
-rsync -a --delete --exclude=cache \
+
+# 2. Manifests y chunks del servidor (sin cache, sin static)
+rsync -a --exclude=cache --exclude=static \
   "$BUILD_DIR/.next/standalone/.next/" "$PROD_DIR/.next/"
-# static assets (cliente)
-cp -r "$BUILD_DIR/.next/static/." "$PROD_DIR/.next/static/"
-# public
+
+# 3. Static assets del cliente
+rm -rf "$PROD_DIR/.next/static"
+cp -r "$BUILD_DIR/.next/static" "$PROD_DIR/.next/static"
+
+# 4. Public
 cp -r "$BUILD_DIR/public/." "$PROD_DIR/public/"
 
 # Reiniciar PM2 (full delete+start para recargar env vars)
@@ -33,7 +44,7 @@ echo "[deploy] PM2 reiniciado"
 
 # Verificar
 sleep 3
-STATUS=$(curl -sk --max-time 8 http://localhost:3000/api/health 2>/dev/null)
+STATUS=$(curl -sk --max-time 8 http://localhost:3000/api/health 2>/dev/null || echo "no-response")
 echo "[deploy] Health: $STATUS"
 
 # Limpieza
