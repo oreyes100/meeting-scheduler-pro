@@ -72,7 +72,7 @@ export const DEFAULT_CIERRE: CierreConfig = {
   res_pct_code: 'RM',
   res_pct_percent: 10,
   res_pct_source: 'C',
-  maintenance_code: 'GC',
+  maintenance_code: 'GM',
   maintenance_amount: 0,
 };
 

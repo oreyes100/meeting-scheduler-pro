@@ -88,7 +88,7 @@ export async function PUT(request: Request) {
         (congregation_id, label, city, state, treasurer_name, remit_code, res_pub_code, res_pub_amount,
          res_pct_code, res_pct_percent, res_pct_source, maintenance_code, maintenance_amount,
          ai_api_key, updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, datetime('now'))
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, datetime('now'))
       ON CONFLICT(congregation_id) DO UPDATE SET
         label = excluded.label, city = excluded.city, state = excluded.state,
         treasurer_name = excluded.treasurer_name,

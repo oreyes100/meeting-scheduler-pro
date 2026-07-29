@@ -154,7 +154,7 @@ export const EMPTY_CONFIG: CuentasConfig = {
   label: '', city: '', state: '', treasurer_name: '',
   remit_code: 'SOM', res_pub_code: 'RM', res_pub_amount: 0,
   res_pct_code: 'RM', res_pct_percent: 10, res_pct_source: 'C',
-  maintenance_code: 'GC', maintenance_amount: 0,
+  maintenance_code: 'GM', maintenance_amount: 0,
   has_ai_key: false,
 };
 
