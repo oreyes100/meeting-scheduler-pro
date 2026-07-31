@@ -37,7 +37,8 @@ export interface SlipData {
   fechaLarga: string;      // "10 de agosto 2026"
   fechaIso: string;        // "2026-08-10"
   numIntervencion: number;
-  tituloCorto: string;     // "Empiece conversaciones"
+  tituloCorto: string;     // "Lectura de la Biblia" / "Empiece conversaciones"
+  material: string;        // "Jer 24:1-10 (th lección 5)" — referencia/fuente
   sala: Sala;
 }
 
@@ -51,15 +52,35 @@ export function fmtFechaLarga(iso: string): string {
   return `${d} de ${MESES[m - 1]} ${y}`;
 }
 
+type PartTitleShape = Pick<SlipPart, 'part_type' | 'student_part_type' | 'title'> & { study_point?: string };
+
 /**
- * Título corto de la intervención (misma lógica que el S-89 multi-up de
- * PrintModal, duplicada aquí para no arrastrar dependencias de cliente).
+ * Tema corto de la intervención (sin el material): "Lectura de la Biblia",
+ * "Discurso", "Empiece conversaciones". Toma la parte anterior al primer `:` y
+ * quita la ubicación entre paréntesis al final.
  */
-export function s89Title(part: Pick<SlipPart, 'part_type' | 'student_part_type' | 'title'>): string {
+export function s89Title(part: PartTitleShape): string {
   if (part.part_type === 'bible_reading') return 'Lectura de la Biblia';
   if (part.student_part_type === 'talk') return 'Discurso';
-  // Quita la ubicación entre paréntesis al final: "Empiece conversaciones (DE CASA EN CASA)".
-  return part.title.replace(/\s*\([A-ZÁÉÍÓÚÑÜ\s]+\)\s*$/, '').trim();
+  const colon = part.title.indexOf(':');
+  const topic = colon >= 0 ? part.title.slice(0, colon) : part.title;
+  return topic.replace(/\s*\([^)]*\)\s*$/, '').trim();
+}
+
+/**
+ * Material / fuente de la intervención — lo que va tras el tema en la misma
+ * línea: "Jer 24:1-10 (th lección 5)", "Jesús es el Hijo de Dios (th lección 15)",
+ * o la ubicación "DE CASA EN CASA". Devuelve '' si no hay material.
+ */
+export function s89Material(part: PartTitleShape): string {
+  // 1) Todo lo que sigue al primer `:` (el separador tema/material del programa).
+  const colon = part.title.indexOf(':');
+  if (colon >= 0) return part.title.slice(colon + 1).trim();
+  // 2) Si no hay `:`, el grupo entre paréntesis final es la ubicación/fuente.
+  const paren = part.title.match(/\(([^)]+)\)\s*$/);
+  if (paren) return paren[1].trim();
+  // 3) Último recurso: el punto de estudio.
+  return part.study_point ?? '';
 }
 
 /** Etiqueta legible de la sala para CSV/XLSX. */
@@ -90,6 +111,7 @@ export function buildSlips(meeting: SlipMeeting): SlipData[] {
     fechaIso:       meeting.date,
     numIntervencion: p.part_number,
     tituloCorto:    s89Title(p),
+    material:       s89Material(p),
     sala:           p.class_type,
   }));
 }

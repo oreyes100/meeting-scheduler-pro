@@ -16,6 +16,23 @@
 import type { SlipData, Sala } from './s89Individual';
 import { salaCsv } from './s89Individual';
 
+/** Deltas en mm para ajustar la posición vertical de cada campo en el PDF. */
+export interface PdfOffsets {
+  nombre: number;
+  ayudante: number;
+  fecha: number;
+  asignacion: number;
+  sala: number;
+}
+
+export const PDF_OFFSETS_DEFAULT: PdfOffsets = { nombre: 0, ayudante: 0, fecha: 0, asignacion: 0, sala: 0 };
+
+/** Línea de intervención: "3 Lectura de la Biblia > Jer 24:1-10 (th lección 5)". */
+function asignacionLinea(s: SlipData): string {
+  const base = `${s.numIntervencion} ${s.tituloCorto}`;
+  return s.material ? `${base} > ${s.material}` : base;
+}
+
 // ── Geometría hojita ─────────────────────────────────────────────────────────
 const SLIP_W = 85;   // mm — ancho impresora
 const SLIP_H = 127;  // mm — alto impresora (papel real 115; contenido en top ~60)
@@ -48,7 +65,10 @@ function unwrap<T>(mod: T): T {
 }
 
 // ── PDF ──────────────────────────────────────────────────────────────────────
-export async function buildS89IndividualPdfBlob(slips: SlipData[]): Promise<Blob> {
+export async function buildS89IndividualPdfBlob(
+  slips: SlipData[],
+  offsets: PdfOffsets = PDF_OFFSETS_DEFAULT,
+): Promise<Blob> {
   const mod = await import('jspdf');
   const jsPDFLib: any = unwrap(mod);
   const JsPDF = jsPDFLib.jsPDF ?? jsPDFLib;
@@ -61,18 +81,18 @@ export async function buildS89IndividualPdfBlob(slips: SlipData[]): Promise<Blob
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
-    doc.text(s.nombre,   X_TEXT, PDF_Y.nombre + oy,   { maxWidth: SLIP_W - X_TEXT - 3 });
-    doc.text(s.ayudante, X_TEXT, PDF_Y.ayudante + oy, { maxWidth: SLIP_W - X_TEXT - 3 });
-    doc.text(s.fechaLarga, X_TEXT, PDF_Y.fecha + oy);
+    doc.text(s.nombre,     X_TEXT,   PDF_Y.nombre     + oy + offsets.nombre,     { maxWidth: SLIP_W - X_TEXT - 3 });
+    doc.text(s.ayudante,   X_TEXT,   PDF_Y.ayudante   + oy + offsets.ayudante,   { maxWidth: SLIP_W - X_TEXT - 3 });
+    doc.text(s.fechaLarga, X_TEXT,   PDF_Y.fecha      + oy + offsets.fecha);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text(`${s.numIntervencion} ${s.tituloCorto}`, X_ASSIGN, PDF_Y.asignacion + oy,
+    doc.text(asignacionLinea(s), X_ASSIGN, PDF_Y.asignacion + oy + offsets.asignacion,
       { maxWidth: SLIP_W - X_ASSIGN - 3 });
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
-    doc.text('X', X_SALA, PDF_Y.sala + (SALA_DY[s.sala] ?? 0) + oy);
+    doc.text('X', X_SALA, PDF_Y.sala + (SALA_DY[s.sala] ?? 0) + oy + offsets.sala);
   });
 
   return doc.output('blob');
@@ -111,7 +131,7 @@ export async function buildS89IndividualDocxBlob(slips: SlipData[]): Promise<Blo
       spacer(12),
       value(s.fechaLarga, 22, INDENT),
       spacer(16),
-      value(`${s.numIntervencion} ${s.tituloCorto}`, 20, INDENT_MARK, false),
+      value(asignacionLinea(s), 20, INDENT_MARK, false),
       spacer(18), spacer(18), spacer(18), spacer(16),
     ];
     // La marca "X" cae en la casilla de la sala: auxiliares una/dos líneas abajo.
@@ -179,8 +199,8 @@ function downloadBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export async function downloadS89IndividualPdf(slips: SlipData[], base: string) {
-  downloadBlob(await buildS89IndividualPdfBlob(slips), `${base}.pdf`);
+export async function downloadS89IndividualPdf(slips: SlipData[], base: string, offsets?: PdfOffsets) {
+  downloadBlob(await buildS89IndividualPdfBlob(slips, offsets), `${base}.pdf`);
 }
 export async function downloadS89IndividualDocx(slips: SlipData[], base: string) {
   downloadBlob(await buildS89IndividualDocxBlob(slips), `${base}.docx`);

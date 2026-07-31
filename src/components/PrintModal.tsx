@@ -5,7 +5,9 @@ import { X, Printer, FileText, Calendar, UserCheck, LayoutGrid, FileSpreadsheet,
 import { buildSlips } from '@/lib/s89Individual';
 import {
   downloadS89IndividualPdf, downloadS89IndividualDocx, downloadS89Xlsx, downloadS89Csv,
+  PDF_OFFSETS_DEFAULT,
 } from '@/lib/exportS89';
+import type { PdfOffsets } from '@/lib/exportS89';
 
 const CONGREGATION_NAME = 'La Estación';
 
@@ -49,7 +51,7 @@ interface PrintModalProps {
   auxiliaryRooms?: number;
 }
 
-type ReportType = 's140' | 'combined' | 's89' | 'chairman';
+type ReportType = 's140' | 'combined' | 's89' | 's89ind' | 'chairman';
 
 // Lunes (ISO) de la semana de una fecha — para emparejar entre semana ↔ fin de semana.
 function mondayOf(iso: string): string {
@@ -193,9 +195,13 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
     return () => { cancelled = true; };
   }, [isOpen]);
 
-  // S-89: modalidad multi-up (varias por hoja) vs individual (85 mm, una por página).
-  const [s89Mode, setS89Mode] = useState<'multi' | 'individual'>('multi');
+  // S-89 individual (85 mm): estado de generación + ajustes de posición PDF.
   const [s89Busy, setS89Busy] = useState(false);
+  const [pdfOffsets, setPdfOffsets] = useState<PdfOffsets>({ ...PDF_OFFSETS_DEFAULT });
+  const [showPdfAdjust, setShowPdfAdjust] = useState(false);
+
+  const adjustOffset = (field: keyof PdfOffsets, delta: number) =>
+    setPdfOffsets(prev => ({ ...prev, [field]: Math.round((prev[field] + delta) * 10) / 10 }));
 
   // Precargar los módulos de export al abrir para no perder el user-gesture window.
   useEffect(() => {
@@ -212,7 +218,7 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
     const base = `Hojas_S-89_${selectedMeeting.date}`;
     setS89Busy(true);
     try {
-      if (kind === 'pdf')       await downloadS89IndividualPdf(slips, base);
+      if (kind === 'pdf')       await downloadS89IndividualPdf(slips, base, pdfOffsets);
       else if (kind === 'docx') await downloadS89IndividualDocx(slips, base);
       else if (kind === 'xlsx') await downloadS89Xlsx(slips, base);
       else                      downloadS89Csv(slips, base);
@@ -272,6 +278,7 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                     { key: 's140', label: 'Programa mensual', icon: <Calendar className="w-4 h-4" /> },
                     { key: 'combined', label: 'Programa combinado', icon: <LayoutGrid className="w-4 h-4" /> },
                     { key: 's89',  label: 'Hojas de asignación (S-89)', icon: <FileText className="w-4 h-4" /> },
+                    { key: 's89ind', label: 'Hojas S-89 individuales (85 mm)', icon: <File className="w-4 h-4" /> },
                     { key: 'chairman', label: 'Hoja del presidente', icon: <UserCheck className="w-4 h-4" /> },
                   ] as const).map(({ key, label, icon }) => (
                     <button
@@ -548,61 +555,9 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                 <div>
                   {selectedMeeting ? (
                     <>
-                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 no-print border-b pb-2">
+                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 no-print border-b pb-2">
                         Hojas S-89 — {fmtJW(selectedMeeting.date)}
                       </p>
-
-                      {/* Toggle: varias por hoja vs individual 85 mm */}
-                      <div className="no-print mb-4 flex items-center gap-2">
-                        <div className="inline-flex rounded-lg border border-slate-300 overflow-hidden text-sm">
-                          <button
-                            onClick={() => setS89Mode('multi')}
-                            className={`px-3 py-1.5 font-medium ${s89Mode === 'multi' ? 'bg-sky-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-100'}`}
-                          >
-                            Varias por hoja
-                          </button>
-                          <button
-                            onClick={() => setS89Mode('individual')}
-                            className={`px-3 py-1.5 font-medium border-l border-slate-300 ${s89Mode === 'individual' ? 'bg-sky-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-100'}`}
-                          >
-                            Individual 85 mm
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Panel de export para la modalidad individual */}
-                      {s89Mode === 'individual' && (() => {
-                        const slipCount = buildSlips(selectedMeeting).length;
-                        return (
-                          <div className="no-print mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                            <p className="text-sm text-slate-600 mb-3">
-                              Una hojita por asignación estudiantil (85 × 127 mm), solo con los datos del asignado.
-                              {' '}<span className="font-semibold">{slipCount}</span> hojita(s) para esta semana.
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                              <button disabled={s89Busy || slipCount === 0} onClick={() => runS89Export('pdf')}
-                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-rose-600 text-white text-sm font-semibold hover:bg-rose-700 disabled:opacity-40">
-                                <FileText className="w-4 h-4" /> PDF
-                              </button>
-                              <button disabled={s89Busy || slipCount === 0} onClick={() => runS89Export('docx')}
-                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-sky-700 text-white text-sm font-semibold hover:bg-sky-800 disabled:opacity-40">
-                                <File className="w-4 h-4" /> DOCX
-                              </button>
-                              <button disabled={s89Busy || slipCount === 0} onClick={() => runS89Export('xlsx')}
-                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-40">
-                                <FileSpreadsheet className="w-4 h-4" /> XLSX
-                              </button>
-                              <button disabled={s89Busy || slipCount === 0} onClick={() => runS89Export('csv')}
-                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-600 text-white text-sm font-semibold hover:bg-slate-700 disabled:opacity-40">
-                                <FileSpreadsheet className="w-4 h-4" /> CSV
-                              </button>
-                            </div>
-                            <p className="text-[11px] text-slate-400 mt-2">
-                              CSV: Nombre, Ayudante, Fecha, Núm. de intervención, Sala.
-                            </p>
-                          </div>
-                        );
-                      })()}
 
                       {(selectedMeeting.parts as Part[])
                         .filter(p => p.role === 'student' && p.assigned_user_id)
@@ -673,6 +628,116 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                     </>
                   ) : (
                     <p className="text-center py-12 text-slate-400">Selecciona una semana en la vista principal para imprimir las hojas S-89.</p>
+                  )}
+                </div>
+              )}
+
+              {/* ── Hojas S-89 individuales (85 mm) ─────────────────────────── */}
+              {reportType === 's89ind' && (
+                <div>
+                  {selectedMeeting ? (() => {
+                    const slips = buildSlips(selectedMeeting);
+                    return (
+                      <>
+                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 border-b pb-2">
+                          Hojas S-89 individuales — {fmtJW(selectedMeeting.date)}
+                        </p>
+
+                        <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <p className="text-sm text-slate-600 mb-3">
+                            Una hojita por asignación estudiantil (85 × 127 mm), solo con los datos del asignado,
+                            como el modelo impreso. <span className="font-semibold">{slips.length}</span> hojita(s) para esta semana.
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <button disabled={s89Busy || slips.length === 0} onClick={() => runS89Export('pdf')}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-rose-600 text-white text-sm font-semibold hover:bg-rose-700 disabled:opacity-40">
+                              <FileText className="w-4 h-4" /> PDF
+                            </button>
+                            <button disabled={s89Busy || slips.length === 0} onClick={() => runS89Export('docx')}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-sky-700 text-white text-sm font-semibold hover:bg-sky-800 disabled:opacity-40">
+                              <File className="w-4 h-4" /> DOCX
+                            </button>
+                            <button disabled={s89Busy || slips.length === 0} onClick={() => runS89Export('xlsx')}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-40">
+                              <FileSpreadsheet className="w-4 h-4" /> XLSX
+                            </button>
+                            <button disabled={s89Busy || slips.length === 0} onClick={() => runS89Export('csv')}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-600 text-white text-sm font-semibold hover:bg-slate-700 disabled:opacity-40">
+                              <FileSpreadsheet className="w-4 h-4" /> CSV
+                            </button>
+                            {s89Busy && <span className="text-sm text-slate-400 self-center">Generando…</span>}
+                          </div>
+                          <p className="text-[11px] text-slate-400 mt-2">
+                            CSV: Nombre, Ayudante, Fecha, Núm. de intervención, Sala.
+                          </p>
+                        </div>
+
+                        {/* ── Ajuste de posiciones PDF ──────────────────────── */}
+                        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+                          <button
+                            onClick={() => setShowPdfAdjust(v => !v)}
+                            className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+                          >
+                            <span>⚙ Ajustar posiciones PDF (mm)</span>
+                            <span className="text-slate-400 text-xs">{showPdfAdjust ? '▲' : '▼'}</span>
+                          </button>
+                          {showPdfAdjust && (
+                            <div className="px-4 pb-3 pt-1 space-y-1.5 border-t border-slate-200">
+                              {([
+                                { key: 'nombre',     label: 'Nombre' },
+                                { key: 'ayudante',   label: 'Ayudante' },
+                                { key: 'fecha',      label: 'Fecha' },
+                                { key: 'asignacion', label: 'Asignación' },
+                                { key: 'sala',       label: 'Sala (X)' },
+                              ] as { key: keyof PdfOffsets; label: string }[]).map(({ key, label }) => (
+                                <div key={key} className="flex items-center gap-2 text-sm">
+                                  <span className="w-24 text-slate-600 shrink-0">{label}</span>
+                                  <button
+                                    onClick={() => adjustOffset(key, -0.5)}
+                                    className="w-7 h-7 rounded bg-slate-200 hover:bg-slate-300 font-bold text-slate-700 flex items-center justify-center"
+                                  >−</button>
+                                  <span className="w-14 text-center font-mono text-slate-800 tabular-nums">
+                                    {pdfOffsets[key] > 0 ? '+' : ''}{pdfOffsets[key].toFixed(1)}
+                                  </span>
+                                  <button
+                                    onClick={() => adjustOffset(key, +0.5)}
+                                    className="w-7 h-7 rounded bg-slate-200 hover:bg-slate-300 font-bold text-slate-700 flex items-center justify-center"
+                                  >+</button>
+                                  {pdfOffsets[key] !== 0 && (
+                                    <button
+                                      onClick={() => setPdfOffsets(prev => ({ ...prev, [key]: 0 }))}
+                                      className="text-[11px] text-slate-400 hover:text-slate-600 ml-1"
+                                    >reset</button>
+                                  )}
+                                </div>
+                              ))}
+                              <button
+                                onClick={() => setPdfOffsets({ ...PDF_OFFSETS_DEFAULT })}
+                                className="mt-1 text-[11px] text-slate-400 hover:text-slate-600"
+                              >Restablecer todo</button>
+                            </div>
+                          )}
+                        </div>
+
+                        {slips.length === 0 ? (
+                          <p className="text-center py-6 text-slate-400">No hay partes de estudiante asignadas en esta semana.</p>
+                        ) : (
+                          <div className="border border-slate-200 rounded-lg overflow-hidden">
+                            {slips.map((s, i) => (
+                              <div key={i} className="flex items-baseline gap-3 px-3 py-2 text-sm border-b border-slate-100 last:border-b-0">
+                                <span className="font-bold text-slate-800 w-40 shrink-0 truncate">{s.nombre}</span>
+                                <span className="text-slate-600 flex-1">
+                                  {s.numIntervencion} {s.tituloCorto}{s.material ? <span className="text-slate-400"> › {s.material}</span> : null}
+                                </span>
+                                {s.ayudante && <span className="text-slate-400 shrink-0">+ {s.ayudante}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })() : (
+                    <p className="text-center py-12 text-slate-400">Selecciona una semana en la vista principal para generar las hojas S-89 individuales.</p>
                   )}
                 </div>
               )}
