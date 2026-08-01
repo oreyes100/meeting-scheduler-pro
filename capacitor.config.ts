@@ -5,7 +5,9 @@ const config: CapacitorConfig = {
   appName: 'Meeting Scheduler Pro',
   webDir: 'capacitor-www',
   server: {
-    url: 'https://meeting-scheduler-pro.vercel.app/meetings',
+    // Producción self-hosted (VPS). La rama desplegada es `vps-selfhosted`;
+    // el antiguo despliegue de Vercel sirve `main` y quedó desactualizado.
+    url: 'https://congregaciontj.duckdns.org/meetings',
     cleartext: false,
     errorPath: 'error.html',
   },
