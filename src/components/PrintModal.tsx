@@ -113,14 +113,18 @@ function getMonthES(yearMonthStr: string): string {
   return d.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
 }
 
-// De-duplica reuniones que comparten la misma fecha (puede haber un "stub" vacío
-// y la reunión real con asignaciones). Para cada fecha nos quedamos con la que
-// tiene más asignaciones, para que el reporte mensual nunca muestre una semana
-// vacía cuando existe la reunión con datos.
+// De-duplica reuniones que caen en la misma semana (puede haber una reunión
+// "stub" con fecha errónea —p. ej. un martes— y la reunión real fechada el
+// lunes, ambas para la misma semana). Agrupamos por lunes de la semana +
+// congregación y nos quedamos con la que tiene más asignaciones, para que el
+// reporte mensual nunca muestre una semana vacía ni una semana duplicada.
 function dedupeMeetingsByDate(ms: any[]): any[] {
-  const byDate: Record<string, any[]> = {};
-  for (const m of ms) (byDate[m.date] ||= []).push(m);
-  return Object.values(byDate).map(group =>
+  const byWeek: Record<string, any[]> = {};
+  for (const m of ms) {
+    const key = `${mondayOf(m.date)}|${m.congregation_id ?? ''}`;
+    (byWeek[key] ||= []).push(m);
+  }
+  return Object.values(byWeek).map(group =>
     group.slice().sort((a, b) => {
       const score = (m: any) =>
         (m.parts || []).filter((p: any) => p.assigned_user_id).length +
@@ -128,6 +132,15 @@ function dedupeMeetingsByDate(ms: any[]): any[] {
       return score(b) - score(a);
     })[0]
   );
+}
+
+// Etiqueta de la semana: "lunes X al domingo Y" (lunes de la semana de la
+// reunión hasta el domingo siguiente), en lugar de la fecha suelta de la reunión.
+function weekRangeLabel(iso: string): string {
+  const mon = mondayOf(iso);
+  const sun = new Date(mon + 'T00:00:00Z');
+  sun.setUTCDate(sun.getUTCDate() + 6);
+  return `Semana del lunes ${fmtJW(mon)} al domingo ${fmtJW(sun.toISOString().slice(0, 10))}`;
 }
 
 // Mapa de asignaciones por publicador para el reporte de publicadores:
@@ -416,7 +429,7 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                       return (
                         <div key={m.id} className="week-block mb-5">
                           <div className="flex items-center text-white text-sm py-2 px-3" style={{ background: TEAL }}>
-                            <span className="font-bold">{fmtJW(m.date)}</span>
+                            <span className="font-bold">{weekRangeLabel(m.date)}</span>
                             <span className="mx-3">—</span>
                             <span className="font-bold">{m.assembly_type === 'regional' ? 'ASAMBLEA REGIONAL' : 'ASAMBLEA DE CIRCUITO'}</span>
                           </div>
@@ -448,7 +461,7 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                         {/* Cabecera teal */}
                         <div className="flex items-stretch text-white text-sm" style={{ background: TEAL }}>
                           <div className="font-bold px-2 py-1 flex-1">
-                            {fmtJW(m.date)}{scripture ? ` | ${scripture}` : ''}
+                            {weekRangeLabel(m.date)}{scripture ? ` | ${scripture}` : ''}
                           </div>
                           <div className="px-3 py-1 flex items-center gap-1.5 border-l border-white/30">
                             <span className="text-[11px] font-semibold uppercase opacity-80">Presidente</span>
@@ -532,7 +545,7 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                       return (
                         <div key={m.id} className="week-block mb-5">
                           <div className="flex items-center text-white text-sm py-2 px-3" style={{ background: TEAL }}>
-                            <span className="font-bold">{fmtJW(m.date)}</span>
+                            <span className="font-bold">{weekRangeLabel(m.date)}</span>
                             <span className="mx-3">—</span>
                             <span className="font-bold">{m.assembly_type === 'regional' ? 'ASAMBLEA REGIONAL' : 'ASAMBLEA DE CIRCUITO'}</span>
                           </div>
@@ -569,7 +582,7 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                         {/* Columna entre semana */}
                         <div className="flex-1 pr-3">
                           <div className="flex items-stretch text-white text-sm" style={{ background: TEAL }}>
-                            <div className="font-bold px-2 py-1 flex-1">{fmtJW(m.date)}{scripture ? ` | ${scripture}` : ''}</div>
+                            <div className="font-bold px-2 py-1 flex-1">{weekRangeLabel(m.date)}{scripture ? ` | ${scripture}` : ''}</div>
                             <div className="px-3 py-1 border-l border-white/30 w-2/5">
                               <span className="text-[11px] font-semibold uppercase opacity-80">Presidente y Oración</span>{' '}
                               <span className="font-medium">{chairmanName || '—'}</span>
