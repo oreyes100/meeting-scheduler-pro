@@ -8,6 +8,7 @@ import {
   PDF_OFFSETS_DEFAULT,
 } from '@/lib/exportS89';
 import type { PdfOffsets } from '@/lib/exportS89';
+import { exportXlsx } from '@/lib/exportReport';
 
 const CONGREGATION_NAME = 'La Estación';
 
@@ -51,7 +52,7 @@ interface PrintModalProps {
   auxiliaryRooms?: number;
 }
 
-type ReportType = 's140' | 'combined' | 's89' | 's89ind' | 'chairman';
+type ReportType = 's140' | 'combined' | 's89' | 's89ind' | 'chairman' | 'publishers';
 
 // Lunes (ISO) de la semana de una fecha — para emparejar entre semana ↔ fin de semana.
 function mondayOf(iso: string): string {
@@ -110,6 +111,53 @@ function getMonthES(yearMonthStr: string): string {
   const [year, month] = yearMonthStr.split('-');
   const d = new Date(Number(year), Number(month) - 1, 1);
   return d.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
+}
+
+// De-duplica reuniones que comparten la misma fecha (puede haber un "stub" vacío
+// y la reunión real con asignaciones). Para cada fecha nos quedamos con la que
+// tiene más asignaciones, para que el reporte mensual nunca muestre una semana
+// vacía cuando existe la reunión con datos.
+function dedupeMeetingsByDate(ms: any[]): any[] {
+  const byDate: Record<string, any[]> = {};
+  for (const m of ms) (byDate[m.date] ||= []).push(m);
+  return Object.values(byDate).map(group =>
+    group.slice().sort((a, b) => {
+      const score = (m: any) =>
+        (m.parts || []).filter((p: any) => p.assigned_user_id).length +
+        (m.chairman_id ? 1 : 0);
+      return score(b) - score(a);
+    })[0]
+  );
+}
+
+// Mapa de asignaciones por publicador para el reporte de publicadores:
+//  - weeks: fechas de reunión que tienen al menos una asignación (una columna cada una)
+//  - assignedByPublisher: id de publicador -> conjunto de fechas en las que fue asignado
+//    (en cualquier rol: presidente, oración, CBS, o parte como titular/ayudante)
+function publisherAssignmentMap(meetings: any[]): {
+  assignedByPublisher: Record<string, Set<string>>;
+  weeks: string[];
+} {
+  const assignedByPublisher: Record<string, Set<string>> = {};
+  const weeksWithAssignments = new Set<string>();
+  const add = (uid: string | null | undefined, date: string) => {
+    if (!uid || !date) return;
+    (assignedByPublisher[uid] ||= new Set<string>()).add(date);
+    weeksWithAssignments.add(date);
+  };
+  for (const m of meetings) {
+    const d = m.date;
+    add(m.chairman_id, d);
+    add(m.opening_prayer_id, d);
+    add(m.closing_prayer_id, d);
+    add(m.cbs_conductor_id, d);
+    add(m.cbs_reader_id, d);
+    for (const p of (m.parts || []) as Part[]) {
+      add(p.assigned_user_id, d);
+      add(p.assistant_user_id, d);
+    }
+  }
+  return { assignedByPublisher, weeks: Array.from(weeksWithAssignments).sort() };
 }
 
 function extractScripture(title: string): string {
@@ -236,9 +284,38 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
     if (w?.date) weekendByMonday[mondayOf(w.date)] = w;
   }
 
-  const monthlyMeetings = allMeetings.filter(m => m.date.startsWith(selectedMonth));
+  const monthlyMeetings = dedupeMeetingsByDate(allMeetings.filter(m => m.date.startsWith(selectedMonth)));
   const availableMonths = Array.from(new Set(allMeetings.map(m => m.date.substring(0, 7)))).sort() as string[];
   const printedOn = fmtJW(new Date().toISOString().slice(0, 10));
+
+  // Reporte de publicadores: una columna por semana con asignaciones.
+  const { assignedByPublisher, weeks: publisherWeeks } = publisherAssignmentMap(allMeetings);
+  const publisherColumns = [
+    'Publicador', 'Última asignación',
+    ...publisherWeeks.map(w => fmtJW(w)),
+  ];
+  const publisherRows = publishers.map((p: any) => {
+    const set = assignedByPublisher[p.id] || new Set<string>();
+    const last = set.size ? Array.from(set).sort().slice(-1)[0] : '';
+    return [
+      p.name || `${p.first_name || ''} ${p.last_name || ''}`.trim(),
+      last ? fmtJW(last) : '',
+      ...publisherWeeks.map(w => (set.has(w) ? '✓' : '')),
+    ];
+  });
+  const exportPublishers = async () => {
+    try {
+      await exportXlsx({
+        title: 'Reporte de publicadores',
+        congName: CONGREGATION_NAME,
+        subtitle: CONGREGATION_NAME,
+        columns: publisherColumns,
+        rows: publisherRows,
+      });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Error al exportar');
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 print:p-0 print:bg-white print:relative print:inset-auto">
@@ -280,7 +357,8 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                     { key: 's89',  label: 'Hojas de asignación (S-89)', icon: <FileText className="w-4 h-4" /> },
                     { key: 's89ind', label: 'Hojas S-89 individuales (85 mm)', icon: <File className="w-4 h-4" /> },
                     { key: 'chairman', label: 'Hoja del presidente', icon: <UserCheck className="w-4 h-4" /> },
-                  ] as const).map(({ key, label, icon }) => (
+                    { key: 'publishers', label: 'Reporte de publicadores', icon: <FileSpreadsheet className="w-4 h-4" /> },
+                   ] as const).map(({ key, label, icon }) => (
                     <button
                       key={key}
                       onClick={() => setReportType(key)}
@@ -806,6 +884,58 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                   ) : (
                     <p className="text-center py-12 text-slate-400">Selecciona una semana para ver la hoja del presidente.</p>
                   )}
+                </div>
+              )}
+
+              {/* ── Reporte de publicadores (XLSX) ──────────────────────────── */}
+              {reportType === 'publishers' && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 no-print border-b pb-2">
+                    Reporte de publicadores
+                  </p>
+
+                  <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-sm text-slate-600 mb-3">
+                      Lista de todos los publicadores con la fecha de su última asignación y una
+                      columna por cada semana que tuvo asignaciones. Marca <span className="font-semibold">✓</span> si el
+                      publicador fue asignado esa semana (en cualquier rol: presidente, oración, CBS,
+                      o parte como titular o ayudante).
+                    </p>
+                    <button
+                      onClick={exportPublishers}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700"
+                    >
+                      <FileSpreadsheet className="w-4 h-4" /> Exportar XLSX
+                    </button>
+                    <p className="text-[11px] text-slate-400 mt-2">
+                      {publisherRows.length} publicador(es) · {publisherWeeks.length} semana(s) con asignaciones.
+                    </p>
+                  </div>
+
+                  <div className="border border-slate-200 rounded-lg overflow-hidden max-h-[50vh] overflow-y-auto">
+                    <table className="w-full text-xs border-collapse">
+                      <thead className="sticky top-0 bg-slate-100">
+                        <tr>
+                          {publisherColumns.map((c, i) => (
+                            <th key={i} className="border border-slate-200 px-2 py-1 text-left font-semibold whitespace-nowrap">
+                              {c}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {publisherRows.map((r, i) => (
+                          <tr key={i} className={i % 2 ? 'bg-slate-50' : ''}>
+                            {r.map((cell, j) => (
+                              <td key={j} className="border border-slate-200 px-2 py-1 whitespace-nowrap">
+                                {cell || ''}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
 
