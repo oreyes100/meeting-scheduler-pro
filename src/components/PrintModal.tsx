@@ -134,43 +134,68 @@ function dedupeMeetingsByDate(ms: any[]): any[] {
   );
 }
 
-// Etiqueta de la semana: "lunes X al domingo Y" (lunes de la semana de la
-// reunión hasta el domingo siguiente), en lugar de la fecha suelta de la reunión.
+const MONTHS_ES = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+];
+
+// Etiqueta de la semana: "Semana del lunes 31 de agosto" (día y mes de la
+// semana de la reunión), en lugar de la fecha suelta de la reunión.
 function weekRangeLabel(iso: string): string {
   const mon = mondayOf(iso);
-  const sun = new Date(mon + 'T00:00:00Z');
-  sun.setUTCDate(sun.getUTCDate() + 6);
-  return `Semana del lunes ${fmtJW(mon)} al domingo ${fmtJW(sun.toISOString().slice(0, 10))}`;
+  const [, mm, dd] = mon.split('-');
+  const monthName = MONTHS_ES[Number(mm) - 1] || '';
+  return `Semana del lunes ${Number(dd)} de ${monthName}`;
 }
 
-// Mapa de asignaciones por publicador para el reporte de publicadores:
-//  - weeks: fechas de reunión que tienen al menos una asignación (una columna cada una)
-//  - assignedByPublisher: id de publicador -> conjunto de fechas en las que fue asignado
-//    (en cualquier rol: presidente, oración, CBS, o parte como titular/ayudante)
-function publisherAssignmentMap(meetings: any[]): {
-  assignedByPublisher: Record<string, Set<string>>;
+// Miércoles de la semana de una reunión. Se usa para decidir a qué mes pertenece
+// el programa: una reunión cuyo miércoles cae en el mes seleccionado se incluye,
+// así la semana que empieza el lunes 31/ago (miércoles 2/sep) entra en el reporte
+// de septiembre aunque la fecha de la reunión sea de agosto.
+function wednesdayOf(iso: string): string {
+  const mon = mondayOf(iso);
+  const d = new Date(mon + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + 2);
+  return d.toISOString().slice(0, 10);
+}
+
+function meetingInMonth(iso: string, yearMonth: string): boolean {
+  return wednesdayOf(iso).startsWith(yearMonth);
+}
+
+// Mapa detallado de asignaciones por publicador para el reporte de publicadores.
+// Por cada (publicador, semana) guardamos los números de asignación dados y si
+// alguna fue en sala auxiliar.
+interface PubCell { nums: number[]; aux: boolean; }
+function publisherAssignmentDetail(meetings: any[]): {
+  detail: Record<string, Record<string, PubCell>>;
   weeks: string[];
 } {
-  const assignedByPublisher: Record<string, Set<string>> = {};
-  const weeksWithAssignments = new Set<string>();
-  const add = (uid: string | null | undefined, date: string) => {
+  const detail: Record<string, Record<string, PubCell>> = {};
+  const weeksSet = new Set<string>();
+  const add = (uid: string | null | undefined, date: string, num: number | null, aux: boolean) => {
     if (!uid || !date) return;
-    (assignedByPublisher[uid] ||= new Set<string>()).add(date);
-    weeksWithAssignments.add(date);
+    const byWeek = (detail[uid] ||= {});
+    const cell = (byWeek[date] ||= { nums: [], aux: false });
+    if (num != null) cell.nums.push(num);
+    if (aux) cell.aux = true;
+    weeksSet.add(date);
   };
   for (const m of meetings) {
     const d = m.date;
-    add(m.chairman_id, d);
-    add(m.opening_prayer_id, d);
-    add(m.closing_prayer_id, d);
-    add(m.cbs_conductor_id, d);
-    add(m.cbs_reader_id, d);
+    // Roles sin número de asignación: se marcan con palomita.
+    add(m.chairman_id, d, null, false);
+    add(m.opening_prayer_id, d, null, false);
+    add(m.closing_prayer_id, d, null, false);
+    add(m.cbs_conductor_id, d, null, false);
+    add(m.cbs_reader_id, d, null, false);
     for (const p of (m.parts || []) as Part[]) {
-      add(p.assigned_user_id, d);
-      add(p.assistant_user_id, d);
+      const aux = p.class_type === 'aux_1' || p.class_type === 'aux_2';
+      add(p.assigned_user_id, d, p.part_number, aux);
+      add(p.assistant_user_id, d, p.part_number, aux);
     }
   }
-  return { assignedByPublisher, weeks: Array.from(weeksWithAssignments).sort() };
+  return { detail, weeks: Array.from(weeksSet).sort() };
 }
 
 function extractScripture(title: string): string {
@@ -297,33 +322,66 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
     if (w?.date) weekendByMonday[mondayOf(w.date)] = w;
   }
 
-  const monthlyMeetings = dedupeMeetingsByDate(allMeetings.filter(m => m.date.startsWith(selectedMonth)));
+  const monthlyMeetings = dedupeMeetingsByDate(allMeetings.filter(m => meetingInMonth(m.date, selectedMonth)));
   const availableMonths = Array.from(new Set(allMeetings.map(m => m.date.substring(0, 7)))).sort() as string[];
   const printedOn = fmtJW(new Date().toISOString().slice(0, 10));
 
-  // Reporte de publicadores: una columna por semana con asignaciones.
-  const { assignedByPublisher, weeks: publisherWeeks } = publisherAssignmentMap(allMeetings);
-  const publisherColumns = [
-    'Publicador', 'Última asignación',
-    ...publisherWeeks.map(w => fmtJW(w)),
+  // Reporte de publicadores: una columna por semana; la celda muestra el número
+  // de asignación dado (y "A" si fue en sala auxiliar). Segmentado por ancianos /
+  // siervos ministeriales / publicadores.
+  const monthMeetings = allMeetings.filter(m => meetingInMonth(m.date, selectedMonth));
+  const { detail: pubDetail, weeks: publisherWeeks } = publisherAssignmentDetail(monthMeetings);
+
+  const pubCell = (uid: string, w: string): string => {
+    const c = pubDetail[uid]?.[w];
+    if (!c) return '';
+    if (c.nums.length === 0) return '✓';
+    const txt = c.nums.join(',');
+    return c.aux ? `${txt} A` : txt;
+  };
+
+  const classifyPublisher = (p: any): 'anciano' | 'siervo' | 'publicador' => {
+    if (p.is_elder) return 'anciano';
+    if (p.is_ministerial_servant) return 'siervo';
+    return 'publicador';
+  };
+
+  const pubWeekCols = ['Publicador', 'Última asignación', ...publisherWeeks.map(w => fmtJW(w))];
+
+  const buildPubRows = (group: 'anciano' | 'siervo' | 'publicador') =>
+    publishers
+      .filter((p: any) => classifyPublisher(p) === group)
+      .map((p: any) => {
+        const byWeek = pubDetail[p.id] || {};
+        const weeksAssigned = Object.keys(byWeek).sort();
+        const last = weeksAssigned.length ? weeksAssigned.slice(-1)[0] : '';
+        return [
+          p.name || `${p.first_name || ''} ${p.last_name || ''}`.trim(),
+          last ? fmtJW(last) : '',
+          ...publisherWeeks.map(w => pubCell(p.id, w)),
+        ];
+      });
+
+  const pubGroups = [
+    { key: 'anciano' as const, label: 'Ancianos' },
+    { key: 'siervo' as const, label: 'Siervos ministeriales' },
+    { key: 'publicador' as const, label: 'Publicadores' },
   ];
-  const publisherRows = publishers.map((p: any) => {
-    const set = assignedByPublisher[p.id] || new Set<string>();
-    const last = set.size ? Array.from(set).sort().slice(-1)[0] : '';
-    return [
-      p.name || `${p.first_name || ''} ${p.last_name || ''}`.trim(),
-      last ? fmtJW(last) : '',
-      ...publisherWeeks.map(w => (set.has(w) ? '✓' : '')),
-    ];
-  });
+
+  const pubSheets = pubGroups.map(g => ({
+    name: g.label,
+    columns: pubWeekCols,
+    rows: buildPubRows(g.key),
+  }));
+
   const exportPublishers = async () => {
     try {
       await exportXlsx({
         title: 'Reporte de publicadores',
         congName: CONGREGATION_NAME,
-        subtitle: CONGREGATION_NAME,
-        columns: publisherColumns,
-        rows: publisherRows,
+        columns: [],
+        rows: [],
+        sheets: pubSheets,
       });
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Error al exportar');
@@ -909,10 +967,11 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
 
                   <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <p className="text-sm text-slate-600 mb-3">
-                      Lista de todos los publicadores con la fecha de su última asignación y una
-                      columna por cada semana que tuvo asignaciones. Marca <span className="font-semibold">✓</span> si el
-                      publicador fue asignado esa semana (en cualquier rol: presidente, oración, CBS,
-                      o parte como titular o ayudante).
+                      Lista de publicadores con la fecha de su última asignación y una columna por
+                      cada semana. En cada celda se muestra el <span className="font-semibold">número de asignación</span> que
+                      dieron; si fue en <span className="font-semibold">sala auxiliar</span> se agrega <span className="font-semibold">A</span>. Los roles sin
+                      número (presidente, oración, CBS) se marcan con <span className="font-semibold">✓</span>. El reporte se
+                      divide en Ancianos, Siervos ministeriales y Publicadores.
                     </p>
                     <button
                       onClick={exportPublishers}
@@ -921,34 +980,42 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                       <FileSpreadsheet className="w-4 h-4" /> Exportar XLSX
                     </button>
                     <p className="text-[11px] text-slate-400 mt-2">
-                      {publisherRows.length} publicador(es) · {publisherWeeks.length} semana(s) con asignaciones.
+                      {publishers.length} publicador(es) · {publisherWeeks.length} semana(s) con asignaciones.
                     </p>
                   </div>
 
-                  <div className="border border-slate-200 rounded-lg overflow-hidden max-h-[50vh] overflow-y-auto">
-                    <table className="w-full text-xs border-collapse">
-                      <thead className="sticky top-0 bg-slate-100">
-                        <tr>
-                          {publisherColumns.map((c, i) => (
-                            <th key={i} className="border border-slate-200 px-2 py-1 text-left font-semibold whitespace-nowrap">
-                              {c}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {publisherRows.map((r, i) => (
-                          <tr key={i} className={i % 2 ? 'bg-slate-50' : ''}>
-                            {r.map((cell, j) => (
-                              <td key={j} className="border border-slate-200 px-2 py-1 whitespace-nowrap">
-                                {cell || ''}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  {pubGroups.map(g => {
+                    const rows = buildPubRows(g.key);
+                    return (
+                      <div key={g.key} className="mb-6">
+                        <h4 className="text-sm font-bold text-slate-700 mb-2">{g.label} ({rows.length})</h4>
+                        <div className="border border-slate-200 rounded-lg overflow-hidden max-h-[40vh] overflow-y-auto">
+                          <table className="w-full text-xs border-collapse">
+                            <thead className="sticky top-0 bg-slate-100">
+                              <tr>
+                                {pubWeekCols.map((c, i) => (
+                                  <th key={i} className="border border-slate-200 px-2 py-1 text-left font-semibold whitespace-nowrap">
+                                    {c}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {rows.map((r, i) => (
+                                <tr key={i} className={i % 2 ? 'bg-slate-50' : ''}>
+                                  {r.map((cell, j) => (
+                                    <td key={j} className="border border-slate-200 px-2 py-1 whitespace-nowrap">
+                                      {cell || ''}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
