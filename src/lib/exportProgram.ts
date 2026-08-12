@@ -255,15 +255,17 @@ export async function exportProgramXlsx(weeks: ProgramWeek[], opts: ProgramExpor
   const aoa: any[][] = [];
   const merges: any[] = [];
   const styles: Record<string, any> = {};
+  const COLS = 12;
+  const ensureRow = (r: number) => { while (aoa.length <= r) aoa.push(Array(COLS).fill('')); };
+  const setCell = (r: number, c: number, v: any) => { ensureRow(r); aoa[r][c] = v; };
   const setS = (r: number, c: number, s: any) => { styles[`${r},${c}`] = s; };
   const fill = (hex: string, white = false) => ({ fill: { fgColor: { rgb: hex } }, font: { bold: true, color: { rgb: white ? WHITE_HEX : SLATE_HEX } }, alignment: { vertical: 'center', wrapText: true } });
   const plain = () => ({ alignment: { vertical: 'center' } });
-  const pushRow = (cells: any[]) => { aoa.push(cells); return aoa.length - 1; };
 
-  pushRow([opts.title]);
+  setCell(0, 0, opts.title);
   merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } });
   setS(0, 0, { font: { bold: true, size: 14 }, alignment: { vertical: 'center' } });
-  pushRow([opts.subtitle]);
+  setCell(1, 0, opts.subtitle);
   merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: 4 } });
   setS(1, 0, { font: { italic: true, color: { rgb: '555555' } } });
 
@@ -271,43 +273,38 @@ export async function exportProgramXlsx(weeks: ProgramWeek[], opts: ProgramExpor
 
   for (const wk of weeks) {
     if (wk.isAssembly) {
-      const r = pushRow([`${wk.weekLabel}  —  ${wk.assemblyLabel ?? 'ASAMBLEA'}`]);
+      const r = aoa.length;
+      setCell(r, 0, `${wk.weekLabel}  —  ${wk.assemblyLabel ?? 'ASAMBLEA'}`);
       merges.push({ s: { r, c: 0 }, e: { r, c: 4 } });
       setS(r, 0, fill(TEAL_HEX, true));
       continue;
     }
     if (opts.combined) {
-      const headerR = pushRow(Array(12).fill(''));
-      merges.push({ s: { r: headerR, c: LEFT }, e: { r: headerR, c: LEFT + 4 } });
-      merges.push({ s: { r: headerR, c: RIGHT }, e: { r: headerR, c: RIGHT + 5 } });
+      const headerR = aoa.length;
+      setCell(headerR, LEFT, wk.weekLabel + (wk.scripture ? ` | ${wk.scripture}` : ''));
       setS(headerR, LEFT, fill(TEAL_HEX, true));
-      aoa[headerR][LEFT] = wk.weekLabel + (wk.scripture ? ` | ${wk.scripture}` : '');
+      merges.push({ s: { r: headerR, c: LEFT }, e: { r: headerR, c: LEFT + 4 } });
+      setCell(headerR, RIGHT, `Domingo ${wk.weekend?.date ?? '—'}`);
       setS(headerR, RIGHT, fill(TEAL_HEX, true));
-      aoa[headerR][RIGHT] = `Domingo ${wk.weekend?.date ?? '—'}`;
+      merges.push({ s: { r: headerR, c: RIGHT }, e: { r: headerR, c: RIGHT + 5 } });
 
       let lr = headerR + 1;
       for (const p of wk.parts ?? []) {
-        if (p.sep === 'amber') { setS(lr, LEFT, fill(AMBER_HEX)); aoa[lr][LEFT] = ''; lr++; }
-        else if (p.sep === 'maroon') { setS(lr, LEFT, fill(MAROON_HEX)); aoa[lr][LEFT] = ''; lr++; }
-        if (p.bible) { aoa[lr][LEFT] = 'SALA PRINCIPAL'; setS(lr, LEFT, { font: { bold: true, color: { rgb: SLATE_HEX } } }); lr++; }
-        aoa[lr][LEFT] = `${p.num}. ${p.title} (${p.dur} min.)`;
-        setS(lr, LEFT, plain());
-        aoa[lr][LEFT + 4] = p.name;
-        setS(lr, LEFT + 4, plain());
+        if (p.sep === 'amber') { setCell(lr, LEFT, ''); setS(lr, LEFT, fill(AMBER_HEX)); merges.push({ s: { r: lr, c: LEFT }, e: { r: lr, c: LEFT + 4 } }); lr++; }
+        else if (p.sep === 'maroon') { setCell(lr, LEFT, ''); setS(lr, LEFT, fill(MAROON_HEX)); merges.push({ s: { r: lr, c: LEFT }, e: { r: lr, c: LEFT + 4 } }); lr++; }
+        if (p.bible) { setCell(lr, LEFT, 'SALA PRINCIPAL'); setS(lr, LEFT, { font: { bold: true, color: { rgb: SLATE_HEX } } }); lr++; }
+        setCell(lr, LEFT, `${p.num}. ${p.title} (${p.dur} min.)`); setS(lr, LEFT, plain());
+        setCell(lr, LEFT + 4, p.name); setS(lr, LEFT + 4, plain());
         lr++;
       }
       if (wk.cbsNum != null) {
-        aoa[lr][LEFT] = `${wk.cbsNum}. Estudio bíblico (${wk.cbsDur} min.)`;
-        setS(lr, LEFT, plain());
-        aoa[lr][LEFT + 4] = wk.cbs || '';
-        setS(lr, LEFT + 4, plain());
+        setCell(lr, LEFT, `${wk.cbsNum}. Estudio bíblico (${wk.cbsDur} min.)`); setS(lr, LEFT, plain());
+        setCell(lr, LEFT + 4, wk.cbs || ''); setS(lr, LEFT + 4, plain());
         lr++;
       }
-      aoa[lr][LEFT] = `LIMPIEZA ${wk.cleaning}    HOSPITALIDAD ${wk.hospitality}`;
-      setS(lr, LEFT, fill(YELLOW_HEX));
+      setCell(lr, LEFT, `LIMPIEZA ${wk.cleaning}    HOSPITALIDAD ${wk.hospitality}`); setS(lr, LEFT, fill(YELLOW_HEX));
       merges.push({ s: { r: lr, c: LEFT }, e: { r: lr, c: LEFT + 3 } });
-      aoa[lr][LEFT + 4] = `Oración: ${wk.closing || '—'}`;
-      setS(lr, LEFT + 4, plain());
+      setCell(lr, LEFT + 4, `Oración: ${wk.closing || '—'}`); setS(lr, LEFT + 4, plain());
       const leftEnd = lr;
 
       let rr = headerR + 1;
@@ -318,47 +315,39 @@ export async function exportProgramXlsx(weeks: ProgramWeek[], opts: ProgramExpor
           ['Congregación', w.congregation], ['Conductor', w.conductor], ['Lector', w.reader],
         ];
         for (const [lab, val] of wkRows) {
-          aoa[rr][RIGHT] = lab;
-          setS(rr, RIGHT, { font: { bold: true } });
-          aoa[rr][RIGHT + 1] = val || '—';
-          setS(rr, RIGHT + 1, plain());
+          setCell(rr, RIGHT, lab); setS(rr, RIGHT, { font: { bold: true } });
+          setCell(rr, RIGHT + 1, val || '—'); setS(rr, RIGHT + 1, plain());
           rr++;
         }
-        aoa[rr][RIGHT] = `LIMPIEZA ${w.cleaning}  HOSP ${w.hospitality}`;
-        setS(rr, RIGHT, fill(YELLOW_HEX));
+        setCell(rr, RIGHT, `LIMPIEZA ${w.cleaning}  HOSP ${w.hospitality}`); setS(rr, RIGHT, fill(YELLOW_HEX));
         merges.push({ s: { r: rr, c: RIGHT }, e: { r: rr, c: RIGHT + 5 } });
         rr++;
       }
       const endR = Math.max(leftEnd, rr - 1);
-      while (aoa.length <= endR) pushRow(Array(12).fill(''));
+      ensureRow(endR);
     } else {
-      const headerR = pushRow([wk.weekLabel + (wk.scripture ? ` | ${wk.scripture}` : '')]);
-      merges.push({ s: { r: headerR, c: 0 }, e: { r: headerR, c: 4 } });
+      const headerR = aoa.length;
+      setCell(headerR, 0, wk.weekLabel + (wk.scripture ? ` | ${wk.scripture}` : ''));
       setS(headerR, 0, fill(TEAL_HEX, true));
-      aoa[headerR][4] = `Presidente: ${wk.chairman || '—'}   Oración: ${wk.opening || '—'}`;
+      merges.push({ s: { r: headerR, c: 0 }, e: { r: headerR, c: 4 } });
+      setCell(headerR, 4, `Presidente: ${wk.chairman || '—'}   Oración: ${wk.opening || '—'}`);
       let r = headerR + 1;
       for (const p of wk.parts ?? []) {
-        if (p.sep === 'amber') { aoa[r][0] = ''; setS(r, 0, fill(AMBER_HEX)); merges.push({ s: { r, c: 0 }, e: { r, c: 4 } }); r++; }
-        else if (p.sep === 'maroon') { aoa[r][0] = ''; setS(r, 0, fill(MAROON_HEX)); merges.push({ s: { r, c: 0 }, e: { r, c: 4 } }); r++; }
-        if (p.bible) { aoa[r][0] = 'SALA PRINCIPAL'; setS(r, 0, { font: { bold: true, color: { rgb: SLATE_HEX } } }); r++; }
-        aoa[r][0] = `${p.num}. ${p.title} (${p.dur} min.)`;
-        setS(r, 0, plain());
-        aoa[r][4] = p.name;
-        setS(r, 4, plain());
+        if (p.sep === 'amber') { setCell(r, 0, ''); setS(r, 0, fill(AMBER_HEX)); merges.push({ s: { r, c: 0 }, e: { r, c: 4 } }); r++; }
+        else if (p.sep === 'maroon') { setCell(r, 0, ''); setS(r, 0, fill(MAROON_HEX)); merges.push({ s: { r, c: 0 }, e: { r, c: 4 } }); r++; }
+        if (p.bible) { setCell(r, 0, 'SALA PRINCIPAL'); setS(r, 0, { font: { bold: true, color: { rgb: SLATE_HEX } } }); r++; }
+        setCell(r, 0, `${p.num}. ${p.title} (${p.dur} min.)`); setS(r, 0, plain());
+        setCell(r, 4, p.name); setS(r, 4, plain());
         r++;
       }
       if (wk.cbsNum != null) {
-        aoa[r][0] = `${wk.cbsNum}. Estudio bíblico (${wk.cbsDur} min.)`;
-        setS(r, 0, plain());
-        aoa[r][4] = wk.cbs || '';
-        setS(r, 4, plain());
+        setCell(r, 0, `${wk.cbsNum}. Estudio bíblico (${wk.cbsDur} min.)`); setS(r, 0, plain());
+        setCell(r, 4, wk.cbs || ''); setS(r, 4, plain());
         r++;
       }
-      aoa[r][0] = `LIMPIEZA ${wk.cleaning}    HOSPITALIDAD ${wk.hospitality}`;
-      setS(r, 0, fill(YELLOW_HEX));
+      setCell(r, 0, `LIMPIEZA ${wk.cleaning}    HOSPITALIDAD ${wk.hospitality}`); setS(r, 0, fill(YELLOW_HEX));
       merges.push({ s: { r, c: 0 }, e: { r, c: 3 } });
-      aoa[r][4] = `Oración: ${wk.closing || '—'}`;
-      setS(r, 4, plain());
+      setCell(r, 4, `Oración: ${wk.closing || '—'}`); setS(r, 4, plain());
     }
   }
 
@@ -370,14 +359,16 @@ export async function exportProgramXlsx(weeks: ProgramWeek[], opts: ProgramExpor
     if (!ws[addr]) ws[addr] = { t: 's', v: aoa[r]?.[c] ?? '' };
     ws[addr].s = styles[key];
   }
-  ws['!cols'] = Array.from({ length: 12 }, (_, i) => ({ wch: i === LEFT + 4 || i === RIGHT + 1 ? 26 : 16 }));
+  ws['!cols'] = Array.from({ length: COLS }, (_, i) => ({ wch: i === LEFT + 4 || i === RIGHT + 1 ? 26 : 16 }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Programa');
   XLSX.writeFile(wb, `${fileBase(opts.title, opts.subtitle)}.xlsx`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DOCX
+// DOCX — sin tablas anidadas ni celdas sueltas: cabeceras teal, separadores de
+// color, y para combinado una tabla de 2 columnas cuyas celdas contienen
+// párrafos (no tablas) para máxima compatibilidad con Word.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function exportProgramDocx(weeks: ProgramWeek[], opts: ProgramExportOptions) {
   const docx: any = unwrap(await import('docx'));
@@ -385,11 +376,13 @@ export async function exportProgramDocx(weeks: ProgramWeek[], opts: ProgramExpor
 
   const tealHex = TEAL_HEX;
 
-  const cell = (text: string, o: any = {}) =>
-    new TableCell({
+  const shadePara = (text: string, o: { fill?: string; color?: string; bold?: boolean; size?: number } = {}) =>
+    new Paragraph({
       shading: o.fill ? { type: ShadingType.CLEAR, fill: o.fill } : undefined,
-      children: [new Paragraph({ children: [new TextRun({ text, bold: !!o.bold, color: o.color || '000000', size: o.size || 18 })] })],
+      children: [new TextRun({ text: text || ' ', bold: !!o.bold, color: o.color || '000000', size: o.size || 18 })],
     });
+
+  const cell = (children: any[]) => new TableCell({ children });
 
   const sectionChildren: any[] = [
     new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: opts.title, bold: true })] }),
@@ -398,64 +391,67 @@ export async function exportProgramDocx(weeks: ProgramWeek[], opts: ProgramExpor
 
   for (const wk of weeks) {
     if (wk.isAssembly) {
-      sectionChildren.push(new Paragraph({
-        shading: { type: ShadingType.CLEAR, fill: tealHex },
-        children: [new TextRun({ text: `${wk.weekLabel}  —  ${wk.assemblyLabel ?? 'ASAMBLEA'}`, bold: true, color: 'FFFFFF' })],
-      }));
+      sectionChildren.push(shadePara(`${wk.weekLabel}  —  ${wk.assemblyLabel ?? 'ASAMBLEA'}`, { fill: tealHex, color: 'FFFFFF', bold: true }));
       continue;
     }
 
-    const headPara = new Paragraph({
-      shading: { type: ShadingType.CLEAR, fill: tealHex },
-      children: [new TextRun({ text: wk.weekLabel + (wk.scripture ? ` | ${wk.scripture}` : ''), bold: true, color: 'FFFFFF' })],
-    });
-
-    const partRows: any[] = [];
-    const pushSep = (hex: string) => partRows.push(new TableRow({ children: [new TableCell({ columnSpan: 2, shading: { type: ShadingType.CLEAR, fill: hex }, children: [new Paragraph({ children: [new TextRun({ text: '' })] })] })] }));
-    for (const p of wk.parts ?? []) {
-      if (p.sep === 'amber') pushSep(AMBER_HEX);
-      else if (p.sep === 'maroon') pushSep(MAROON_HEX);
-      if (p.bible) partRows.push(new TableRow({ children: [new TableCell({ columnSpan: 2, children: [new Paragraph({ children: [new TextRun({ text: 'SALA PRINCIPAL', bold: true, size: 16 })] })] })] }));
-      partRows.push(new TableRow({ children: [cell(`${p.num}. ${p.title} (${p.dur} min.)`), cell(p.name || '—')] }));
-    }
-    if (wk.cbsNum != null) partRows.push(new TableRow({ children: [cell(`${wk.cbsNum}. Estudio bíblico (${wk.cbsDur} min.)`), cell(wk.cbs || '—')] }));
-
-    const footerPara = new Paragraph({
-      shading: { type: ShadingType.CLEAR, fill: YELLOW_HEX },
-      children: [new TextRun({ text: `LIMPIEZA ${wk.cleaning}    HOSPITALIDAD ${wk.hospitality}    Oración: ${wk.closing || '—'}`, bold: true, size: 16 })],
-    });
-
-    const midweekCell = new TableCell({
-      children: [
-        headPara,
-        opts.combined
-          ? new Paragraph({ children: [new TextRun({ text: `Presidente y Oración: ${wk.chairman || '—'}`, size: 18 })] })
-          : new Paragraph({ children: [new TextRun({ text: `Presidente: ${wk.chairman || '—'}   Oración: ${wk.opening || '—'}`, size: 18 })] }),
-        new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: partRows }),
-        footerPara,
-      ],
-    });
+    const header = shadePara(wk.weekLabel + (wk.scripture ? ` | ${wk.scripture}` : ''), { fill: tealHex, color: 'FFFFFF', bold: true });
+    const presLine = opts.combined
+      ? new Paragraph({ children: [new TextRun({ text: `Presidente y Oración: ${wk.chairman || '—'}`, size: 18 })] })
+      : new Paragraph({ children: [new TextRun({ text: `Presidente: ${wk.chairman || '—'}   Oración: ${wk.opening || '—'}`, size: 18 })] });
+    const footer = shadePara(`LIMPIEZA ${wk.cleaning}    HOSPITALIDAD ${wk.hospitality}    Oración: ${wk.closing || '—'}`, { fill: YELLOW_HEX, bold: true, size: 16 });
 
     if (opts.combined && wk.weekend) {
+      const leftParas: any[] = [header, presLine];
+      for (const p of wk.parts ?? []) {
+        if (p.sep === 'amber') leftParas.push(shadePara(' ', { fill: AMBER_HEX }));
+        else if (p.sep === 'maroon') leftParas.push(shadePara(' ', { fill: MAROON_HEX }));
+        if (p.bible) leftParas.push(new Paragraph({ children: [new TextRun({ text: 'SALA PRINCIPAL', bold: true, size: 16 })] }));
+        leftParas.push(new Paragraph({ children: [new TextRun({ text: `${p.num}. ${p.title} (${p.dur} min.) — ${p.name || '—'}`, size: 18 })] }));
+      }
+      if (wk.cbsNum != null) leftParas.push(new Paragraph({ children: [new TextRun({ text: `${wk.cbsNum}. Estudio bíblico (${wk.cbsDur} min.) — ${wk.cbs || '—'}`, size: 18 })] }));
+      leftParas.push(footer);
+
       const w = wk.weekend;
-      const wkRows = [
+      const rightParas: any[] = [shadePara(`Domingo ${w.date}`, { fill: tealHex, color: 'FFFFFF', bold: true })];
+      const wkRows: [string, string][] = [
         ['Presidente', w.chairman], ['Discurso', w.talk], ['Orador', w.speaker],
         ['Congregación', w.congregation], ['Conductor', w.conductor], ['Lector', w.reader],
-      ].map(([lab, val]) => new TableRow({ children: [cell(lab, { bold: true }), cell(val || '—')] }));
-      const wkCell = new TableCell({
-        children: [
-          new Paragraph({ shading: { type: ShadingType.CLEAR, fill: tealHex }, children: [new TextRun({ text: `Domingo ${w.date}`, bold: true, color: 'FFFFFF' })] }),
-          new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: wkRows }),
-          new Paragraph({ shading: { type: ShadingType.CLEAR, fill: YELLOW_HEX }, children: [new TextRun({ text: `LIMPIEZA ${w.cleaning}  HOSP ${w.hospitality}`, bold: true, size: 16 })] }),
-        ],
-      });
+      ];
+      for (const [lab, val] of wkRows) {
+        rightParas.push(new Paragraph({ children: [new TextRun({ text: `${lab}: `, bold: true, size: 18 }), new TextRun({ text: val || '—', size: 18 })] }));
+      }
+      rightParas.push(shadePara(`LIMPIEZA ${w.cleaning}  HOSP ${w.hospitality}`, { fill: YELLOW_HEX, bold: true, size: 16 }));
+
       sectionChildren.push(new Table({
         width: { size: 100, type: WidthType.PERCENTAGE },
-        columnWidths: [8200, 4800],
-        rows: [new TableRow({ children: [midweekCell, wkCell] })],
+        columnWidths: [6200, 3600],
+        rows: [new TableRow({ children: [cell(leftParas), cell(rightParas)] })],
       }));
     } else {
-      sectionChildren.push(midweekCell);
+      const partRows: any[] = [];
+      const pushSep = (hex: string) => partRows.push(new TableRow({ children: [new TableCell({ columnSpan: 2, shading: { type: ShadingType.CLEAR, fill: hex }, children: [new Paragraph({ children: [new TextRun({ text: '' })] })] })] }));
+      for (const p of wk.parts ?? []) {
+        if (p.sep === 'amber') pushSep(AMBER_HEX);
+        else if (p.sep === 'maroon') pushSep(MAROON_HEX);
+        if (p.bible) partRows.push(new TableRow({ children: [new TableCell({ columnSpan: 2, children: [new Paragraph({ children: [new TextRun({ text: 'SALA PRINCIPAL', bold: true, size: 16 })] })] })] }));
+        partRows.push(new TableRow({
+          children: [
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: `${p.num}. ${p.title} (${p.dur} min.)`, size: 18 })] })] }),
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: p.name || '—', size: 18 })] })] }),
+          ],
+        }));
+      }
+      if (wk.cbsNum != null) partRows.push(new TableRow({
+        children: [
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: `${wk.cbsNum}. Estudio bíblico (${wk.cbsDur} min.)`, size: 18 })] })] }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: wk.cbs || '—', size: 18 })] })] }),
+        ],
+      }));
+
+      sectionChildren.push(header, presLine);
+      if (partRows.length) sectionChildren.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: partRows }));
+      sectionChildren.push(footer);
     }
     sectionChildren.push(new Paragraph({ text: '' }));
   }
