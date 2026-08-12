@@ -8,7 +8,7 @@ import {
   PDF_OFFSETS_DEFAULT,
 } from '@/lib/exportS89';
 import type { PdfOffsets } from '@/lib/exportS89';
-import { exportXlsx } from '@/lib/exportReport';
+import { exportXlsx, exportPdf, exportDocx } from '@/lib/exportReport';
 
 const CONGREGATION_NAME = 'La Estación';
 
@@ -286,6 +286,15 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
   const [pdfOffsets, setPdfOffsets] = useState<PdfOffsets>({ ...PDF_OFFSETS_DEFAULT });
   const [showPdfAdjust, setShowPdfAdjust] = useState(false);
 
+  // Reunión elegida para las Hojas S-89 individuales (85 mm). Por defecto la más
+  // reciente (no la primera, que solía ser mayo/2026). El usuario la cambia con el
+  // selector de semana.
+  const [s89WeekId, setS89WeekId] = useState<string | null>(null);
+  const s89Meeting =
+    allMeetings.find(m => m.id === s89WeekId) ??
+    allMeetings.slice().sort((a, b) => b.date.localeCompare(a.date))[0] ??
+    selectedMeeting ?? null;
+
   const adjustOffset = (field: keyof PdfOffsets, delta: number) =>
     setPdfOffsets(prev => ({ ...prev, [field]: Math.round((prev[field] + delta) * 10) / 10 }));
 
@@ -298,10 +307,10 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
   }, [isOpen]);
 
   const runS89Export = async (kind: 'pdf' | 'docx' | 'xlsx' | 'csv') => {
-    if (!selectedMeeting) return;
-    const slips = buildSlips(selectedMeeting);
+    if (!s89Meeting) return;
+    const slips = buildSlips(s89Meeting);
     if (slips.length === 0) return;
-    const base = `Hojas_S-89_${selectedMeeting.date}`;
+    const base = `Hojas_S-89_${s89Meeting.date}`;
     setS89Busy(true);
     try {
       if (kind === 'pdf')       await downloadS89IndividualPdf(slips, base, pdfOffsets);
@@ -388,6 +397,42 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
     }
   };
 
+  // Programa mensual (S-140 / combinado) como tabla para descargar PDF/DOCX/XLSX.
+  const buildProgramRows = (): { columns: string[]; rows: (string | number | null | undefined)[][] } => {
+    const columns = ['Semana', 'Parte', 'Min', 'Asignado'];
+    const rows: (string | number | null | undefined)[][] = [];
+    for (const m of monthlyMeetings) {
+      const wk = weekRangeLabel(m.date);
+      rows.push([wk, 'Presidente', '', getName(m.chairman_id, publishers)]);
+      rows.push([wk, 'Oración inicial', '', getName(m.opening_prayer_id, publishers)]);
+      const parts = ((m.parts || []) as Part[]).slice().sort((a, b) => a.part_number - b.part_number);
+      for (const p of parts) rows.push([wk, programTitle(p), p.duration_minutes ?? '', rowName(p)]);
+      rows.push([wk, 'Estudio bíblico (CBS)', '', getName(m.cbs_conductor_id, publishers)]);
+      rows.push([wk, 'Oración final', '', getName(m.closing_prayer_id, publishers)]);
+      if (reportType === 'combined') {
+        const w = weekendByMonday[mondayOf(m.date)];
+        if (w) {
+          rows.push([wk, 'Fin de semana — Presidente', '', getName(w.chairman_id, publishers)]);
+          rows.push([wk, 'Fin de semana — Discurso', w.duration_minutes ?? '', wkTalk(w)]);
+        }
+      }
+    }
+    return { columns, rows };
+  };
+
+  const exportProgram = async (kind: 'pdf' | 'docx' | 'xlsx') => {
+    const { columns, rows } = buildProgramRows();
+    const title = reportType === 'combined' ? 'Programa combinado' : 'Programa S-140';
+    const subtitle = getMonthES(selectedMonth);
+    try {
+      if (kind === 'pdf') await exportPdf({ title, congName: CONGREGATION_NAME, subtitle, columns, rows });
+      else if (kind === 'docx') await exportDocx({ title, congName: CONGREGATION_NAME, subtitle, columns, rows });
+      else await exportXlsx({ title, congName: CONGREGATION_NAME, subtitle, columns, rows });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Error al exportar');
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 print:p-0 print:bg-white print:relative print:inset-auto">
       <style jsx global>{`
@@ -453,6 +498,26 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                   >
                     {availableMonths.map(m => <option key={m} value={m}>{getMonthES(m)}</option>)}
                   </select>
+                </div>
+              )}
+
+              {(reportType === 's140' || reportType === 'combined') && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Descargar programa</label>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => exportProgram('pdf')}
+                      className="px-3 py-2 rounded-lg bg-rose-600 text-white text-sm font-semibold hover:bg-rose-700"
+                    >PDF</button>
+                    <button
+                      onClick={() => exportProgram('docx')}
+                      className="px-3 py-2 rounded-lg bg-sky-700 text-white text-sm font-semibold hover:bg-sky-800"
+                    >DOCX</button>
+                    <button
+                      onClick={() => exportProgram('xlsx')}
+                      className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700"
+                    >XLSX</button>
+                  </div>
                 </div>
               )}
             </div>
@@ -784,13 +849,30 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
               {/* ── Hojas S-89 individuales (85 mm) ─────────────────────────── */}
               {reportType === 's89ind' && (
                 <div>
-                  {selectedMeeting ? (() => {
-                    const slips = buildSlips(selectedMeeting);
+                  {(() => {
+                    const weekOptions = allMeetings.slice().sort((a, b) => b.date.localeCompare(a.date));
+                    const countById: Record<string, number> = {};
+                    for (const m of weekOptions) countById[m.id] = buildSlips(m).length;
+                    if (!s89Meeting) {
+                      return <p className="text-center py-12 text-slate-400">No hay reuniones cargadas.</p>;
+                    }
+                    const slips = buildSlips(s89Meeting);
                     return (
                       <>
-                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 border-b pb-2">
-                          Hojas S-89 individuales — {fmtJW(selectedMeeting.date)}
-                        </p>
+                        <div className="mb-4 border-b pb-2">
+                          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Semana</label>
+                          <select
+                            value={s89Meeting.id}
+                            onChange={e => setS89WeekId(e.target.value || null)}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                          >
+                            {weekOptions.map(m => (
+                              <option key={m.id} value={m.id}>
+                                {fmtJW(m.date)}{countById[m.id] ? ` (${countById[m.id]})` : ' (sin partes)'}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
 
                         <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
                           <p className="text-sm text-slate-600 mb-3">
@@ -831,35 +913,47 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                             <span className="text-slate-400 text-xs">{showPdfAdjust ? '▲' : '▼'}</span>
                           </button>
                           {showPdfAdjust && (
-                            <div className="px-4 pb-3 pt-1 space-y-1.5 border-t border-slate-200">
+                            <div className="px-4 pb-3 pt-1 space-y-2 border-t border-slate-200">
                               {([
                                 { key: 'nombre',     label: 'Nombre' },
                                 { key: 'ayudante',   label: 'Ayudante' },
                                 { key: 'fecha',      label: 'Fecha' },
                                 { key: 'asignacion', label: 'Asignación' },
-                                { key: 'sala',       label: 'Sala (X)' },
-                              ] as { key: keyof PdfOffsets; label: string }[]).map(({ key, label }) => (
-                                <div key={key} className="flex items-center gap-2 text-sm">
-                                  <span className="w-24 text-slate-600 shrink-0">{label}</span>
-                                  <button
-                                    onClick={() => adjustOffset(key, -0.5)}
-                                    className="w-7 h-7 rounded bg-slate-200 hover:bg-slate-300 font-bold text-slate-700 flex items-center justify-center"
-                                  >−</button>
-                                  <span className="w-14 text-center font-mono text-slate-800 tabular-nums">
-                                    {pdfOffsets[key] > 0 ? '+' : ''}{pdfOffsets[key].toFixed(1)}
-                                  </span>
-                                  <button
-                                    onClick={() => adjustOffset(key, +0.5)}
-                                    className="w-7 h-7 rounded bg-slate-200 hover:bg-slate-300 font-bold text-slate-700 flex items-center justify-center"
-                                  >+</button>
-                                  {pdfOffsets[key] !== 0 && (
-                                    <button
-                                      onClick={() => setPdfOffsets(prev => ({ ...prev, [key]: 0 }))}
-                                      className="text-[11px] text-slate-400 hover:text-slate-600 ml-1"
-                                    >reset</button>
-                                  )}
-                                </div>
-                              ))}
+                                { key: 'sala',       label: 'Sala' },
+                              ] as { key: keyof PdfOffsets; label: string }[]).map(({ key, label }) => {
+                                const xKey = (key + 'X') as keyof PdfOffsets;
+                                return (
+                                  <div key={key} className="border border-slate-200 rounded-lg p-2">
+                                    <div className="text-sm font-medium text-slate-600 mb-1">{label}</div>
+                                    {(['X', 'Y'] as const).map(axis => {
+                                      const k = axis === 'Y' ? key : xKey;
+                                      const val = pdfOffsets[k] as number;
+                                      return (
+                                        <div key={axis} className="flex items-center gap-2 text-sm">
+                                          <span className="w-5 text-slate-400 shrink-0 font-bold">{axis}</span>
+                                          <button
+                                            onClick={() => adjustOffset(k, -0.5)}
+                                            className="w-7 h-7 rounded bg-slate-200 hover:bg-slate-300 font-bold text-slate-700 flex items-center justify-center"
+                                          >−</button>
+                                          <span className="w-14 text-center font-mono text-slate-800 tabular-nums">
+                                            {val > 0 ? '+' : ''}{val.toFixed(1)}
+                                          </span>
+                                          <button
+                                            onClick={() => adjustOffset(k, +0.5)}
+                                            className="w-7 h-7 rounded bg-slate-200 hover:bg-slate-300 font-bold text-slate-700 flex items-center justify-center"
+                                          >+</button>
+                                          {val !== 0 && (
+                                            <button
+                                              onClick={() => setPdfOffsets(prev => ({ ...prev, [k]: 0 }))}
+                                              className="text-[11px] text-slate-400 hover:text-slate-600 ml-1"
+                                            >reset</button>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })}
                               <button
                                 onClick={() => setPdfOffsets({ ...PDF_OFFSETS_DEFAULT })}
                                 className="mt-1 text-[11px] text-slate-400 hover:text-slate-600"
@@ -885,9 +979,7 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                         )}
                       </>
                     );
-                  })() : (
-                    <p className="text-center py-12 text-slate-400">Selecciona una semana en la vista principal para generar las hojas S-89 individuales.</p>
-                  )}
+                  })()}
                 </div>
               )}
 

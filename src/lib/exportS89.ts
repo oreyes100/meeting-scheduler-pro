@@ -16,16 +16,24 @@
 import type { SlipData, Sala } from './s89Individual';
 import { salaCsv } from './s89Individual';
 
-/** Deltas en mm para ajustar la posición vertical de cada campo en el PDF. */
+/** Deltas en mm para ajustar la posición de cada campo en el PDF (X = horizontal, Y = vertical). */
 export interface PdfOffsets {
   nombre: number;
   ayudante: number;
   fecha: number;
   asignacion: number;
   sala: number;
+  nombreX: number;
+  ayudanteX: number;
+  fechaX: number;
+  asignacionX: number;
+  salaX: number;
 }
 
-export const PDF_OFFSETS_DEFAULT: PdfOffsets = { nombre: 0, ayudante: 0, fecha: 0, asignacion: 0, sala: 0 };
+export const PDF_OFFSETS_DEFAULT: PdfOffsets = {
+  nombre: 0, ayudante: 0, fecha: 0, asignacion: 0, sala: 0,
+  nombreX: 0, ayudanteX: 0, fechaX: 0, asignacionX: 0, salaX: 0,
+};
 
 /** Línea de intervención: "3 Lectura de la Biblia > Jer 24:1-10 (th lección 5)". */
 function asignacionLinea(s: SlipData): string {
@@ -81,18 +89,18 @@ export async function buildS89IndividualPdfBlob(
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
-    doc.text(s.nombre,     X_TEXT,   PDF_Y.nombre     + oy + offsets.nombre,     { maxWidth: SLIP_W - X_TEXT - 3 });
-    doc.text(s.ayudante,   X_TEXT,   PDF_Y.ayudante   + oy + offsets.ayudante,   { maxWidth: SLIP_W - X_TEXT - 3 });
-    doc.text(s.fechaLarga, X_TEXT,   PDF_Y.fecha      + oy + offsets.fecha);
+    doc.text(s.nombre,     X_TEXT + offsets.nombreX,   PDF_Y.nombre     + oy + offsets.nombre,     { maxWidth: SLIP_W - X_TEXT - 3 });
+    doc.text(s.ayudante,   X_TEXT + offsets.ayudanteX, PDF_Y.ayudante   + oy + offsets.ayudante,   { maxWidth: SLIP_W - X_TEXT - 3 });
+    doc.text(s.fechaLarga, X_TEXT + offsets.fechaX,     PDF_Y.fecha      + oy + offsets.fecha);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text(asignacionLinea(s), X_ASSIGN, PDF_Y.asignacion + oy + offsets.asignacion,
+    doc.text(asignacionLinea(s), X_ASSIGN + offsets.asignacionX, PDF_Y.asignacion + oy + offsets.asignacion,
       { maxWidth: SLIP_W - X_ASSIGN - 3 });
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
-    doc.text('X', X_SALA, PDF_Y.sala + (SALA_DY[s.sala] ?? 0) + oy + offsets.sala);
+    doc.text('X', X_SALA + offsets.salaX, PDF_Y.sala + (SALA_DY[s.sala] ?? 0) + oy + offsets.sala);
   });
 
   return doc.output('blob');
