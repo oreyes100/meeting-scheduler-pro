@@ -8,7 +8,8 @@ import {
   PDF_OFFSETS_DEFAULT,
 } from '@/lib/exportS89';
 import type { PdfOffsets } from '@/lib/exportS89';
-import { exportXlsx, exportPdf, exportDocx } from '@/lib/exportReport';
+import { exportXlsx } from '@/lib/exportReport';
+import { exportProgramPdf, exportProgramDocx, exportProgramXlsx, type ProgramWeek } from '@/lib/exportProgram';
 
 const CONGREGATION_NAME = 'La Estación';
 
@@ -398,37 +399,81 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
     }
   };
 
-  // Programa mensual (S-140 / combinado) como tabla para descargar PDF/DOCX/XLSX.
-  const buildProgramRows = (): { columns: string[]; rows: (string | number | null | undefined)[][] } => {
-    const columns = ['Semana', 'Parte', 'Min', 'Asignado'];
-    const rows: (string | number | null | undefined)[][] = [];
-    for (const m of monthlyMeetings) {
-      const wk = weekRangeLabel(m.date);
-      rows.push([wk, 'Presidente', '', getName(m.chairman_id, publishers)]);
-      rows.push([wk, 'Oración inicial', '', getName(m.opening_prayer_id, publishers)]);
-      const parts = ((m.parts || []) as Part[]).slice().sort((a, b) => a.part_number - b.part_number);
-      for (const p of parts) rows.push([wk, programTitle(p), p.duration_minutes ?? '', rowName(p)]);
-      rows.push([wk, 'Estudio bíblico (CBS)', '', getName(m.cbs_conductor_id, publishers)]);
-      rows.push([wk, 'Oración final', '', getName(m.closing_prayer_id, publishers)]);
-      if (reportType === 'combined') {
-        const w = weekendByMonday[mondayOf(m.date)];
-        if (w) {
-          rows.push([wk, 'Fin de semana — Presidente', '', getName(w.chairman_id, publishers)]);
-          rows.push([wk, 'Fin de semana — Discurso', w.duration_minutes ?? '', wkTalk(w)]);
-        }
+  // Programa mensual (S-140 / combinado) con el MISMO formato que la impresión.
+  const buildProgramWeeks = (type: 's140' | 'combined'): ProgramWeek[] =>
+    monthlyMeetings.map(m => {
+      if (m.assembly_type) {
+        return {
+          weekLabel: weekRangeLabel(m.date),
+          isAssembly: true,
+          assemblyLabel: m.assembly_type === 'regional' ? 'ASAMBLEA REGIONAL' : 'ASAMBLEA DE CIRCUITO',
+        };
       }
-    }
-    return { columns, rows };
-  };
+      const allParts = (m.parts || []) as Part[];
+      const gems = allParts.find(p => p.part_type === 'spiritual_gems');
+      const scripture = gems ? extractScripture(gems.title) : '';
+      const mainParts = allParts.filter(p => p.part_type !== 'cbs').sort((a, b) => a.part_number - b.part_number);
+      const cbsPart = allParts.find(p => p.part_type === 'cbs');
+      const bibleIdx = mainParts.findIndex(p => p.part_type === 'bible_reading');
+      const firstStudentIdx = mainParts.findIndex(p => p.part_type === 'student_part');
+      const firstLivingIdx = mainParts.findIndex(p => p.part_type === 'living_part');
+
+      const chairmanName = m.chairman?.name || getName(m.chairman_id, publishers);
+      const openingName = m.opening_prayer?.name || getName(m.opening_prayer_id, publishers) || chairmanName;
+      const closingName = m.closing_prayer?.name || getName(m.closing_prayer_id, publishers);
+      const cbsConductor = m.cbs_conducer?.name || getName(m.cbs_conductor_id, publishers);
+      const cbsReader = m.cbs_reader?.name || getName(m.cbs_reader_id, publishers);
+      const cbsName = cbsConductor && cbsReader ? `${cbsConductor}/${cbsReader}` : (cbsConductor || cbsReader || '');
+
+      const parts: ProgramWeek['parts'] = mainParts.map((p, idx) => ({
+        num: p.part_number,
+        title: programTitle(p),
+        dur: p.duration_minutes ?? '',
+        name: rowName(p),
+        sep: idx === firstStudentIdx ? 'amber' : idx === firstLivingIdx ? 'maroon' : null,
+        bible: idx === bibleIdx,
+      }));
+
+      const wk = weekendByMonday[mondayOf(m.date)];
+      const week: ProgramWeek = {
+        weekLabel: weekRangeLabel(m.date),
+        scripture,
+        chairman: chairmanName,
+        opening: openingName,
+        closing: closingName,
+        parts,
+        cbs: cbsName,
+        cbsNum: cbsPart?.part_number ?? null,
+        cbsDur: cbsPart?.duration_minutes ?? '',
+        cleaning: m.cleaning_group ?? '___',
+        hospitality: wkHospitality(wk) || '___',
+      };
+      if (type === 'combined' && wk) {
+        week.weekend = {
+          date: wk.date,
+          chairman: wkName(wk?.chairman),
+          talk: wkTalk(wk),
+          speaker: wkSpeaker(wk),
+          congregation: wkCongregation(wk),
+          conductor: wkName(wk?.wt_conductor),
+          reader: wkName(wk?.wt_reader),
+          cleaning: wk?.cleaning_group ?? '___',
+          hospitality: wkHospitality(wk),
+        };
+      }
+      return week;
+    });
 
   const exportProgram = async (kind: 'pdf' | 'docx' | 'xlsx') => {
-    const { columns, rows } = buildProgramRows();
-    const title = reportType === 'combined' ? 'Programa combinado' : 'Programa S-140';
+    const combined = reportType === 'combined';
+    const weeks = buildProgramWeeks(combined ? 'combined' : 's140');
+    const title = combined ? 'Programa combinado' : 'Programa S-140';
     const subtitle = getMonthES(selectedMonth);
+    const opts = { title, congName: CONGREGATION_NAME, subtitle, printedOn, combined };
     try {
-      if (kind === 'pdf') await exportPdf({ title, congName: CONGREGATION_NAME, subtitle, columns, rows });
-      else if (kind === 'docx') await exportDocx({ title, congName: CONGREGATION_NAME, subtitle, columns, rows });
-      else await exportXlsx({ title, congName: CONGREGATION_NAME, subtitle, columns, rows });
+      if (kind === 'pdf') await exportProgramPdf(weeks, opts);
+      else if (kind === 'docx') await exportProgramDocx(weeks, opts);
+      else await exportProgramXlsx(weeks, opts);
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Error al exportar');
     }
