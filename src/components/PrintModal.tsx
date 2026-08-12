@@ -286,14 +286,15 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
   const [pdfOffsets, setPdfOffsets] = useState<PdfOffsets>({ ...PDF_OFFSETS_DEFAULT });
   const [showPdfAdjust, setShowPdfAdjust] = useState(false);
 
-  // Reunión elegida para las Hojas S-89 individuales (85 mm). Por defecto la más
-  // reciente (no la primera, que solía ser mayo/2026). El usuario la cambia con el
-  // selector de semana.
+  // Reunión elegida para las Hojas S-89 individuales (85 mm). Por defecto la semana
+  // seleccionada en la vista principal (p.ej. septiembre); si no hay selección,
+  // la más reciente. El usuario la cambia con el selector de semana.
   const [s89WeekId, setS89WeekId] = useState<string | null>(null);
   const s89Meeting =
     allMeetings.find(m => m.id === s89WeekId) ??
+    selectedMeeting ??
     allMeetings.slice().sort((a, b) => b.date.localeCompare(a.date))[0] ??
-    selectedMeeting ?? null;
+    null;
 
   const adjustOffset = (field: keyof PdfOffsets, delta: number) =>
     setPdfOffsets(prev => ({ ...prev, [field]: Math.round((prev[field] + delta) * 10) / 10 }));
@@ -314,7 +315,7 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
     setS89Busy(true);
     try {
       if (kind === 'pdf')       await downloadS89IndividualPdf(slips, base, pdfOffsets);
-      else if (kind === 'docx') await downloadS89IndividualDocx(slips, base);
+      else if (kind === 'docx') await downloadS89IndividualDocx(slips, base, pdfOffsets);
       else if (kind === 'xlsx') await downloadS89Xlsx(slips, base);
       else                      downloadS89Csv(slips, base);
     } catch (e) {

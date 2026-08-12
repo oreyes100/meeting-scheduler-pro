@@ -110,8 +110,9 @@ export async function buildS89IndividualPdfBlob(
 // Secuencia de espaciadores/valores del modelo (size en half-points = valor sz).
 const INDENT = 1701;        // twips — sangría izquierda de los valores (30 mm)
 const INDENT_MARK = 2000;   // twips — asignación y "X" llevan sangría algo mayor
+const TWIP_PER_MM = 56.6929; // 1 mm = 56.6929 twips
 
-export async function buildS89IndividualDocxBlob(slips: SlipData[]): Promise<Blob> {
+export async function buildS89IndividualDocxBlob(slips: SlipData[], offsets: PdfOffsets = PDF_OFFSETS_DEFAULT): Promise<Blob> {
   const docx: any = unwrap(await import('docx'));
   const { Document, Packer, Paragraph, TextRun, SectionType } = docx;
 
@@ -123,29 +124,33 @@ export async function buildS89IndividualDocxBlob(slips: SlipData[]): Promise<Blo
       children: [new TextRun({ text: '', size: sz, font: FONT })],
     });
 
-  const value = (text: string, sz: number, indent: number, bold = true) =>
-    new Paragraph({
-      spacing: { after: 0, line: 240, lineRule: 'auto' },
-      indent: { left: indent },
+  // `field` aplica los ajustes X (sangría) e Y (espaciado before) del PDF.
+  const value = (text: string, sz: number, baseIndent: number, bold = true, field?: keyof PdfOffsets) => {
+    const ox = field ? (offsets as any)[`${field}X`] ?? 0 : 0;
+    const oy = field ? (offsets as any)[field] ?? 0 : 0;
+    return new Paragraph({
+      spacing: { after: 0, line: 240, lineRule: 'auto', before: Math.round(oy * TWIP_PER_MM) },
+      indent: { left: Math.round(baseIndent + ox * TWIP_PER_MM) },
       children: [new TextRun({ text, size: sz, bold, font: FONT })],
     });
+  };
 
   const sections = slips.map(s => {
     const children: any[] = [
       spacer(18), spacer(18), spacer(18), spacer(16),
-      value(s.nombre, 22, INDENT),
+      value(s.nombre, 22, INDENT, true, 'nombre'),
       spacer(20),
-      value(s.ayudante, 22, INDENT),
+      value(s.ayudante, 22, INDENT, true, 'ayudante'),
       spacer(12),
-      value(s.fechaLarga, 22, INDENT),
+      value(s.fechaLarga, 22, INDENT, true, 'fecha'),
       spacer(16),
-      value(asignacionLinea(s), 20, INDENT_MARK, false),
+      value(asignacionLinea(s), 20, INDENT_MARK, false, 'asignacion'),
       spacer(18), spacer(18), spacer(18), spacer(16),
     ];
     // La marca "X" cae en la casilla de la sala: auxiliares una/dos líneas abajo.
     const extra = s.sala === 'aux_1' ? 1 : s.sala === 'aux_2' ? 2 : 0;
     for (let i = 0; i < extra; i++) children.push(spacer(18));
-    children.push(value('X', 28, INDENT_MARK));
+    children.push(value('X', 28, INDENT_MARK, true, 'sala'));
 
     return {
       properties: {
@@ -163,19 +168,26 @@ export async function buildS89IndividualDocxBlob(slips: SlipData[]): Promise<Blo
   return Packer.toBlob(doc);
 }
 
-// ── XLSX (tabla de datos, mismas 5 columnas del CSV) ─────────────────────────
+// ── XLSX (tabla de datos) ────────────────────────────────────────────────────
+// CSV conserva las 5 columnas cortas; el XLSX añade la fuente de la asignación.
 const HEADERS = ['Nombre', 'Ayudante', 'Fecha', 'Num de Intervencion', 'Sala'];
 
 function slipRow(s: SlipData): (string | number)[] {
   return [s.nombre, s.ayudante, s.fechaLarga, s.numIntervencion, salaCsv(s.sala)];
 }
 
+const XLSX_HEADERS = ['Nombre', 'Ayudante', 'Fecha', 'Num de Intervencion', 'Asignacion', 'Basado en', 'Sala'];
+
+function xlsxRow(s: SlipData): (string | number)[] {
+  return [s.nombre, s.ayudante, s.fechaLarga, s.numIntervencion, s.tituloCorto, s.material, salaCsv(s.sala)];
+}
+
 export async function buildS89XlsxBlob(slips: SlipData[]): Promise<Blob> {
   const XLSX: any = unwrap(await import('xlsx-js-style'));
-  const data = [HEADERS, ...slips.map(slipRow)];
+  const data = [XLSX_HEADERS, ...slips.map(xlsxRow)];
   const ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!cols'] = HEADERS.map((h, i) => ({
-    wch: Math.min(40, Math.max(h.length, ...slips.map(s => String(slipRow(s)[i]).length)) + 2),
+  ws['!cols'] = XLSX_HEADERS.map((h, i) => ({
+    wch: Math.min(50, Math.max(h.length, ...slips.map(s => String(xlsxRow(s)[i]).length)) + 2),
   }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'S-89');
@@ -210,8 +222,8 @@ function downloadBlob(blob: Blob, filename: string) {
 export async function downloadS89IndividualPdf(slips: SlipData[], base: string, offsets?: PdfOffsets) {
   downloadBlob(await buildS89IndividualPdfBlob(slips, offsets), `${base}.pdf`);
 }
-export async function downloadS89IndividualDocx(slips: SlipData[], base: string) {
-  downloadBlob(await buildS89IndividualDocxBlob(slips), `${base}.docx`);
+export async function downloadS89IndividualDocx(slips: SlipData[], base: string, offsets?: PdfOffsets) {
+  downloadBlob(await buildS89IndividualDocxBlob(slips, offsets), `${base}.docx`);
 }
 export async function downloadS89Xlsx(slips: SlipData[], base: string) {
   downloadBlob(await buildS89XlsxBlob(slips), `${base}.xlsx`);
