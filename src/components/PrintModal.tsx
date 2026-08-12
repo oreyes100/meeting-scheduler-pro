@@ -326,11 +326,11 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
   const availableMonths = Array.from(new Set(allMeetings.map(m => m.date.substring(0, 7)))).sort() as string[];
   const printedOn = fmtJW(new Date().toISOString().slice(0, 10));
 
-  // Reporte de publicadores: una columna por semana; la celda muestra el número
-  // de asignación dado (y "A" si fue en sala auxiliar). Segmentado por ancianos /
-  // siervos ministeriales / publicadores.
-  const monthMeetings = allMeetings.filter(m => meetingInMonth(m.date, selectedMonth));
-  const { detail: pubDetail, weeks: publisherWeeks } = publisherAssignmentDetail(monthMeetings);
+  // Reporte de publicadores: una columna por semana (histórico completo, no solo
+  // el mes seleccionado); la celda muestra el número de asignación dado (y "A" si
+  // fue en sala auxiliar). Segmentado por ancianos / siervos ministeriales / publicadores.
+  const pubMeetings = allMeetings;
+  const { detail: pubDetail, weeks: publisherWeeks } = publisherAssignmentDetail(pubMeetings);
 
   const pubCell = (uid: string, w: string): string => {
     const c = pubDetail[uid]?.[w];
@@ -968,7 +968,7 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                   <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <p className="text-sm text-slate-600 mb-3">
                       Lista de publicadores con la fecha de su última asignación y una columna por
-                      cada semana. En cada celda se muestra el <span className="font-semibold">número de asignación</span> que
+                      cada semana del <span className="font-semibold">historial completo</span>. En cada celda se muestra el <span className="font-semibold">número de asignación</span> que
                       dieron; si fue en <span className="font-semibold">sala auxiliar</span> se agrega <span className="font-semibold">A</span>. Los roles sin
                       número (presidente, oración, CBS) se marcan con <span className="font-semibold">✓</span>. El reporte se
                       divide en Ancianos, Siervos ministeriales y Publicadores.
