@@ -30,7 +30,11 @@ export async function POST(
     }
 
     console.log(`🤖 Triggering auto-assignment for meeting: ${meetingId}`);
-    const result = await runAutoAssignment(meetingId);
+    // The service MUST use the same data store as the rest of the app (the
+    // SQLite shim, `sb()`). Defaulting it to supabase-js would write the
+    // assignments to a separate Supabase project the UI never reads → the
+    // auto-assign button would appear to do nothing.
+    const result = await runAutoAssignment(meetingId, sb());
 
     return NextResponse.json({
       success: true,

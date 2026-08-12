@@ -2,10 +2,15 @@ import { createClient } from '@supabase/supabase-js';
 
 /**
  * Executes the auto-assignment logic for a specific meeting ID.
- * Connects to Supabase using either a custom client or creates a service-role client.
- * 
- * @param {string} meetingId 
- * @param {any} [customClient] 
+ *
+ * The app runs self-hosted over a local SQLite database reached through the
+ * supabase-compatible shim in `@/lib/db`. Every other route uses `sb()` (the
+ * shim), so the auto-assign route MUST pass `sb()` as `customClient` — otherwise
+ * assignments are written to a different store than the one the UI reads and
+ * they silently appear as "not assigned".
+ *
+ * @param {string} meetingId
+ * @param {any} [customClient]
  * @returns {Promise<{ assignedCount: number, totalCount: number, logs: string[] }>}
  */
 export async function runAutoAssignment(meetingId, customClient) {
@@ -49,18 +54,15 @@ export async function runAutoAssignment(meetingId, customClient) {
     return { assignedCount: 0, totalCount: 0, logs };
   }
 
-  // 3. Fetch all active publishers
+  // 3. Fetch all active publishers (scoped to the congregation when possible)
   let users = [];
-  const { data: activeUsers, error: usersError } = await supabase
-    .from('users')
-    .select('*')
-    .eq('is_active', true);
+  let usersQuery = supabase.from('users').select('*').eq('is_active', true);
+  if (meeting.congregation_id) usersQuery = usersQuery.eq('congregation_id', meeting.congregation_id);
+  const { data: activeUsers, error: usersError } = await usersQuery;
 
   if (usersError) {
-    // Fallback in case is_active column doesn't exist yet
-    const { data: usersFallback, error: fallbackError } = await supabase
-      .from('users')
-      .select('*');
+    // Fallback in case is_active / congregation_id columns don't exist
+    const { data: usersFallback, error: fallbackError } = await supabase.from('users').select('*');
     if (fallbackError) throw new Error(`Failed to fetch users: ${fallbackError.message}`);
     users = usersFallback || [];
   } else {
@@ -88,21 +90,36 @@ export async function runAutoAssignment(meetingId, customClient) {
   //     each assignee last filled. (The previous version omitted part_type and
   //     collapsed all roles into a single per-user date, which caused the same
   //     person to keep landing on the same slot every week.)
-  const { data: pastParts, error: historyError } = await supabase
-    .from('meeting_parts')
-    .select(`
-      assigned_user_id,
-      assistant_user_id,
-      part_type,
-      meetings ( date )
-    `)
-    .not('assigned_user_id', 'is', null);
+  //     Uses explicit queries instead of a nested fkey join (`meetings (date)`)
+  //     because the local SQLite shim cannot execute that syntax.
+  let pastParts = [];
+  const { data: allMeetingDates, error: allMeetingsError } = await supabase
+    .from('meetings')
+    .select('id, date');
+  if (!allMeetingsError && allMeetingDates) {
+    const dateByMeetingId = {};
+    for (const m of allMeetingDates) dateByMeetingId[m.id] = m.date;
 
-  if (!historyError && pastParts) {
+    const { data: pastAssigned } = await supabase
+      .from('meeting_parts')
+      .select('id, meeting_id, assigned_user_id, assistant_user_id, part_type')
+      .not('assigned_user_id', 'is', null);
+    const { data: pastAssistants } = await supabase
+      .from('meeting_parts')
+      .select('id, meeting_id, assigned_user_id, assistant_user_id, part_type')
+      .not('assistant_user_id', 'is', null);
+
+    const seen = new Set();
+    for (const p of [...(pastAssigned || []), ...(pastAssistants || [])]) {
+      if (!p.id || seen.has(p.id)) continue;
+      seen.add(p.id);
+      pastParts.push({ ...p, date: dateByMeetingId[p.meeting_id] });
+    }
+
     pastParts.forEach(p => {
-      const meetingDate = p.meetings?.date;
+      const meetingDate = p.date;
       if (!meetingDate) return;
-      if (p.part_type) {
+      if (p.part_type && p.assigned_user_id) {
         bumpHistory(p.assigned_user_id, p.part_type, meetingDate);
       }
       // Assistants are logged under their own role key so they don't get
@@ -124,6 +141,57 @@ export async function runAutoAssignment(meetingId, customClient) {
     });
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // 5. MONTH-LEVEL RULE: a publisher must not be used more than once in the
+  //    same calendar month — whether as the primary, helper (assistant) or any
+  //    meeting-level role (chairman, prayers, CBS). Build the set of user ids
+  //    already occupied in the target meeting's month so they are excluded
+  //    from every candidate pool.
+  // ─────────────────────────────────────────────────────────────────────────
+  const targetMonth = meeting.date ? String(meeting.date).slice(0, 7) : null; // "YYYY-MM"
+  const usedThisMonth = new Set();
+  const markUsed = (uid) => { if (uid) usedThisMonth.add(uid); };
+
+  if (targetMonth) {
+    let monthMeetingsQuery = supabase.from('meetings').select('id').ilike('date', `${targetMonth}-%`);
+    if (meeting.congregation_id) monthMeetingsQuery = monthMeetingsQuery.eq('congregation_id', meeting.congregation_id);
+    const { data: monthMeetings } = await monthMeetingsQuery;
+    const monthIds = (monthMeetings || []).map(m => m.id);
+
+    if (monthIds.length) {
+      const { data: monthParts } = await supabase
+        .from('meeting_parts')
+        .select('assigned_user_id, assistant_user_id')
+        .in('meeting_id', monthIds);
+      (monthParts || []).forEach(p => {
+        markUsed(p.assigned_user_id);
+        markUsed(p.assistant_user_id);
+      });
+
+      const { data: monthHistory } = await supabase
+        .from('part_history')
+        .select('user_id')
+        .in('meeting_id', monthIds);
+      (monthHistory || []).forEach(h => markUsed(h.user_id));
+    }
+  }
+
+  logs.push(`📅 Month rule for ${targetMonth || '(no date)'}: ${usedThisMonth.size} publisher(s) already used this month.`);
+
+  // Array of logs emitted when the strict month rule is broken out of necessity.
+  const fallbackLogs = [];
+
+  // Candidate pool builder. Strict = not used in this meeting AND not used this
+  // month. If the strict pool is empty we RELAX the month rule (still never
+  // double-book within the meeting) so an unassigned part is not left hanging —
+  // the alternative would be permanently unassignable parts late in the month.
+  const poolFor = (filterFn) => {
+    const strict = users.filter(u => !assignedInThisMeeting.has(u.id) && !usedThisMonth.has(u.id) && filterFn(u));
+    if (strict.length > 0) return { candidates: strict, monthOverride: false };
+    const relaxed = users.filter(u => !assignedInThisMeeting.has(u.id) && filterFn(u));
+    return { candidates: relaxed, monthOverride: true };
+  };
+
   // Helper: sort candidates Least-Recently-Assigned for a SPECIFIC role.
   // Users who never did this role come first, then oldest-dated users, with
   // alphabetical name as a stable tie-breaker.
@@ -144,7 +212,7 @@ export async function runAutoAssignment(meetingId, customClient) {
 
   // Set of user IDs assigned in THIS meeting to avoid double-booking
   const assignedInThisMeeting = new Set();
-  
+
   // Pre-fill already manually assigned users
   if (meeting.chairman_id) assignedInThisMeeting.add(meeting.chairman_id);
   if (meeting.opening_prayer_id) assignedInThisMeeting.add(meeting.opening_prayer_id);
@@ -157,6 +225,9 @@ export async function runAutoAssignment(meetingId, customClient) {
     if (p.assistant_user_id) assignedInThisMeeting.add(p.assistant_user_id);
   });
 
+  // Mark the current meeting's pre-existing assignments as used this month too.
+  assignedInThisMeeting.forEach(markUsed);
+
   // --- Assign Meeting-Level Roles first (Chairman, CBS, Prayers) ---
   // The 4th arg is the part_type key used to look up per-role LRA history.
   // If `mirrorAs` is provided, the same user is also written to that other
@@ -165,7 +236,7 @@ export async function runAutoAssignment(meetingId, customClient) {
   // the chairman).
   const assignMeetingRole = async (field, roleName, partType, filterFn, mirrorAs) => {
     if (!meeting[field]) {
-      const candidates = users.filter(u => !assignedInThisMeeting.has(u.id) && filterFn(u));
+      const { candidates, monthOverride } = poolFor(filterFn);
       const sorted = getLRASortedUsers(candidates, partType);
       if (sorted.length > 0) {
         const chosen = sorted[0];
@@ -179,8 +250,12 @@ export async function runAutoAssignment(meetingId, customClient) {
           .eq('id', meetingId);
 
         if (!error) {
+          if (monthOverride && usedThisMonth.has(chosen.id)) {
+            fallbackLogs.push(`⚠️ Month rule relaxed for ${roleName}: reused ${chosen.name} (no fresh candidate).`);
+          }
           meeting[field] = chosen.id;
           assignedInThisMeeting.add(chosen.id);
+          markUsed(chosen.id);
           if (mirrorAs) {
             meeting[mirrorAs.field] = chosen.id;
             logs.push(`✅ Assigned ${chosen.name} as ${roleName} (and ${mirrorAs.label})`);
@@ -255,7 +330,7 @@ export async function runAutoAssignment(meetingId, customClient) {
   for (const part of parts) {
     // 1. Treasures Talk (Male, can_be_speaker)
     if (part.part_type === 'treasures_talk' && !part.assigned_user_id) {
-      const candidates = users.filter(u => !assignedInThisMeeting.has(u.id) && u.gender === 'male' && u.can_be_speaker);
+      const { candidates, monthOverride } = poolFor(u => u.gender === 'male' && u.can_be_speaker);
       const sorted = getLRASortedUsers(candidates, 'treasures_talk');
       if (sorted.length > 0) {
         const chosen = sorted[0];
@@ -263,13 +338,17 @@ export async function runAutoAssignment(meetingId, customClient) {
           .from('meeting_parts')
           .update({ assigned_user_id: chosen.id })
           .eq('id', part.id);
-        
+
         if (!error) {
+          if (monthOverride && usedThisMonth.has(chosen.id)) {
+            fallbackLogs.push(`⚠️ Month rule relaxed for Treasures Talk: reused ${chosen.name} (no fresh candidate).`);
+          }
           assignedInThisMeeting.add(chosen.id);
+          markUsed(chosen.id);
           part.assigned_user_id = chosen.id;
           newlyAssignedCount++;
           logs.push(`✅ Assigned ${chosen.name} to Treasures Talk: "${part.title}"`);
-          
+
           await supabase.from('part_history').insert({
             meeting_id: meetingId,
             user_id: chosen.id,
@@ -285,7 +364,7 @@ export async function runAutoAssignment(meetingId, customClient) {
 
     // 2. Spiritual Gems (Male, can_do_gems)
     if (part.part_type === 'spiritual_gems' && !part.assigned_user_id) {
-      const candidates = users.filter(u => !assignedInThisMeeting.has(u.id) && u.gender === 'male' && u.can_do_gems);
+      const { candidates, monthOverride } = poolFor(u => u.gender === 'male' && u.can_do_gems);
       const sorted = getLRASortedUsers(candidates, 'spiritual_gems');
       if (sorted.length > 0) {
         const chosen = sorted[0];
@@ -293,13 +372,17 @@ export async function runAutoAssignment(meetingId, customClient) {
           .from('meeting_parts')
           .update({ assigned_user_id: chosen.id })
           .eq('id', part.id);
-        
+
         if (!error) {
+          if (monthOverride && usedThisMonth.has(chosen.id)) {
+            fallbackLogs.push(`⚠️ Month rule relaxed for Spiritual Gems: reused ${chosen.name} (no fresh candidate).`);
+          }
           assignedInThisMeeting.add(chosen.id);
+          markUsed(chosen.id);
           part.assigned_user_id = chosen.id;
           newlyAssignedCount++;
           logs.push(`✅ Assigned ${chosen.name} to Spiritual Gems`);
-          
+
           await supabase.from('part_history').insert({
             meeting_id: meetingId,
             user_id: chosen.id,
@@ -315,7 +398,7 @@ export async function runAutoAssignment(meetingId, customClient) {
 
     // 3. Bible Reading (brothers only — women are excluded per congregation policy)
     if (part.part_type === 'bible_reading' && !part.assigned_user_id) {
-      const candidates = users.filter(u => !assignedInThisMeeting.has(u.id) && u.can_do_bible_reading && u.gender === 'male');
+      const { candidates, monthOverride } = poolFor(u => u.can_do_bible_reading && u.gender === 'male');
       const sorted = getLRASortedUsers(candidates, 'bible_reading');
       if (sorted.length > 0) {
         const chosen = sorted[0];
@@ -323,13 +406,17 @@ export async function runAutoAssignment(meetingId, customClient) {
           .from('meeting_parts')
           .update({ assigned_user_id: chosen.id })
           .eq('id', part.id);
-        
+
         if (!error) {
+          if (monthOverride && usedThisMonth.has(chosen.id)) {
+            fallbackLogs.push(`⚠️ Month rule relaxed for Bible Reading (${part.class_type.toUpperCase()}): reused ${chosen.name} (no fresh candidate).`);
+          }
           assignedInThisMeeting.add(chosen.id);
+          markUsed(chosen.id);
           part.assigned_user_id = chosen.id;
           newlyAssignedCount++;
           logs.push(`✅ Assigned ${chosen.name} to Bible Reading (${part.class_type.toUpperCase()})`);
-          
+
           await supabase.from('part_history').insert({
             meeting_id: meetingId,
             user_id: chosen.id,
@@ -346,46 +433,54 @@ export async function runAutoAssignment(meetingId, customClient) {
     // 4. Student Parts (Apply Yourself to the Field Ministry)
     if (part.part_type === 'student_part' && !part.assigned_user_id) {
       const isTalk = part.student_part_type === 'talk';
-      const candidates = users.filter(u => !assignedInThisMeeting.has(u.id) && u.can_do_student_parts && (!isTalk || u.gender === 'male'));
+      const { candidates, monthOverride } = poolFor(u => u.can_do_student_parts && (!isTalk || u.gender === 'male'));
       const sorted = getLRASortedUsers(candidates, 'student_part');
       if (sorted.length > 0) {
         const student = sorted[0];
 
         // Find assistant if needed
         let assistantId = part.assistant_user_id || null;
+        let assistantOverride = false;
         if (!assistantId && part.student_part_type !== 'talk') {
           // Rule: assistant must have same gender as student
-          const assistantCandidates = users.filter(
-            u => !assignedInThisMeeting.has(u.id) &&
-                 u.id !== student.id &&
-                 u.gender === student.gender &&
-                 u.can_be_assistant
+          const { candidates: assistantCandidates, monthOverride: asstOverride } = poolFor(
+            u => u.id !== student.id && u.gender === student.gender && u.can_be_assistant
           );
           const sortedAssistants = getLRASortedUsers(assistantCandidates, 'assistant');
           if (sortedAssistants.length > 0) {
             assistantId = sortedAssistants[0].id;
+            assistantOverride = asstOverride;
           }
         }
 
         const { error } = await supabase
           .from('meeting_parts')
-          .update({ 
+          .update({
             assigned_user_id: student.id,
             assistant_user_id: assistantId
           })
           .eq('id', part.id);
-        
+
         if (!error) {
+          if (monthOverride && usedThisMonth.has(student.id)) {
+            fallbackLogs.push(`⚠️ Month rule relaxed for Student Part: reused ${student.name} (no fresh candidate).`);
+          }
           assignedInThisMeeting.add(student.id);
+          markUsed(student.id);
           part.assigned_user_id = student.id;
-          
+
           let assistantMsg = '';
           if (assistantId) {
+            if (assistantOverride && usedThisMonth.has(assistantId)) {
+              const asstName = users.find(u => u.id === assistantId)?.name;
+              fallbackLogs.push(`⚠️ Month rule relaxed for assistant: reused ${asstName} (no fresh candidate).`);
+            }
             assignedInThisMeeting.add(assistantId);
+            markUsed(assistantId);
             part.assistant_user_id = assistantId;
             const assistantName = users.find(u => u.id === assistantId)?.name;
             assistantMsg = ` with assistant ${assistantName}`;
-            
+
             await supabase.from('part_history').insert({
               meeting_id: meetingId,
               user_id: assistantId,
@@ -397,7 +492,7 @@ export async function runAutoAssignment(meetingId, customClient) {
 
           newlyAssignedCount++;
           logs.push(`✅ Assigned ${student.name}${assistantMsg} to Student Part: "${part.title}" (${part.class_type.toUpperCase()})`);
-          
+
           await supabase.from('part_history').insert({
             meeting_id: meetingId,
             user_id: student.id,
@@ -417,8 +512,7 @@ export async function runAutoAssignment(meetingId, customClient) {
     //    prayers, and treasures talk, fall back to brothers eligible to
     //    preside — they are typically the same elders/MS pool.
     if (part.part_type === 'living_part' && !part.assigned_user_id) {
-      const candidates = users.filter(u =>
-        !assignedInThisMeeting.has(u.id) &&
+      const { candidates, monthOverride } = poolFor(u =>
         u.gender === 'male' &&
         (u.can_be_speaker || u.can_be_chairman)
       );
@@ -429,13 +523,17 @@ export async function runAutoAssignment(meetingId, customClient) {
           .from('meeting_parts')
           .update({ assigned_user_id: chosen.id })
           .eq('id', part.id);
-        
+
         if (!error) {
+          if (monthOverride && usedThisMonth.has(chosen.id)) {
+            fallbackLogs.push(`⚠️ Month rule relaxed for Living Part: reused ${chosen.name} (no fresh candidate).`);
+          }
           assignedInThisMeeting.add(chosen.id);
+          markUsed(chosen.id);
           part.assigned_user_id = chosen.id;
           newlyAssignedCount++;
           logs.push(`✅ Assigned ${chosen.name} to Living Part: "${part.title}"`);
-          
+
           await supabase.from('part_history').insert({
             meeting_id: meetingId,
             user_id: chosen.id,
@@ -481,6 +579,11 @@ export async function runAutoAssignment(meetingId, customClient) {
     .select('assigned_user_id')
     .eq('meeting_id', meetingId);
   const assignedCount = finalParts ? finalParts.filter(p => p.assigned_user_id).length : 0;
+
+  if (fallbackLogs.length) {
+    logs.push('━━━ Month-rule overrides (no fresh candidate available) ━━━');
+    logs.push(...fallbackLogs);
+  }
 
   logs.push(`🎉 Assignment complete. Total assigned parts: ${assignedCount}/${parts.length}.`);
   return {

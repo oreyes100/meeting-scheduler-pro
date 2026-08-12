@@ -129,6 +129,8 @@ class QueryBuilder {
   in(col: string, vals: unknown[]) { this.s.filters.push({ col, op: 'IN', val: vals }); return this; }
   gte(col: string, val: unknown) { this.s.filters.push({ col, op: '>=', val }); return this; }
   lte(col: string, val: unknown) { this.s.filters.push({ col, op: '<=', val }); return this; }
+  gt(col: string, val: unknown) { this.s.filters.push({ col, op: '>', val }); return this; }
+  lt(col: string, val: unknown) { this.s.filters.push({ col, op: '<', val }); return this; }
   ilike(col: string, val: unknown) { this.s.filters.push({ col, op: 'LIKE', val: String(val).replace(/%/g, '%') }); return this; }
   not(col: string, op: string, val: unknown) {
     if (op === 'is') this.s.filters.push({ col, op: 'IS NOT', val });
