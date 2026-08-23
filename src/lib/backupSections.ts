@@ -14,7 +14,7 @@ export const BACKUP_SECTIONS: Record<string, { label: string; tables: string[] }
   co_visits: { label: 'Visitas del Superintendente de Circuito', tables: ['circuit_overseer_visits'] },
   attendance: { label: 'Asistencia a las reuniones', tables: ['meeting_attendance'] },
   responsibilities: { label: 'Responsabilidades en la Congregación', tables: ['congregation_roles'] },
-  cuentas: { label: 'Cuentas (Contabilidad)', tables: ['cuentas_config', 'cuentas_saldo_inicial', 'cuentas_codes', 'cuentas_transactions'] },
+  cuentas: { label: 'Cuentas v2 (Contabilidad)', tables: ['cuentas_config', 'cuentas_saldo_inicial', 'cuentas_codes', 'cuentas_transactions'] },
 };
 
 export const ALL_TABLES: string[] = Object.values(BACKUP_SECTIONS).flatMap(s => s.tables);
