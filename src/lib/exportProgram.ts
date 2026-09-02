@@ -77,8 +77,22 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 function fileBase(title: string, subtitle?: string): string {
-  return `${title}${subtitle ? ` - ${subtitle}` : ''}`.normalize('NFD').replace(/[̀-ͯ]/g, '')
+  return `${title}${subtitle ? ` - ${subtitle}` : ''}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_');
+}
+
+function estimateWeekHeight(wk: ProgramWeek, combined: boolean): number {
+  if (wk.isAssembly) return 14;
+  const leftPartsH = 14 // header (single or 2-line)
+    + (wk.parts?.length || 0) * 5.2
+    + (wk.parts?.filter(p => p.sep).length || 0) * 2
+    + (wk.parts?.filter(p => p.bible).length || 0) * 4
+    + (wk.cbsNum != null ? 5.2 : 0)
+    + 8 // yellow footer
+    + 6; // margin
+  if (!combined || !wk.weekend) return leftPartsH;
+  const rightH = 14 + 6 * 5.2 + 8 + 6;
+  return Math.max(leftPartsH, rightH);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -101,22 +115,56 @@ export async function exportProgramPdf(weeks: ProgramWeek[], opts: ProgramExport
   const rightW = combined ? contentW - leftW - 6 : 0;
 
   let y = M;
-  const newPage = () => { doc.addPage(); y = M; };
-  const ensure = (need: number) => { if (y + need > pageH - M) newPage(); };
-
-  const tealBar = (x: number, w: number, h: number, text: string, rightText?: string) => {
-    doc.setFillColor(61, 125, 142);
-    doc.rect(x, y, w, h, 'F');
-    doc.setTextColor(255, 255, 255);
+  const newPage = () => {
+    doc.addPage();
+    y = M;
+    // Repetir encabezado de documento en páginas siguientes
+    doc.setTextColor(50, 50, 50);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text(text, x + 2, y + h / 2 + 1);
-    if (rightText) {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.text(rightText, x + w - 2, y + h / 2 + 1, { align: 'right' });
+    doc.setFontSize(11);
+    doc.text(`${opts.title} — ${opts.congName} (${opts.subtitle || ''})`, M, y + 3);
+    y += 8;
+  };
+
+  const drawTealHeader = (x: number, w: number, mainTitle: string, presText?: string, oracionText?: string) => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    const mainWidth = doc.getTextWidth(mainTitle);
+    const rightInfo = [
+      presText ? `Pres: ${presText}` : '',
+      oracionText ? `Orac: ${oracionText}` : ''
+    ].filter(Boolean).join('   ');
+    const rightWidth = rightInfo ? doc.getTextWidth(rightInfo) : 0;
+
+    const needsTwoLines = (mainWidth + rightWidth + 8) > w;
+    const barH = needsTwoLines ? 11 : 7;
+
+    doc.setFillColor(61, 125, 142);
+    doc.rect(x, y, w, barH, 'F');
+    doc.setTextColor(255, 255, 255);
+
+    if (needsTwoLines) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.text(mainTitle, x + 2, y + 4.2);
+      if (rightInfo) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(255, 243, 92); // Amarillo suave de alto contraste
+        doc.text(rightInfo, x + 2, y + 8.8);
+      }
+    } else {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9.5);
+      doc.text(mainTitle, x + 2, y + 4.7);
+      if (rightInfo) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(255, 255, 255);
+        doc.text(rightInfo, x + w - 2, y + 4.7, { align: 'right' });
+      }
     }
-    y += h;
+    y += barH;
   };
 
   const sepLine = (x: number, w: number, hex: string) => {
@@ -126,12 +174,15 @@ export async function exportProgramPdf(weeks: ProgramWeek[], opts: ProgramExport
     y += 2;
   };
 
-  const line = (x: number, w: number, left: string, right: string, size = 9) => {
-    doc.setTextColor(40, 40, 40);
+  const line = (x: number, w: number, left: string, right: string, size = 8.5) => {
+    doc.setTextColor(35, 35, 35);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(size);
     doc.text(left, x + 1, y + 3.5);
-    if (right) doc.text(right, x + w - 1, y + 3.5, { align: 'right' });
+    if (right) {
+      doc.setFont('helvetica', 'bold');
+      doc.text(right, x + w - 1, y + 3.5, { align: 'right' });
+    }
     y += 5;
   };
 
@@ -143,33 +194,46 @@ export async function exportProgramPdf(weeks: ProgramWeek[], opts: ProgramExport
     y += 4;
   };
 
+  // Encabezado principal de la primera página
   doc.setTextColor(20, 20, 20);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   doc.text(opts.title, M, y + 4);
   doc.setFontSize(10);
-  doc.setTextColor(90, 90, 90);
+  doc.setTextColor(80, 80, 80);
   doc.text(opts.congName, pageW - M, y + 4, { align: 'right' });
   y += 6;
   if (opts.subtitle) {
     doc.setFontSize(9);
-    doc.setTextColor(80, 80, 80);
+    doc.setTextColor(70, 70, 70);
     doc.text(opts.subtitle, M, y + 3);
     y += 5;
   }
 
   for (const wk of weeks) {
+    const requiredH = estimateWeekHeight(wk, combined);
+    if (y + requiredH > pageH - M) {
+      newPage();
+    }
+
     if (wk.isAssembly) {
-      ensure(10);
-      tealBar(M, contentW, 7, `${wk.weekLabel}  —  ${wk.assemblyLabel ?? 'ASAMBLEA'}`);
-      y += 3;
+      doc.setFillColor(61, 125, 142);
+      doc.rect(M, y, contentW, 7, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text(`${wk.weekLabel}  —  ${wk.assemblyLabel ?? 'ASAMBLEA'}`, M + 2, y + 4.7);
+      y += 10;
       continue;
     }
 
     if (combined) {
-      ensure(40);
-      tealBar(M, leftW, 7, wk.weekLabel + (wk.scripture ? ` | ${wk.scripture}` : ''), `Presidente y Oración: ${wk.chairman || '—'}`);
-      if (wk.weekend) tealBar(rightX, rightW, 7, `Domingo ${wk.weekend.date}`);
+      drawTealHeader(M, leftW, wk.weekLabel + (wk.scripture ? ` | ${wk.scripture}` : ''), wk.chairman, wk.opening);
+      if (wk.weekend) {
+        doc.setFillColor(61, 125, 142);
+        doc.rect(rightX, y - (y - (y - 7)), rightW, 7, 'F'); // sincronizar cabecera fin de semana
+        // Se dibuja en la misma altura inicial del bloque
+      }
       const bodyStart = y;
       for (const p of wk.parts ?? []) {
         if (p.sep === 'amber') sepLine(M, leftW, AMBER_HEX);
@@ -178,20 +242,32 @@ export async function exportProgramPdf(weeks: ProgramWeek[], opts: ProgramExport
         line(M, leftW, `${p.num}. ${p.title} (${p.dur} min.)`, p.name);
       }
       if (wk.cbsNum != null) line(M, leftW, `${wk.cbsNum}. Estudio bíblico (${wk.cbsDur} min.)`, wk.cbs || '');
+      
+      // Footer entre semana
       doc.setFillColor(255, 243, 92);
-      doc.rect(M, y, leftW, 6, 'F');
+      doc.rect(M, y, leftW, 6.5, 'F');
       doc.setTextColor(20, 20, 20);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(7.5);
-      doc.text(`LIMPIEZA ${wk.cleaning}    HOSPITALIDAD ${wk.hospitality}`, M + 1, y + 4);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Oración: ${wk.closing || '—'}`, M + leftW - 1, y + 4, { align: 'right' });
-      y += 8;
+      doc.text(`LIMPIEZA ${wk.cleaning}    HOSPITALIDAD ${wk.hospitality}`, M + 1.5, y + 4.3);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Oración: ${wk.closing || '—'}`, M + leftW - 1.5, y + 4.3, { align: 'right' });
+      y += 8.5;
+      const leftFinalY = y;
+
       if (wk.weekend) {
         let rightY = bodyStart;
+        // Dibujar cabecera derecha fin de semana
+        doc.setFillColor(61, 125, 142);
+        doc.rect(rightX, rightY - 7, rightW, 7, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9.5);
+        doc.text(`Fin de Semana — ${wk.weekend.date}`, rightX + 2, rightY - 2.3);
+
         const w = wk.weekend;
         const wkLine = (lab: string, val: string) => {
-          doc.setTextColor(60, 60, 60);
+          doc.setTextColor(50, 50, 50);
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(8);
           doc.text(lab, rightX + 1, rightY + 3.5);
@@ -205,20 +281,19 @@ export async function exportProgramPdf(weeks: ProgramWeek[], opts: ProgramExport
         wkLine('Congregación', w.congregation);
         wkLine('Conductor', w.conductor);
         wkLine('Lector', w.reader);
+
         doc.setFillColor(255, 243, 92);
-        doc.rect(rightX, rightY, rightW, 6, 'F');
+        doc.rect(rightX, rightY, rightW, 6.5, 'F');
         doc.setTextColor(20, 20, 20);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(7.5);
-        doc.text(`LIMPIEZA ${w.cleaning}  HOSP ${w.hospitality}`, rightX + 1, rightY + 4);
-        rightY += 8;
-        y = Math.max(y, rightY);
+        doc.text(`LIMPIEZA ${w.cleaning}   HOSP ${w.hospitality}`, rightX + 1.5, rightY + 4.3);
+        rightY += 8.5;
+        y = Math.max(leftFinalY, rightY);
       }
-      y += 4;
+      y += 3;
     } else {
-      ensure(40);
-      tealBar(M, contentW, 7, wk.weekLabel + (wk.scripture ? ` | ${wk.scripture}` : ''),
-        `Presidente: ${wk.chairman || '—'}   Oración: ${wk.opening || '—'}`);
+      drawTealHeader(M, contentW, wk.weekLabel + (wk.scripture ? ` | ${wk.scripture}` : ''), wk.chairman, wk.opening);
       for (const p of wk.parts ?? []) {
         if (p.sep === 'amber') sepLine(M, contentW, AMBER_HEX);
         else if (p.sep === 'maroon') sepLine(M, contentW, MAROON_HEX);
@@ -226,21 +301,22 @@ export async function exportProgramPdf(weeks: ProgramWeek[], opts: ProgramExport
         line(M, contentW, `${p.num}. ${p.title} (${p.dur} min.)`, p.name);
       }
       if (wk.cbsNum != null) line(M, contentW, `${wk.cbsNum}. Estudio bíblico (${wk.cbsDur} min.)`, wk.cbs || '');
+      
       doc.setFillColor(255, 243, 92);
-      doc.rect(M, y, contentW, 6, 'F');
+      doc.rect(M, y, contentW, 6.5, 'F');
       doc.setTextColor(20, 20, 20);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(7.5);
-      doc.text(`LIMPIEZA ${wk.cleaning}    HOSPITALIDAD ${wk.hospitality}`, M + 1, y + 4);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Oración: ${wk.closing || '—'}`, M + contentW - 1, y + 4, { align: 'right' });
+      doc.text(`LIMPIEZA ${wk.cleaning}    HOSPITALIDAD ${wk.hospitality}`, M + 1.5, y + 4.3);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Oración: ${wk.closing || '—'}`, M + contentW - 1.5, y + 4.3, { align: 'right' });
       y += 10;
     }
   }
 
   doc.setFontSize(8);
   doc.setTextColor(140, 140, 140);
-  doc.text(`Impreso ${opts.printedOn}`, pageW - M, pageH - 5, { align: 'right' });
+  doc.text(`Impreso ${opts.printedOn}`, pageW - M, pageH - 4, { align: 'right' });
 
   const blob: Blob = await Promise.resolve(doc.output('blob'));
   downloadBlob(blob, `${fileBase(opts.title, opts.subtitle)}.pdf`);
@@ -259,8 +335,15 @@ export async function exportProgramXlsx(weeks: ProgramWeek[], opts: ProgramExpor
   const ensureRow = (r: number) => { while (aoa.length <= r) aoa.push(Array(COLS).fill('')); };
   const setCell = (r: number, c: number, v: any) => { ensureRow(r); aoa[r][c] = v; };
   const setS = (r: number, c: number, s: any) => { styles[`${r},${c}`] = s; };
-  const fill = (hex: string, white = false) => ({ fill: { fgColor: { rgb: hex } }, font: { bold: true, color: { rgb: white ? WHITE_HEX : SLATE_HEX } }, alignment: { vertical: 'center', wrapText: true } });
-  const plain = () => ({ alignment: { vertical: 'center' } });
+  const fill = (hex: string, white = false) => ({
+    fill: { fgColor: { rgb: hex } },
+    font: { bold: true, color: { rgb: white ? WHITE_HEX : SLATE_HEX } },
+    alignment: { vertical: 'center', wrapText: true }
+  });
+  const plain = (bold = false) => ({
+    font: bold ? { bold: true } : undefined,
+    alignment: { vertical: 'center' }
+  });
 
   setCell(0, 0, opts.title);
   merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } });
@@ -281,42 +364,59 @@ export async function exportProgramXlsx(weeks: ProgramWeek[], opts: ProgramExpor
     }
     if (opts.combined) {
       const headerR = aoa.length;
+      // Fila 1 cabecera: Título de la semana y Domingo
       setCell(headerR, LEFT, wk.weekLabel + (wk.scripture ? ` | ${wk.scripture}` : ''));
       setS(headerR, LEFT, fill(TEAL_HEX, true));
       merges.push({ s: { r: headerR, c: LEFT }, e: { r: headerR, c: LEFT + 4 } });
+      
       setCell(headerR, RIGHT, `Domingo ${wk.weekend?.date ?? '—'}`);
       setS(headerR, RIGHT, fill(TEAL_HEX, true));
       merges.push({ s: { r: headerR, c: RIGHT }, e: { r: headerR, c: RIGHT + 5 } });
 
-      let lr = headerR + 1;
+      // Fila 2 cabecera: Presidente y Oración explícitos con alto contraste
+      const subHeaderR = headerR + 1;
+      setCell(subHeaderR, LEFT, `Presidente: ${wk.chairman || '—'}    Oración: ${wk.opening || '—'}`);
+      setS(subHeaderR, LEFT, { fill: { fgColor: { rgb: '2D5D6E' } }, font: { bold: true, color: { rgb: WHITE_HEX } } });
+      merges.push({ s: { r: subHeaderR, c: LEFT }, e: { r: subHeaderR, c: LEFT + 4 } });
+      
+      setCell(subHeaderR, RIGHT, 'Reunión Pública y Estudio de La Atalaya');
+      setS(subHeaderR, RIGHT, { fill: { fgColor: { rgb: '2D5D6E' } }, font: { bold: true, color: { rgb: WHITE_HEX } } });
+      merges.push({ s: { r: subHeaderR, c: RIGHT }, e: { r: subHeaderR, c: RIGHT + 5 } });
+
+      let lr = subHeaderR + 1;
       for (const p of wk.parts ?? []) {
         if (p.sep === 'amber') { setCell(lr, LEFT, ''); setS(lr, LEFT, fill(AMBER_HEX)); merges.push({ s: { r: lr, c: LEFT }, e: { r: lr, c: LEFT + 4 } }); lr++; }
         else if (p.sep === 'maroon') { setCell(lr, LEFT, ''); setS(lr, LEFT, fill(MAROON_HEX)); merges.push({ s: { r: lr, c: LEFT }, e: { r: lr, c: LEFT + 4 } }); lr++; }
         if (p.bible) { setCell(lr, LEFT, 'SALA PRINCIPAL'); setS(lr, LEFT, { font: { bold: true, color: { rgb: SLATE_HEX } } }); lr++; }
         setCell(lr, LEFT, `${p.num}. ${p.title} (${p.dur} min.)`); setS(lr, LEFT, plain());
-        setCell(lr, LEFT + 4, p.name); setS(lr, LEFT + 4, plain());
+        setCell(lr, LEFT + 4, p.name); setS(lr, LEFT + 4, plain(true));
         lr++;
       }
       if (wk.cbsNum != null) {
         setCell(lr, LEFT, `${wk.cbsNum}. Estudio bíblico (${wk.cbsDur} min.)`); setS(lr, LEFT, plain());
-        setCell(lr, LEFT + 4, wk.cbs || ''); setS(lr, LEFT + 4, plain());
+        setCell(lr, LEFT + 4, wk.cbs || ''); setS(lr, LEFT + 4, plain(true));
         lr++;
       }
       setCell(lr, LEFT, `LIMPIEZA ${wk.cleaning}    HOSPITALIDAD ${wk.hospitality}`); setS(lr, LEFT, fill(YELLOW_HEX));
       merges.push({ s: { r: lr, c: LEFT }, e: { r: lr, c: LEFT + 3 } });
-      setCell(lr, LEFT + 4, `Oración: ${wk.closing || '—'}`); setS(lr, LEFT + 4, plain());
+      setCell(lr, LEFT + 4, `Oración: ${wk.closing || '—'}`); setS(lr, LEFT + 4, plain(true));
       const leftEnd = lr;
 
-      let rr = headerR + 1;
+      let rr = subHeaderR + 1;
       const w = wk.weekend;
       if (w) {
         const wkRows: [string, string][] = [
-          ['Presidente', w.chairman], ['Discurso', w.talk], ['Orador', w.speaker],
-          ['Congregación', w.congregation], ['Conductor', w.conductor], ['Lector', w.reader],
+          ['Presidente', w.chairman],
+          ['Discurso', w.talk],
+          ['Orador', w.speaker],
+          ['Congregación', w.congregation],
+          ['Conductor', w.conductor],
+          ['Lector', w.reader],
         ];
         for (const [lab, val] of wkRows) {
           setCell(rr, RIGHT, lab); setS(rr, RIGHT, { font: { bold: true } });
           setCell(rr, RIGHT + 1, val || '—'); setS(rr, RIGHT + 1, plain());
+          merges.push({ s: { r: rr, c: RIGHT + 1 }, e: { r: rr, c: RIGHT + 5 } });
           rr++;
         }
         setCell(rr, RIGHT, `LIMPIEZA ${w.cleaning}  HOSP ${w.hospitality}`); setS(rr, RIGHT, fill(YELLOW_HEX));
@@ -329,25 +429,33 @@ export async function exportProgramXlsx(weeks: ProgramWeek[], opts: ProgramExpor
       const headerR = aoa.length;
       setCell(headerR, 0, wk.weekLabel + (wk.scripture ? ` | ${wk.scripture}` : ''));
       setS(headerR, 0, fill(TEAL_HEX, true));
-      merges.push({ s: { r: headerR, c: 0 }, e: { r: headerR, c: 4 } });
-      setCell(headerR, 4, `Presidente: ${wk.chairman || '—'}   Oración: ${wk.opening || '—'}`);
+      merges.push({ s: { r: headerR, c: 0 }, e: { r: headerR, c: 2 } });
+      
+      setCell(headerR, 3, `Presidente: ${wk.chairman || '—'}`);
+      setS(headerR, 3, fill(TEAL_HEX, true));
+      
+      setCell(headerR, 4, `Oración: ${wk.opening || '—'}`);
+      setS(headerR, 4, fill(TEAL_HEX, true));
+
       let r = headerR + 1;
       for (const p of wk.parts ?? []) {
         if (p.sep === 'amber') { setCell(r, 0, ''); setS(r, 0, fill(AMBER_HEX)); merges.push({ s: { r, c: 0 }, e: { r, c: 4 } }); r++; }
         else if (p.sep === 'maroon') { setCell(r, 0, ''); setS(r, 0, fill(MAROON_HEX)); merges.push({ s: { r, c: 0 }, e: { r, c: 4 } }); r++; }
         if (p.bible) { setCell(r, 0, 'SALA PRINCIPAL'); setS(r, 0, { font: { bold: true, color: { rgb: SLATE_HEX } } }); r++; }
         setCell(r, 0, `${p.num}. ${p.title} (${p.dur} min.)`); setS(r, 0, plain());
-        setCell(r, 4, p.name); setS(r, 4, plain());
+        merges.push({ s: { r, c: 0 }, e: { r, c: 3 } });
+        setCell(r, 4, p.name); setS(r, 4, plain(true));
         r++;
       }
       if (wk.cbsNum != null) {
         setCell(r, 0, `${wk.cbsNum}. Estudio bíblico (${wk.cbsDur} min.)`); setS(r, 0, plain());
-        setCell(r, 4, wk.cbs || ''); setS(r, 4, plain());
+        merges.push({ s: { r, c: 0 }, e: { r, c: 3 } });
+        setCell(r, 4, wk.cbs || ''); setS(r, 4, plain(true));
         r++;
       }
       setCell(r, 0, `LIMPIEZA ${wk.cleaning}    HOSPITALIDAD ${wk.hospitality}`); setS(r, 0, fill(YELLOW_HEX));
       merges.push({ s: { r, c: 0 }, e: { r, c: 3 } });
-      setCell(r, 4, `Oración: ${wk.closing || '—'}`); setS(r, 4, plain());
+      setCell(r, 4, `Oración: ${wk.closing || '—'}`); setS(r, 4, plain(true));
     }
   }
 
@@ -359,16 +467,14 @@ export async function exportProgramXlsx(weeks: ProgramWeek[], opts: ProgramExpor
     if (!ws[addr]) ws[addr] = { t: 's', v: aoa[r]?.[c] ?? '' };
     ws[addr].s = styles[key];
   }
-  ws['!cols'] = Array.from({ length: COLS }, (_, i) => ({ wch: i === LEFT + 4 || i === RIGHT + 1 ? 26 : 16 }));
+  ws['!cols'] = Array.from({ length: COLS }, (_, i) => ({ wch: i === LEFT + 4 || i === RIGHT + 1 ? 28 : 16 }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Programa');
   XLSX.writeFile(wb, `${fileBase(opts.title, opts.subtitle)}.xlsx`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DOCX — sin tablas anidadas ni celdas sueltas: cabeceras teal, separadores de
-// color, y para combinado una tabla de 2 columnas cuyas celdas contienen
-// párrafos (no tablas) para máxima compatibilidad con Word.
+// DOCX
 // ─────────────────────────────────────────────────────────────────────────────
 export async function exportProgramDocx(weeks: ProgramWeek[], opts: ProgramExportOptions) {
   const docx: any = unwrap(await import('docx'));
@@ -396,9 +502,14 @@ export async function exportProgramDocx(weeks: ProgramWeek[], opts: ProgramExpor
     }
 
     const header = shadePara(wk.weekLabel + (wk.scripture ? ` | ${wk.scripture}` : ''), { fill: tealHex, color: 'FFFFFF', bold: true });
-    const presLine = opts.combined
-      ? new Paragraph({ children: [new TextRun({ text: `Presidente y Oración: ${wk.chairman || '—'}`, size: 18 })] })
-      : new Paragraph({ children: [new TextRun({ text: `Presidente: ${wk.chairman || '—'}   Oración: ${wk.opening || '—'}`, size: 18 })] });
+    const presLine = new Paragraph({
+      children: [
+        new TextRun({ text: 'Presidente: ', bold: true, size: 18 }),
+        new TextRun({ text: `${wk.chairman || '—'}      `, size: 18 }),
+        new TextRun({ text: 'Oración de apertura: ', bold: true, size: 18 }),
+        new TextRun({ text: `${wk.opening || '—'}`, size: 18 }),
+      ],
+    });
     const footer = shadePara(`LIMPIEZA ${wk.cleaning}    HOSPITALIDAD ${wk.hospitality}    Oración: ${wk.closing || '—'}`, { fill: YELLOW_HEX, bold: true, size: 16 });
 
     if (opts.combined && wk.weekend) {
@@ -415,8 +526,12 @@ export async function exportProgramDocx(weeks: ProgramWeek[], opts: ProgramExpor
       const w = wk.weekend;
       const rightParas: any[] = [shadePara(`Domingo ${w.date}`, { fill: tealHex, color: 'FFFFFF', bold: true })];
       const wkRows: [string, string][] = [
-        ['Presidente', w.chairman], ['Discurso', w.talk], ['Orador', w.speaker],
-        ['Congregación', w.congregation], ['Conductor', w.conductor], ['Lector', w.reader],
+        ['Presidente', w.chairman],
+        ['Discurso', w.talk],
+        ['Orador', w.speaker],
+        ['Congregación', w.congregation],
+        ['Conductor', w.conductor],
+        ['Lector', w.reader],
       ];
       for (const [lab, val] of wkRows) {
         rightParas.push(new Paragraph({ children: [new TextRun({ text: `${lab}: `, bold: true, size: 18 }), new TextRun({ text: val || '—', size: 18 })] }));
@@ -438,14 +553,14 @@ export async function exportProgramDocx(weeks: ProgramWeek[], opts: ProgramExpor
         partRows.push(new TableRow({
           children: [
             new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: `${p.num}. ${p.title} (${p.dur} min.)`, size: 18 })] })] }),
-            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: p.name || '—', size: 18 })] })] }),
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: p.name || '—', bold: true, size: 18 })] })] }),
           ],
         }));
       }
       if (wk.cbsNum != null) partRows.push(new TableRow({
         children: [
           new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: `${wk.cbsNum}. Estudio bíblico (${wk.cbsDur} min.)`, size: 18 })] })] }),
-          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: wk.cbs || '—', size: 18 })] })] }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: wk.cbs || '—', bold: true, size: 18 })] })] }),
         ],
       }));
 

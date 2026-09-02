@@ -629,16 +629,16 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                       <div key={m.id} className={`week-block mb-5 ${!isLast ? 'page-break' : ''}`}>
                         {/* Cabecera teal */}
                         <div className="flex items-stretch text-white text-sm" style={{ background: TEAL }}>
-                          <div className="font-bold px-2 py-1 flex-1">
+                          <div className="font-bold px-2.5 py-1.5 flex-1 text-white">
                             {weekRangeLabel(m.date)}{scripture ? ` | ${scripture}` : ''}
                           </div>
-                          <div className="px-3 py-1 flex items-center gap-1.5 border-l border-white/30">
-                            <span className="text-[11px] font-semibold uppercase opacity-80">Presidente</span>
-                            <span className="font-medium">{chairmanName || '—'}</span>
+                          <div className="px-3 py-1.5 flex items-center gap-1.5 border-l border-white/40">
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-yellow-200">Presidente:</span>
+                            <span className="font-semibold text-white">{chairmanName || '—'}</span>
                           </div>
-                          <div className="px-3 py-1 flex items-center gap-1.5 border-l border-white/30">
-                            <span className="text-[11px] font-semibold uppercase opacity-80">Oración</span>
-                            <span className="font-medium">{openingName || '—'}</span>
+                          <div className="px-3 py-1.5 flex items-center gap-1.5 border-l border-white/40">
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-yellow-200">Oración:</span>
+                            <span className="font-semibold text-white">{openingName || '—'}</span>
                           </div>
                         </div>
 
@@ -751,10 +751,10 @@ export default function PrintModal({ isOpen, onClose, selectedMeeting, allMeetin
                         {/* Columna entre semana */}
                         <div className="flex-1 pr-3">
                           <div className="flex items-stretch text-white text-sm" style={{ background: TEAL }}>
-                            <div className="font-bold px-2 py-1 flex-1">{weekRangeLabel(m.date)}{scripture ? ` | ${scripture}` : ''}</div>
-                            <div className="px-3 py-1 border-l border-white/30 w-2/5">
-                              <span className="text-[11px] font-semibold uppercase opacity-80">Presidente y Oración</span>{' '}
-                              <span className="font-medium">{chairmanName || '—'}</span>
+                            <div className="font-bold px-2.5 py-1.5 flex-1 text-white">{weekRangeLabel(m.date)}{scripture ? ` | ${scripture}` : ''}</div>
+                            <div className="px-3 py-1.5 border-l border-white/40 flex items-center gap-1.5">
+                              <span className="text-[11px] font-bold uppercase tracking-wider text-yellow-200">Pres. / Orac:</span>
+                              <span className="font-semibold text-white">{chairmanName || '—'}</span>
                             </div>
                           </div>
 
