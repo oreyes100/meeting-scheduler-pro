@@ -49,18 +49,22 @@ export async function runAutoAssignment(meetingId, customClient = null) {
     return { assignedCount: 0, totalCount: 0, logs };
   }
 
-  // 3. Fetch all active publishers
+  // 3. Fetch all active publishers for this meeting's congregation
   let users = [];
-  const { data: activeUsers, error: usersError } = await supabase
-    .from('users')
-    .select('*')
-    .eq('is_active', true);
+  let usersQuery = supabase.from('users').select('*').eq('is_active', true);
+  if (meeting?.congregation_id) {
+    usersQuery = usersQuery.eq('congregation_id', meeting.congregation_id);
+  }
+
+  const { data: activeUsers, error: usersError } = await usersQuery;
 
   if (usersError) {
     // Fallback in case is_active column doesn't exist yet
-    const { data: usersFallback, error: fallbackError } = await supabase
-      .from('users')
-      .select('*');
+    let fallbackQuery = supabase.from('users').select('*');
+    if (meeting?.congregation_id) {
+      fallbackQuery = fallbackQuery.eq('congregation_id', meeting.congregation_id);
+    }
+    const { data: usersFallback, error: fallbackError } = await fallbackQuery;
     if (fallbackError) throw new Error(`Failed to fetch users: ${fallbackError.message}`);
     users = usersFallback || [];
   } else {
@@ -345,15 +349,46 @@ export async function runAutoAssignment(meetingId, customClient = null) {
 
     // 4. Student Parts (Apply Yourself to the Field Ministry)
     if (part.part_type === 'student_part' && !part.assigned_user_id) {
-      const isTalk = part.student_part_type === 'talk';
-      const candidates = users.filter(u => !assignedInThisMeeting.has(u.id) && u.can_do_student_parts && (!isTalk || u.gender === 'male'));
-      const sorted = getLRASortedUsers(candidates, 'student_part');
+      const normalizedText = `${part.title || ''} ${part.student_part_type || ''} ${part.study_point || ''}`
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+      const isQueDiria = normalizedText.includes('que diria');
+      const isTalk = part.student_part_type === 'talk' || isQueDiria;
+
+      let candidates = [];
+      if (isQueDiria) {
+        // "Que diría?" → Must be assigned to an elder or ministerial servant (male), talk type, no assistant
+        const eldersAndMS = users.filter(
+          u => !assignedInThisMeeting.has(u.id) &&
+               u.gender === 'male' &&
+               (u.is_elder || u.is_ministerial_servant)
+        );
+        candidates = eldersAndMS.length > 0 ? eldersAndMS : users.filter(
+          u => !assignedInThisMeeting.has(u.id) &&
+               u.gender === 'male' &&
+               (u.can_be_speaker || u.can_be_chairman)
+        );
+      } else if (isTalk) {
+        candidates = users.filter(
+          u => !assignedInThisMeeting.has(u.id) &&
+               u.can_do_student_parts &&
+               u.gender === 'male'
+        );
+      } else {
+        candidates = users.filter(
+          u => !assignedInThisMeeting.has(u.id) &&
+               u.can_do_student_parts
+        );
+      }
+
+      const sorted = getLRASortedUsers(candidates, isQueDiria ? 'student_talk_que_diria' : (isTalk ? 'student_talk' : 'student_part'));
       if (sorted.length > 0) {
         const student = sorted[0];
 
-        // Find assistant if needed
+        // Find assistant if needed (never for talk or "Que diria?")
         let assistantId = part.assistant_user_id || null;
-        if (!assistantId && part.student_part_type !== 'talk') {
+        if (!assistantId && !isTalk && !isQueDiria) {
           // Rule: assistant must have same gender as student
           const assistantCandidates = users.filter(
             u => !assignedInThisMeeting.has(u.id) &&
@@ -365,14 +400,22 @@ export async function runAutoAssignment(meetingId, customClient = null) {
           if (sortedAssistants.length > 0) {
             assistantId = sortedAssistants[0].id;
           }
+        } else if (isTalk || isQueDiria) {
+          assistantId = null;
+        }
+
+        const updatePayload = { 
+          assigned_user_id: student.id,
+          assistant_user_id: assistantId
+        };
+        if (isQueDiria && part.student_part_type !== 'talk') {
+          updatePayload.student_part_type = 'talk';
+          part.student_part_type = 'talk';
         }
 
         const { error } = await supabase
           .from('meeting_parts')
-          .update({ 
-            assigned_user_id: student.id,
-            assistant_user_id: assistantId
-          })
+          .update(updatePayload)
           .eq('id', part.id);
         
         if (!error) {
@@ -396,13 +439,14 @@ export async function runAutoAssignment(meetingId, customClient = null) {
           }
 
           newlyAssignedCount++;
-          logs.push(`✅ Assigned ${student.name}${assistantMsg} to Student Part: "${part.title}" (${part.class_type.toUpperCase()})`);
+          const tagMsg = isQueDiria ? ' [Discurso "Qué diría?" - Anciano/SM]' : (isTalk ? ' [Discurso]' : '');
+          logs.push(`✅ Assigned ${student.name}${assistantMsg} to Student Part${tagMsg}: "${part.title}" (${part.class_type.toUpperCase()})`);
           
           await supabase.from('part_history').insert({
             meeting_id: meetingId,
             user_id: student.id,
-            role: 'student_part',
-            part_type: 'student_part',
+            role: isQueDiria ? 'student_talk_que_diria' : (isTalk ? 'student_talk' : 'student_part'),
+            part_type: isQueDiria ? 'student_talk_que_diria' : (isTalk ? 'student_talk' : 'student_part'),
             assigned_date: meeting.date
           });
         }
