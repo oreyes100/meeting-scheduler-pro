@@ -40,10 +40,21 @@ export async function updateSession(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Exigir sesión: sin usuario → /login (APIs quedan libres; usan service key)
   const { pathname } = request.nextUrl
-  const isPublic = pathname.startsWith('/login') || pathname.startsWith('/api')
-  if (!user && !isPublic) {
+
+  // APIs: default-deny. Solo estos endpoints son públicos (pre-sesión).
+  // Nota: antes quedaban libres "porque usan service key" — eso exponía los
+  // datos de todas las congregaciones sin sesión.
+  const PUBLIC_API = pathname === '/api/health' || pathname === '/api/resolve-login'
+  if (pathname.startsWith('/api')) {
+    if (!user && !PUBLIC_API) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+    }
+    return response
+  }
+
+  // Páginas: sin usuario → /login
+  if (!user && !pathname.startsWith('/login')) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
