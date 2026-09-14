@@ -45,7 +45,11 @@ export async function updateSession(request: NextRequest) {
   // APIs: default-deny. Solo estos endpoints son públicos (pre-sesión).
   // Nota: antes quedaban libres "porque usan service key" — eso exponía los
   // datos de todas las congregaciones sin sesión.
-  const PUBLIC_API = pathname === '/api/health' || pathname === '/api/resolve-login'
+  const PUBLIC_API =
+    pathname === '/api/health' ||
+    pathname === '/api/resolve-login' ||
+    // Cron: autenticado por CRON_SECRET dentro de la propia ruta.
+    pathname === '/api/territory-notifications/run'
   if (pathname.startsWith('/api')) {
     if (!user && !PUBLIC_API) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
