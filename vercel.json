@@ -1,0 +1,5 @@
+{
+  "crons": [
+    { "path": "/api/territory-notifications/run", "schedule": "0 15 * * *" }
+  ]
+}
