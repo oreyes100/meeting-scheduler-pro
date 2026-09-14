@@ -17,7 +17,7 @@ export function ExportMenu({ getData, className }: { getData: () => PrintTableOp
   // Precargar módulos al montar para que el dynamic import sea instant al hacer clic.
   // Sin esto, el user-gesture window de Chrome (~1s) expira antes de la descarga.
   useEffect(() => {
-    import('xlsx').catch(() => {});
+    import('xlsx-js-style').catch(() => {});
     import('jspdf').catch(() => {});
     import('jspdf-autotable').catch(() => {});
     import('docx').catch(() => {});
