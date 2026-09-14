@@ -1,21 +1,37 @@
-import { createClient } from '@supabase/supabase-js';
+import { sb } from '../lib/crud';
+
+/**
+ * Estrategia del motor de auto-asignación (Opción C — dual, seleccionable).
+ *
+ * Los dos linajes VPS divergieron en la política de "Student Parts". Para no
+ * perder ninguna conducta hasta validar con fixtures reales, se conservan ambas
+ * bajo un flag y se eligen por entorno:
+ *
+ *   AUTO_ASSIGN_DRIVER=strict  (default) → PROD VM211: persiste
+ *       student_part_type='talk' para "¿Qué diría?", clave LRA por tipo y pool
+ *       is_elder/is_ministerial_servant con fallback a can_be_speaker/chairman.
+ *   AUTO_ASSIGN_DRIVER=legacy            → LAB VM250: no persiste
+ *       student_part_type, clave LRA única 'student_part', pool por
+ *       can_be_chairman/can_be_speaker y detección de la variante "que dira".
+ *
+ * Tras la validación de paridad (WG-2026-010) se fija una sola y se elimina la otra.
+ */
+const AUTO_ASSIGN_DRIVER = (process.env.AUTO_ASSIGN_DRIVER || 'strict').toLowerCase();
 
 /**
  * Executes the auto-assignment logic for a specific meeting ID.
- * Connects to Supabase using either a custom client or creates a service-role client.
+ * Uses local DB client (sb()) by default so no data goes to external Supabase.
  * 
  * @param {string} meetingId 
  * @param {any} [customClient] 
  * @returns {Promise<{ assignedCount: number, totalCount: number, logs: string[] }>}
  */
-export async function runAutoAssignment(meetingId, customClient) {
-  const supabase = customClient || createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-  );
+export async function runAutoAssignment(meetingId, customClient = null) {
+  const supabase = customClient || sb();
 
   const logs = [];
   logs.push(`🤖 Starting auto-assignment for meeting: ${meetingId}`);
+  logs.push(`⚙️ AUTO_ASSIGN_DRIVER=${AUTO_ASSIGN_DRIVER}`);
 
   // 1. Fetch the meeting details
   const { data: meeting, error: meetingError } = await supabase
@@ -49,16 +65,21 @@ export async function runAutoAssignment(meetingId, customClient) {
     return { assignedCount: 0, totalCount: 0, logs };
   }
 
-  // 3. Fetch all active publishers (scoped to the meeting's congregation)
+  // 3. Fetch all active publishers for this meeting's congregation
   let users = [];
   let usersQuery = supabase.from('users').select('*').eq('is_active', true);
-  if (meeting?.congregation_id) usersQuery = usersQuery.eq('congregation_id', meeting.congregation_id);
+  if (meeting?.congregation_id) {
+    usersQuery = usersQuery.eq('congregation_id', meeting.congregation_id);
+  }
+
   const { data: activeUsers, error: usersError } = await usersQuery;
 
   if (usersError) {
     // Fallback in case is_active column doesn't exist yet
     let fallbackQuery = supabase.from('users').select('*');
-    if (meeting?.congregation_id) fallbackQuery = fallbackQuery.eq('congregation_id', meeting.congregation_id);
+    if (meeting?.congregation_id) {
+      fallbackQuery = fallbackQuery.eq('congregation_id', meeting.congregation_id);
+    }
     const { data: usersFallback, error: fallbackError } = await fallbackQuery;
     if (fallbackError) throw new Error(`Failed to fetch users: ${fallbackError.message}`);
     users = usersFallback || [];
@@ -251,6 +272,201 @@ export async function runAutoAssignment(meetingId, customClient) {
   // --- Assign Part-Level Roles (Treasures talk, Gems, Bible Reading, Student Parts, Living) ---
   let newlyAssignedCount = 0;
 
+  // ── Student Parts — dos estrategias seleccionables (Opción C) ─────────────
+  // strict = PROD VM211 (default) · legacy = LAB VM250. Ver AUTO_ASSIGN_DRIVER.
+  const assignStudentPartStrict = async (part) => {
+    const normalizedText = `${part.title || ''} ${part.student_part_type || ''} ${part.study_point || ''}`
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    const isQueDiria = normalizedText.includes('que diria');
+    const isTalk = part.student_part_type === 'talk' || isQueDiria;
+
+    let candidates = [];
+    if (isQueDiria) {
+      // "Que diría?" → Must be assigned to an elder or ministerial servant (male), talk type, no assistant
+      const eldersAndMS = users.filter(
+        u => !assignedInThisMeeting.has(u.id) &&
+             u.gender === 'male' &&
+             (u.is_elder || u.is_ministerial_servant)
+      );
+      candidates = eldersAndMS.length > 0 ? eldersAndMS : users.filter(
+        u => !assignedInThisMeeting.has(u.id) &&
+             u.gender === 'male' &&
+             (u.can_be_speaker || u.can_be_chairman)
+      );
+    } else if (isTalk) {
+      candidates = users.filter(
+        u => !assignedInThisMeeting.has(u.id) &&
+             u.can_do_student_parts &&
+             u.gender === 'male'
+      );
+    } else {
+      candidates = users.filter(
+        u => !assignedInThisMeeting.has(u.id) &&
+             u.can_do_student_parts
+      );
+    }
+
+    const sorted = getLRASortedUsers(candidates, isQueDiria ? 'student_talk_que_diria' : (isTalk ? 'student_talk' : 'student_part'));
+    if (sorted.length > 0) {
+      const student = sorted[0];
+
+      // Find assistant if needed (never for talk or "Que diria?")
+      let assistantId = part.assistant_user_id || null;
+      if (!assistantId && !isTalk && !isQueDiria) {
+        // Rule: assistant must have same gender as student
+        const assistantCandidates = users.filter(
+          u => !assignedInThisMeeting.has(u.id) &&
+               u.id !== student.id &&
+               u.gender === student.gender &&
+               u.can_be_assistant
+        );
+        const sortedAssistants = getLRASortedUsers(assistantCandidates, 'assistant');
+        if (sortedAssistants.length > 0) {
+          assistantId = sortedAssistants[0].id;
+        }
+      } else if (isTalk || isQueDiria) {
+        assistantId = null;
+      }
+
+      const updatePayload = { 
+        assigned_user_id: student.id,
+        assistant_user_id: assistantId
+      };
+      if (isQueDiria && part.student_part_type !== 'talk') {
+        updatePayload.student_part_type = 'talk';
+        part.student_part_type = 'talk';
+      }
+
+      const { error } = await supabase
+        .from('meeting_parts')
+        .update(updatePayload)
+        .eq('id', part.id);
+      
+      if (!error) {
+        assignedInThisMeeting.add(student.id);
+        part.assigned_user_id = student.id;
+        
+        let assistantMsg = '';
+        if (assistantId) {
+          assignedInThisMeeting.add(assistantId);
+          part.assistant_user_id = assistantId;
+          const assistantName = users.find(u => u.id === assistantId)?.name;
+          assistantMsg = ` with assistant ${assistantName}`;
+          
+          await supabase.from('part_history').insert({
+            meeting_id: meetingId,
+            user_id: assistantId,
+            role: 'assistant',
+            part_type: 'assistant',
+            assigned_date: meeting.date
+          });
+        }
+
+        newlyAssignedCount++;
+        const tagMsg = isQueDiria ? ' [Discurso "Qué diría?" - Anciano/SM]' : (isTalk ? ' [Discurso]' : '');
+        logs.push(`✅ Assigned ${student.name}${assistantMsg} to Student Part${tagMsg}: "${part.title}" (${part.class_type.toUpperCase()})`);
+        
+        await supabase.from('part_history').insert({
+          meeting_id: meetingId,
+          user_id: student.id,
+          role: isQueDiria ? 'student_talk_que_diria' : (isTalk ? 'student_talk' : 'student_part'),
+          part_type: isQueDiria ? 'student_talk_que_diria' : (isTalk ? 'student_talk' : 'student_part'),
+          assigned_date: meeting.date
+        });
+      }
+    } else {
+      logs.push(`⚠️ No candidate found for Student Part: "${part.title}"`);
+    }
+  };
+
+  const assignStudentPartLegacy = async (part) => {
+    // Special rule: "¿Qué diría?" parts are treated as a discourse (discurso).
+    // They must be assigned to an Elder or Ministerial Servant (male), with NO assistant.
+    const normalizedTitle = (part.title || '').toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const isQueDiria = normalizedTitle.includes('que diria') || normalizedTitle.includes('que dira');
+
+    const isTalk = part.student_part_type === 'talk' || isQueDiria;
+
+    let candidates;
+    if (isQueDiria) {
+      // Only elders (can_be_chairman) or ministerial servants (can_be_speaker) — male
+      candidates = users.filter(u =>
+        !assignedInThisMeeting.has(u.id) &&
+        u.gender === 'male' &&
+        (u.can_be_chairman || u.can_be_speaker)
+      );
+      logs.push(`ℹ️ Part "${part.title}" detected as "¿Qué diría?" — restricting to Elders/Ministerial Servants, no assistant.`);
+    } else {
+      candidates = users.filter(u => !assignedInThisMeeting.has(u.id) && u.can_do_student_parts && (!isTalk || u.gender === 'male'));
+    }
+
+    const sorted = getLRASortedUsers(candidates, isQueDiria ? 'living_part' : 'student_part');
+    if (sorted.length > 0) {
+      const student = sorted[0];
+
+      // Find assistant if needed (never for "¿Qué diría?" or talk)
+      let assistantId = part.assistant_user_id || null;
+      if (!assistantId && !isTalk) {
+        // Rule: assistant must have same gender as student
+        const assistantCandidates = users.filter(
+          u => !assignedInThisMeeting.has(u.id) &&
+               u.id !== student.id &&
+               u.gender === student.gender &&
+               u.can_be_assistant
+        );
+        const sortedAssistants = getLRASortedUsers(assistantCandidates, 'assistant');
+        if (sortedAssistants.length > 0) {
+          assistantId = sortedAssistants[0].id;
+        }
+      }
+
+      const { error } = await supabase
+        .from('meeting_parts')
+        .update({ 
+          assigned_user_id: student.id,
+          assistant_user_id: assistantId
+        })
+        .eq('id', part.id);
+      
+      if (!error) {
+        assignedInThisMeeting.add(student.id);
+        part.assigned_user_id = student.id;
+        
+        let assistantMsg = '';
+        if (assistantId) {
+          assignedInThisMeeting.add(assistantId);
+          part.assistant_user_id = assistantId;
+          const assistantName = users.find(u => u.id === assistantId)?.name;
+          assistantMsg = ` with assistant ${assistantName}`;
+          
+          await supabase.from('part_history').insert({
+            meeting_id: meetingId,
+            user_id: assistantId,
+            role: 'assistant',
+            part_type: 'assistant',
+            assigned_date: meeting.date
+          });
+        }
+
+        newlyAssignedCount++;
+        logs.push(`✅ Assigned ${student.name}${assistantMsg} to Student Part: "${part.title}" (${part.class_type.toUpperCase()})`);
+        
+        await supabase.from('part_history').insert({
+          meeting_id: meetingId,
+          user_id: student.id,
+          role: 'student_part',
+          part_type: 'student_part',
+          assigned_date: meeting.date
+        });
+      }
+    } else {
+      logs.push(`⚠️ No candidate found for Student Part: "${part.title}"`);
+    }
+  };
+
   for (const part of parts) {
     // 1. Treasures Talk (Male, can_be_speaker)
     if (part.part_type === 'treasures_talk' && !part.assigned_user_id) {
@@ -344,70 +560,7 @@ export async function runAutoAssignment(meetingId, customClient) {
 
     // 4. Student Parts (Apply Yourself to the Field Ministry)
     if (part.part_type === 'student_part' && !part.assigned_user_id) {
-      const isTalk = part.student_part_type === 'talk';
-      const candidates = users.filter(u => !assignedInThisMeeting.has(u.id) && u.can_do_student_parts && (!isTalk || u.gender === 'male'));
-      const sorted = getLRASortedUsers(candidates, 'student_part');
-      if (sorted.length > 0) {
-        const student = sorted[0];
-
-        // Find assistant if needed
-        let assistantId = part.assistant_user_id || null;
-        if (!assistantId && part.student_part_type !== 'talk') {
-          // Rule: assistant must have same gender as student
-          const assistantCandidates = users.filter(
-            u => !assignedInThisMeeting.has(u.id) &&
-                 u.id !== student.id &&
-                 u.gender === student.gender &&
-                 u.can_be_assistant
-          );
-          const sortedAssistants = getLRASortedUsers(assistantCandidates, 'assistant');
-          if (sortedAssistants.length > 0) {
-            assistantId = sortedAssistants[0].id;
-          }
-        }
-
-        const { error } = await supabase
-          .from('meeting_parts')
-          .update({ 
-            assigned_user_id: student.id,
-            assistant_user_id: assistantId
-          })
-          .eq('id', part.id);
-        
-        if (!error) {
-          assignedInThisMeeting.add(student.id);
-          part.assigned_user_id = student.id;
-          
-          let assistantMsg = '';
-          if (assistantId) {
-            assignedInThisMeeting.add(assistantId);
-            part.assistant_user_id = assistantId;
-            const assistantName = users.find(u => u.id === assistantId)?.name;
-            assistantMsg = ` with assistant ${assistantName}`;
-            
-            await supabase.from('part_history').insert({
-              meeting_id: meetingId,
-              user_id: assistantId,
-              role: 'assistant',
-              part_type: 'assistant',
-              assigned_date: meeting.date
-            });
-          }
-
-          newlyAssignedCount++;
-          logs.push(`✅ Assigned ${student.name}${assistantMsg} to Student Part: "${part.title}" (${part.class_type.toUpperCase()})`);
-          
-          await supabase.from('part_history').insert({
-            meeting_id: meetingId,
-            user_id: student.id,
-            role: 'student_part',
-            part_type: 'student_part',
-            assigned_date: meeting.date
-          });
-        }
-      } else {
-        logs.push(`⚠️ No candidate found for Student Part: "${part.title}"`);
-      }
+      await (AUTO_ASSIGN_DRIVER === 'legacy' ? assignStudentPartLegacy : assignStudentPartStrict)(part);
     }
 
     // 5. Living as Christians Parts (Male, can_be_speaker OR can_be_chairman)
